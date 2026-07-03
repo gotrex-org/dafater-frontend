@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import type { PageMeta } from '@/lib/types';
 import { Pagination } from './Pagination';
 
@@ -19,6 +19,8 @@ interface Props<T> {
   loading?: boolean;
   emptyText?: string;
   onRowClick?: (row: T) => void;
+  /** optional per-row inline style */
+  rowStyle?: (row: T) => CSSProperties | undefined;
   /** pass meta + onPage to render the pagination footer inside the card */
   meta?: PageMeta;
   onPage?: (page: number) => void;
@@ -33,7 +35,7 @@ interface Props<T> {
  */
 export function DataTable<T>({
   columns, rows, rowKey, loading, emptyText = 'لا توجد بيانات',
-  onRowClick, meta, onPage, pageSize, onPageSize,
+  onRowClick, rowStyle, meta, onPage, pageSize, onPageSize,
 }: Props<T>) {
   return (
     <div className="card">
@@ -47,7 +49,7 @@ export function DataTable<T>({
               <tr
                 key={rowKey(row)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
-                style={onRowClick ? { cursor: 'pointer' } : undefined}
+                style={{ ...(onRowClick ? { cursor: 'pointer' } : {}), ...(rowStyle?.(row) ?? {}) }}
               >
                 {columns.map((c, i) => (
                   <td key={i} className={c.className}>{c.cell(row)}</td>

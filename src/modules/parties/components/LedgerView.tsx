@@ -3,17 +3,17 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { money, EGP, fmtDate, todayISO } from '@/lib/format';
 import { downloadElementAsPdf } from '@/lib/pdf';
-import { PageTitle, DataTable, SegmentedControl, Spinner, DetailModal, Combobox, Field, MoneyInput, type Column } from '@/components/common';
+import { PageTitle, DataTable, SegmentedControl, Spinner, Combobox, Field, MoneyInput, type Column } from '@/components/common';
 import { useAuth } from '@/lib/auth';
 import { InvoiceDetailById } from '../../invoices/components/InvoiceDetail';
 import { DealDetailById } from '../../deals/components/DealsView';
-import { usePostEntry } from '../../transactions/hooks';
+import { usePostEntry, useUpdateTransaction } from '../../transactions/hooks';
 import { useParties, usePartyLedger } from '../hooks';
 import { PartiesRegistry } from './PartiesRegistry';
 import type { Party, PartyRole, LedgerRow } from '../dtos';
 
 type SortKey = 'name' | 'balance' | 'activity';
-type LedgerKind = 'all' | 'invoices' | 'collect';
+type LedgerKind = 'all' | 'invoices' | 'collect' | 'commission' | 'withdraw';
 type MainTab = 'ledger' | 'registry';
 
 // ─── Ledger tab ───────────────────────────────────────────────────────────────
@@ -102,13 +102,20 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const [kind, setKind] = useState<LedgerKind>('all');
   const { data, isLoading } = usePartyLedger(party.id, { from: from || undefined, to: to || undefined });
   const [sel, setSel] = useState<LedgerRow | null>(null);
+  const [selEditing, setSelEditing] = useState(false);
+  const [editDate, setEditDate] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editNote, setEditNote] = useState('');
+  const [editErr, setEditErr] = useState('');
+  const updateTxn = useUpdateTransaction();
   const [invoiceUid, setInvoiceUid] = useState<string | null>(null);
   const [dealUid, setDealUid] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const sheetRef = useRef<HTMLDivElement>(null);
-  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [showSettle, setShowSettle] = useState(false);
   const [wDate, setWDate] = useState(() => todayISO());
   const [wAmount, setWAmount] = useState('');
+  const [wDir, setWDir] = useState<'debit' | 'credit'>('debit');
   const [wNote, setWNote] = useState('');
   const [wError, setWError] = useState('');
   const [wMsg, setWMsg] = useState('');
@@ -119,10 +126,18 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
 
   const toggle = (id: string) => setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
-  const visibleRows = (data?.rows ?? []).filter((r) => {
+  const filteredRows = (data?.rows ?? []).filter((r) => {
     if (kind === 'invoices') return !!(r.invoiceUid || r.dealUid);
     if (kind === 'collect') return !r.invoiceUid && !r.dealUid;
+    if (kind === 'commission') return (r.credit ?? 0) > 0;
+    if (kind === 'withdraw') return (r.debit ?? 0) > 0 && !r.invoiceUid && !r.dealUid;
     return true;
+  });
+  // always newest → oldest
+  const visibleRows = [...filteredRows].sort((a, b) => {
+    const da = kind === 'invoices' ? (a.manifestDate ?? a.date) : a.date;
+    const db = kind === 'invoices' ? (b.manifestDate ?? b.date) : b.date;
+    return new Date(db).getTime() - new Date(da).getTime();
   });
 
   return (
@@ -136,19 +151,39 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
         {(from || to) && <button className="btn btn-ghost btn-sm" onClick={() => { setFrom(''); setTo(''); }}>كل الفترة</button>}
         <div style={{ flex: 1 }} />
         {party.role === 'AGENT' && can('invoices.commission') && (
-          <button className="btn btn-ghost btn-sm" onClick={() => setShowWithdraw((v) => !v)}>+ تسجيل سحب</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowSettle((v) => !v)}>+ تسوية commission</button>
         )}
         {data && <button className="btn btn-ghost btn-sm sp" onClick={() => sheetRef.current && downloadElementAsPdf(sheetRef.current, `كشف-حساب-${party.name}`)}>⬇ تحميل PDF</button>}
         {data && <button className="btn btn-primary btn-sm" onClick={() => window.print()}>🖨 طباعة</button>}
       </div>
 
-      {showWithdraw && can('invoices.commission') && (
+      {showSettle && can('invoices.commission') && (
         <div className="card no-print" style={{ padding: 16, marginBottom: 12 }}>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>تسجيل مبلغ أخذه {party.name}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12 }}>
+            <span style={{ fontWeight: 700, fontSize: 15 }}>تسوية حساب — {party.name}</span>
+            {data && (
+              <span className="muted" style={{ fontSize: 13 }}>
+                الرصيد الحالي:{' '}
+                <span style={{ fontWeight: 700, color: (data.balance ?? 0) >= 0 ? 'var(--credit)' : 'var(--debit)' }}>
+                  {money(data.balance, cur)}
+                </span>
+              </span>
+            )}
+          </div>
           <div className="form-grid">
             <Field label="التاريخ"><input type="date" value={wDate} onChange={(e) => setWDate(e.target.value)} /></Field>
             <Field label="المبلغ"><MoneyInput value={wAmount} onChange={setWAmount} placeholder="0.00" /></Field>
-            <Field label="البيان" full><input value={wNote} onChange={(e) => setWNote(e.target.value)} placeholder="سحب commission" /></Field>
+            <Field label="النوع">
+              <select
+                value={wDir}
+                onChange={(e) => setWDir(e.target.value as 'debit' | 'credit')}
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid var(--line)', borderRadius: 10 }}
+              >
+                <option value="debit">خصم من الرصيد (يقلل ما له عندنا)</option>
+                <option value="credit">إضافة للرصيد (يزيد ما له عندنا)</option>
+              </select>
+            </Field>
+            <Field label="البيان" full><input value={wNote} onChange={(e) => setWNote(e.target.value)} placeholder="تسوية حساب" /></Field>
           </div>
           {wError && <div className="err-text">{wError}</div>}
           {wMsg && <div style={{ color: 'var(--credit)', fontWeight: 700 }}>{wMsg}</div>}
@@ -160,7 +195,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                 setWError(''); setWMsg('');
                 if (!wAmount || Number(wAmount) <= 0) return setWError('اكتب المبلغ');
                 postEntry.mutate(
-                  { type: 'adjust', date: wDate, amount: Number(wAmount), partyId: party.id, direction: 'debit', note: wNote || 'سحب commission' },
+                  { type: 'adjust', date: wDate, amount: Number(wAmount), partyId: party.id, direction: wDir, note: wNote || 'تسوية حساب' },
                   {
                     onSuccess: () => { setWMsg('تم التسجيل ✓'); setWAmount(''); setWNote(''); },
                     onError: (e: any) => setWError(e.message),
@@ -170,13 +205,16 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
             >
               {postEntry.isPending ? '...' : 'حفظ'}
             </button>
-            <button className="btn btn-ghost btn-sm" onClick={() => { setShowWithdraw(false); setWError(''); setWMsg(''); }}>إلغاء</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => { setShowSettle(false); setWError(''); setWMsg(''); }}>إلغاء</button>
           </div>
         </div>
       )}
 
       <div className="toolbar no-print">
-        {([['all', 'كشف الكل'], ['invoices', 'الفواتير فقط'], ['collect', 'التحصيل فقط']] as [LedgerKind, string][]).map(([k, label]) => (
+        {(party.role === 'AGENT'
+          ? [['all', 'كل الحركات'], ['commission', 'commission مكتسب'], ['withdraw', 'مسحوب']] as [LedgerKind, string][]
+          : [['all', 'كشف الكل'], ['invoices', 'الفواتير فقط'], ['collect', 'التحصيل فقط']] as [LedgerKind, string][]
+        ).map(([k, label]) => (
           <button key={k} className={`btn btn-sm ${kind === k ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setKind(k)}>{label}</button>
         ))}
       </div>
@@ -184,7 +222,14 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
       {isLoading || !data ? <Spinner /> : (
         <div ref={sheetRef} className="card print-sheet ledger-sheet">
           <div className="mf-logo">أبو شامة</div>
-          <div className="mf-head"><h2>كشف حساب — {party.name}</h2></div>
+          <div className="mf-head">
+            <h2>كشف حساب — {party.name}</h2>
+            {data.linkedParty && (
+              <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
+                كشف مدمج مع {data.linkedParty.role === 'SUPPLIER' ? 'مورد' : 'عميل'}: <b>{data.linkedParty.name}</b>
+              </div>
+            )}
+          </div>
           <div className="muted" style={{ margin: '8px 4px' }}>
             رصيد افتتاحي: <span className="num">{money(data.opening, cur)}</span>
             {(from || to) && <span> · الفترة: {from ? fmtDate(from) : '…'} ← {to ? fmtDate(to) : '…'}</span>}
@@ -203,16 +248,40 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                   return (
                     <Fragment key={r.id}>
                       <tr
-                        style={{ cursor: r.invoiceUid || r.dealUid ? 'pointer' : 'default' }}
+                        style={{
+                          cursor: 'pointer',
+                          ...(r.manifestDate && r.manifestArrived === true
+                            ? { background: 'rgba(178,58,46,0.10)', borderRight: '3px solid var(--debit)' }
+                            : r.manifestDate && r.manifestArrived === false
+                            ? { background: 'rgba(15,110,92,0.10)', borderRight: '3px solid var(--credit)' }
+                            : {}),
+                        }}
                         onClick={() => {
                           if (r.invoiceUid) { setInvoiceUid(r.invoiceUid); return; }
                           if (r.dealUid) { setDealUid(r.dealUid); return; }
                           setSel(r);
+                          setSelEditing(false);
+                          setEditDate(r.date.slice(0, 10));
+                          setEditAmount(String(r.debit || r.credit));
+                          setEditNote(r.note ?? '');
+                          setEditErr('');
                         }}
                       >
-                        <td>{fmtDate(r.date)}</td>
+                        <td>
+                          {r.manifestDate ? (
+                            <span>
+                              {fmtDate(r.manifestDate)}
+                              {r.manifestNo && <span className="muted" style={{ fontSize: 11, display: 'block' }}>عربية {r.manifestNo}</span>}
+                            </span>
+                          ) : fmtDate(r.date)}
+                        </td>
                         <td>{r.type}</td>
                         <td className="muted">
+                          {data.linkedParty && r.partyRole && (
+                            <span className="pill" style={{ fontSize: 10, marginInlineEnd: 4, opacity: 0.75 }}>
+                              {r.partyRole === 'SUPPLIER' ? 'مورد' : 'عميل'}
+                            </span>
+                          )}
                           {r.invoiceItems?.length
                             ? <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); toggle(r.id); }}>{open ? '▾' : '▸'} {r.note || 'تفاصيل الفاتورة'}</button>
                             : r.note}
@@ -247,18 +316,73 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
       )}
 
       {sel && (
-        <DetailModal
-          title="تفاصيل الحركة"
-          onClose={() => setSel(null)}
-          rows={[
-            { label: 'التاريخ', value: fmtDate(sel.date) },
-            { label: 'النوع', value: sel.type },
-            { label: 'البيان', value: sel.note },
-            { label: 'مدين', value: sel.debit ? EGP(sel.debit) : '' },
-            { label: 'دائن', value: sel.credit ? EGP(sel.credit) : '' },
-            { label: 'الرصيد بعد الحركة', value: EGP(sel.balance) },
-          ]}
-        />
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}
+          onClick={() => setSel(null)}
+        >
+          <div
+            className="card"
+            style={{ padding: 20, minWidth: 320, maxWidth: 440, width: '90%' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>
+              {selEditing ? 'تعديل الحركة' : 'تفاصيل الحركة'}
+            </div>
+
+            {!selEditing ? (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '10px 20px', alignItems: 'baseline' }}>
+                  <span className="muted" style={{ fontSize: 13 }}>التاريخ</span><span>{fmtDate(sel.date)}</span>
+                  <span className="muted" style={{ fontSize: 13 }}>النوع</span><span>{sel.type}</span>
+                  {sel.note && <><span className="muted" style={{ fontSize: 13 }}>البيان</span><span>{sel.note}</span></>}
+                  {sel.debit > 0 && <><span className="muted" style={{ fontSize: 13 }}>مدين</span><span className="deb num">{EGP(sel.debit)}</span></>}
+                  {sel.credit > 0 && <><span className="muted" style={{ fontSize: 13 }}>دائن</span><span className="cre num">{EGP(sel.credit)}</span></>}
+                  <span className="muted" style={{ fontSize: 13 }}>الرصيد</span><span className="num">{EGP(sel.balance)}</span>
+                </div>
+                <div className="toolbar" style={{ marginTop: 14 }}>
+                  {can('entry') && (
+                    <button className="btn btn-ghost btn-sm" onClick={() => setSelEditing(true)}>✏ تعديل</button>
+                  )}
+                  <button className="btn btn-ghost btn-sm" onClick={() => setSel(null)}>إغلاق</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="form-grid">
+                  <Field label="التاريخ">
+                    <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+                  </Field>
+                  <Field label="المبلغ">
+                    <MoneyInput value={editAmount} onChange={setEditAmount} />
+                  </Field>
+                  <Field label="البيان" full>
+                    <input value={editNote} onChange={(e) => setEditNote(e.target.value)} placeholder="البيان…" />
+                  </Field>
+                </div>
+                {editErr && <div className="err-text" style={{ marginTop: 8 }}>{editErr}</div>}
+                <div className="toolbar" style={{ marginTop: 14 }}>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    disabled={updateTxn.isPending}
+                    onClick={() => {
+                      setEditErr('');
+                      updateTxn.mutate(
+                        { id: sel.id, dto: { date: editDate, amount: Number(editAmount) || undefined, note: editNote || undefined } },
+                        {
+                          onSuccess: () => { setSel(null); setSelEditing(false); },
+                          onError: (e: any) => setEditErr(e.message ?? 'حدث خطأ'),
+                        },
+                      );
+                    }}
+                  >
+                    {updateTxn.isPending ? '...' : 'حفظ'}
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setSelEditing(false)}>رجوع</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
     </>
   );

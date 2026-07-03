@@ -15,8 +15,11 @@ const sellTotal = (d: Deal) => (d.items || []).reduce((s, it) => s + it.qty * it
 
 export function DealDetailById({ uid, onBack }: { uid: string; onBack: () => void }) {
   const { data, isLoading } = useDeal(uid);
+  const { can } = useAuth();
+  const [editing, setEditing] = useState(false);
   if (isLoading || !data) return <Spinner />;
-  return <DealDetail deal={data} onBack={onBack} />;
+  if (editing) return <DealEditor initialDeal={data} onClose={() => setEditing(false)} />;
+  return <DealDetail deal={data} onBack={onBack} onEdit={can('deals.edit') ? () => setEditing(true) : undefined} />;
 }
 
 function DealDetail({ deal, onBack, onEdit, onDelete }: {

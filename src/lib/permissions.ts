@@ -22,6 +22,7 @@ export const PERMISSIONS: PermGroup[] = [
       { key: 'entry.driverPayment',   label: 'دفع ناولون / عطلة سائق' },
       { key: 'entry.edit',            label: 'تعديل حركة' },
       { key: 'entry.delete',          label: 'حذف حركة' },
+      { key: 'entry.ownOnly',         label: 'يشوف حركاته فقط (لا يشوف حركات الآخرين)' },
     ],
   },
   {
@@ -42,14 +43,14 @@ export const PERMISSIONS: PermGroup[] = [
     ],
   },
   {
-    page: 'manifests', label: 'كشوفات العربيات وكشف السائقين', actions: [
+    page: 'manifests', label: 'كشوفات العربيات', actions: [
       { key: 'manifests.create',      label: 'إنشاء كشف عربية' },
       { key: 'manifests.edit',        label: 'تعديل كشف' },
       { key: 'manifests.delete',      label: 'حذف كشف' },
       { key: 'manifests.print',       label: 'طباعة' },
-      { key: 'manifests.driverTrips', label: 'كشف السائقين' },
     ],
   },
+  { page: 'driver-trips', label: 'كشف السائقين', actions: [] },
   {
     page: 'requests', label: 'طلبيات العملاء', actions: [
       { key: 'requests.create',  label: 'إنشاء طلبية' },
@@ -66,10 +67,14 @@ export const PERMISSIONS: PermGroup[] = [
   },
   {
     page: 'treasury', label: 'الخزنة وحركة النقد', actions: [
-      { key: 'treasury.add',   label: 'إضافة / تعديل خزنة' },
-      { key: 'treasury.forex', label: 'وسطاء الصرف' },
+      { key: 'treasury.settle',    label: 'إيداع / سحب من خزنة' },
+      { key: 'treasury.movements', label: 'كل الحركات النقدية' },
+      { key: 'treasury.expenses',  label: 'المصروفات حسب البند' },
+      { key: 'treasury.add',       label: 'إضافة / تعديل خزنة' },
+      { key: 'treasury.forex',     label: 'وسطاء الصرف' },
     ],
   },
+  { page: 'today', label: 'تقرير اليوم', actions: [] },
   {
     page: 'settings', label: 'الإعدادات', actions: [
       { key: 'settings.users',   label: 'إدارة المستخدمين' },

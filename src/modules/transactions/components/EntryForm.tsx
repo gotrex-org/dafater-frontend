@@ -8,7 +8,7 @@ import { PageTitle, Field, Combobox, MoneyInput } from '@/components/common';
 import { PartyCombobox } from '../../invoices/components/PartyCombobox';
 import { useAllParties } from '../../parties/hooks';
 import { useAllTreasury } from '../../treasury/hooks';
-import { useAllExpenseCategories } from '../../expense-categories/hooks';
+import { useAllExpenseCategories, useCreateCategory } from '../../expense-categories/hooks';
 import { usePostEntry, usePendingCollections, useResolveCollection } from '../hooks';
 import { useForexAgents, useEgpInAny } from '../../forex/hooks';
 import { usePendingDriverTrips, useAddPayment } from '../../driver-trips/hooks';
@@ -108,50 +108,45 @@ function DriverPaymentSection() {
 
   const [date, setDate] = useState(todayISO());
   const [tripId, setTripId] = useState('');
-  const [payType, setPayType] = useState<'freight' | 'delay'>('freight');
+  const [payType, setPayType] = useState<'freight' | 'delay' | 'weightDiff'>('freight');
   const [amount, setAmount] = useState('');
-  const [weightDiff, setWeightDiff] = useState('');
   const [treasuryId, setTreasuryId] = useState('');
   const [note, setNote] = useState('');
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
 
   const selTrip = trips.find((t) => t.id === tripId);
-  const remainingFreight = selTrip?.remainingFreight ?? 0;
-  const remainingDelay   = selTrip?.remainingDelay   ?? 0;
-  const canFreight = remainingFreight > 0;
-  const canDelay   = remainingDelay   > 0;
+  const remainingFreight    = selTrip?.remainingFreight    ?? 0;
+  const remainingDelay      = selTrip?.remainingDelay      ?? 0;
+  const remainingWeightDiff = selTrip?.remainingWeightDiff ?? 0;
+  const canFreight    = remainingFreight    > 0;
+  const canDelay      = remainingDelay      > 0;
+  const canWeightDiff = remainingWeightDiff > 0;
 
   useEffect(() => {
     if (selTrip) {
-      if (payType === 'freight' && !canFreight && canDelay) setPayType('delay');
-      if (payType === 'delay'   && !canDelay   && canFreight) setPayType('freight');
-      setAmount(String(payType === 'freight' ? remainingFreight : remainingDelay));
+      if (payType === 'freight'    && !canFreight    && canDelay)      setPayType('delay');
+      if (payType === 'freight'    && !canFreight    && canWeightDiff) setPayType('weightDiff');
+      if (payType === 'delay'      && !canDelay      && canFreight)    setPayType('freight');
+      if (payType === 'weightDiff' && !canWeightDiff && canFreight)    setPayType('freight');
+      setAmount(String(payType === 'freight' ? remainingFreight : payType === 'delay' ? remainingDelay : remainingWeightDiff));
     }
   }, [tripId, payType]);
 
-  const reset = () => { setTripId(''); setAmount(''); setWeightDiff(''); setNote(''); setTreasuryId(''); setMsg(''); };
+  const reset = () => { setTripId(''); setAmount(''); setNote(''); setTreasuryId(''); setMsg(''); };
 
-  const maxAmount = payType === 'freight' ? remainingFreight : remainingDelay;
+  const maxAmount = payType === 'freight' ? remainingFreight : payType === 'delay' ? remainingDelay : remainingWeightDiff;
 
   const submit = () => {
     setError(''); setMsg('');
     if (!tripId) return setError('اختر السائق');
     if (!amount || Number(amount) <= 0) return setError('اكتب المبلغ');
-    if (payType === 'freight' && Number(amount) > remainingFreight + 0.001)
-      return setError(`المبلغ أكبر من الناولون المتبقي (${EGP(remainingFreight)})`);
-    if (payType === 'delay' && Number(amount) > remainingDelay + 0.001)
-      return setError(`المبلغ أكبر من العطلة المتبقية (${EGP(remainingDelay)})`);
+    if (payType === 'freight'    && Number(amount) > remainingFreight    + 0.001) return setError(`المبلغ أكبر من الناولون المتبقي (${EGP(remainingFreight)})`);
+    if (payType === 'delay'      && Number(amount) > remainingDelay      + 0.001) return setError(`المبلغ أكبر من العطلة المتبقية (${EGP(remainingDelay)})`);
+    if (payType === 'weightDiff' && Number(amount) > remainingWeightDiff + 0.001) return setError(`المبلغ أكبر من فرق الوزن المتبقي (${EGP(remainingWeightDiff)})`);
     if (!treasuryId) return setError('اختر الخزنة');
     addPayment.mutate(
-      {
-        id: tripId,
-        dto: {
-          date, amount: Number(amount), paymentType: payType, treasuryId,
-          weightDiffAmount: payType === 'delay' && Number(weightDiff) > 0 ? Number(weightDiff) : undefined,
-          note: note || undefined,
-        },
-      },
+      { id: tripId, dto: { date, amount: Number(amount), paymentType: payType, treasuryId, note: note || undefined } },
       {
         onSuccess: () => { setMsg('تم تسجيل الدفعة ✓'); reset(); },
         onError: (e: any) => setError(e.message),
@@ -169,8 +164,9 @@ function DriverPaymentSection() {
           {trips.map((t) => (
             <option key={t.id} value={t.id}>
               {t.driverName}{t.vehicleNo ? ` (${t.vehicleNo})` : ''} — {t.clientName}
-              {(t.remainingFreight ?? 0) > 0 ? ` · ناولون: ${EGP(t.remainingFreight ?? 0)}` : ''}
-              {(t.remainingDelay ?? 0) > 0   ? ` · عطلة: ${EGP(t.remainingDelay ?? 0)}` : ''}
+              {(t.remainingFreight    ?? 0) > 0 ? ` · ناولون: ${EGP(t.remainingFreight    ?? 0)}` : ''}
+              {(t.remainingDelay      ?? 0) > 0 ? ` · عطلة: ${EGP(t.remainingDelay      ?? 0)}` : ''}
+              {(t.remainingWeightDiff ?? 0) > 0 ? ` · فرق وزن: ${EGP(t.remainingWeightDiff ?? 0)}` : ''}
             </option>
           ))}
         </select>
@@ -180,7 +176,7 @@ function DriverPaymentSection() {
       {selTrip && (
         <>
           <Field label="نوع الدفع">
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <input type="radio" name="dpType" value="freight" checked={payType === 'freight'} disabled={!canFreight}
                   onChange={() => { setPayType('freight'); setAmount(String(remainingFreight)); }} />
@@ -191,25 +187,21 @@ function DriverPaymentSection() {
                   onChange={() => { setPayType('delay'); setAmount(String(remainingDelay)); }} />
                 عطلة {canDelay ? <span className="muted" style={{ fontSize: 12 }}>({EGP(remainingDelay)} متبقي)</span> : <span style={{ color: 'var(--muted)', fontSize: 11 }}>{selTrip.delayFee > 0 ? '(سُدّدت)' : '(لا يوجد)'}</span>}
               </label>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input type="radio" name="dpType" value="weightDiff" checked={payType === 'weightDiff'} disabled={!canWeightDiff}
+                  onChange={() => { setPayType('weightDiff'); setAmount(String(remainingWeightDiff)); }} />
+                فرق وزن {canWeightDiff ? <span className="muted" style={{ fontSize: 12 }}>({EGP(remainingWeightDiff)} متبقي)</span> : <span style={{ color: 'var(--muted)', fontSize: 11 }}>{(selTrip.weightDiffAmount ?? 0) > 0 ? '(سُدّد)' : '(لا يوجد)'}</span>}
+              </label>
             </div>
           </Field>
 
           <Field label={`المبلغ (أقصى ${EGP(maxAmount)})`}>
             <MoneyInput
               value={amount}
-              onChange={(v) => {
-                const cap = payType === 'freight' ? remainingFreight : remainingDelay;
-                setAmount(Number(v) > cap ? String(cap) : v);
-              }}
+              onChange={(v) => { setAmount(Number(v) > maxAmount ? String(maxAmount) : v); }}
               placeholder="0.00"
             />
           </Field>
-
-          {payType === 'delay' && (
-            <Field label="فرق وزن (اختياري)">
-              <MoneyInput value={weightDiff} onChange={setWeightDiff} placeholder="0.00" />
-            </Field>
-          )}
         </>
       )}
 
@@ -239,8 +231,13 @@ export function EntryForm() {
   }, [allowedTabs, type]);
   const { data: clients } = useAllParties('CLIENT');
   const { data: suppliers } = useAllParties('SUPPLIER');
+  const { data: agents } = useAllParties('AGENT');
   const { data: treasury } = useAllTreasury();
   const { data: cats } = useAllExpenseCategories();
+  const createCategory = useCreateCategory();
+  const [newCatName, setNewCatName] = useState('');
+  const [showAddCat, setShowAddCat] = useState(false);
+  const [catMsg, setCatMsg] = useState('');
   const { data: forexAgents } = useForexAgents();
   const postEntry = usePostEntry();
   const egpInMutation = useEgpInAny();
@@ -257,6 +254,7 @@ export function EntryForm() {
   const [rate, setRate] = useState('');
   const [addFee, setAddFee] = useState(false);
   const [feeAmount, setFeeAmount] = useState('500');
+  const [expensePartyId, setExpensePartyId] = useState('');
   const [note, setNote] = useState('');
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
@@ -277,7 +275,7 @@ export function EntryForm() {
   const reset = () => {
     setAmount(''); setNote(''); setPartyId(''); setPartyId2('');
     setTreasuryId(''); setTreasuryId2(''); setCategoryId('');
-    setRate(''); setAddFee(false); setFeeAmount('500'); setForexAgentId('');
+    setRate(''); setAddFee(false); setFeeAmount('500'); setForexAgentId(''); setExpensePartyId('');
   };
 
   const submit = () => {
@@ -299,7 +297,7 @@ export function EntryForm() {
     postEntry.mutate(
       {
         type: type as EntryType, date, amount: Number(amount),
-        partyId: ['collect', 'paySupplier', 'adjust'].includes(type) ? partyId : undefined,
+        partyId: type === 'expense' ? expensePartyId || undefined : ['collect', 'paySupplier', 'adjust'].includes(type) ? partyId : undefined,
         treasuryId: type !== 'adjust' ? treasuryId : undefined,
         treasuryId2: type === 'transfer' ? treasuryId2 : undefined,
         categoryId: type === 'expense' ? categoryId : undefined,
@@ -338,7 +336,7 @@ export function EntryForm() {
               {(type === 'collect' || type === 'paySupplier' || type === 'adjust') && (
                 <Field label={type === 'collect' ? 'العميل' : type === 'paySupplier' ? 'المورد' : 'الحساب'}>
                   <PartyCombobox
-                    parties={type === 'adjust' ? [...(clients?.data ?? []), ...(suppliers?.data ?? [])] : parties}
+                    parties={type === 'adjust' ? [...(clients?.data ?? []), ...(suppliers?.data ?? []), ...(agents?.data ?? [])] : parties}
                     value={partyId}
                     onChange={setPartyId}
                     role={type === 'paySupplier' ? 'SUPPLIER' : 'CLIENT'}
@@ -358,8 +356,59 @@ export function EntryForm() {
               )}
 
               {type === 'expense' && (
-                <Field label="بند المصروف">
-                  <Combobox options={cats?.data ?? []} value={categoryId} onChange={setCategoryId} />
+                <Field label="العميل (اختياري)">
+                  <Combobox options={clients?.data ?? []} value={expensePartyId} onChange={setExpensePartyId} placeholder="اختياري — لتسجيله على حساب عميل" />
+                </Field>
+              )}
+
+              {type === 'expense' && (
+                <Field label="بند المصروف" full>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 160 }}>
+                      <Combobox options={cats?.data ?? []} value={categoryId} onChange={setCategoryId} />
+                    </div>
+                    {!showAddCat ? (
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setShowAddCat(true); setCatMsg(''); }}>+ بند جديد</button>
+                    ) : (
+                      <>
+                        <input
+                          autoFocus
+                          value={newCatName}
+                          onChange={(e) => setNewCatName(e.target.value)}
+                          placeholder="اسم البند"
+                          style={{ flex: 1, minWidth: 120 }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && newCatName.trim()) {
+                              createCategory.mutate(
+                                { name: newCatName.trim() },
+                                {
+                                  onSuccess: (cat) => { setCategoryId((cat as any).uid); setNewCatName(''); setShowAddCat(false); setCatMsg(''); },
+                                  onError: (err: any) => setCatMsg(err.message),
+                                },
+                              );
+                            }
+                            if (e.key === 'Escape') { setShowAddCat(false); setNewCatName(''); }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          disabled={!newCatName.trim() || createCategory.isPending}
+                          onClick={() =>
+                            createCategory.mutate(
+                              { name: newCatName.trim() },
+                              {
+                                onSuccess: (cat) => { setCategoryId((cat as any).uid); setNewCatName(''); setShowAddCat(false); setCatMsg(''); },
+                                onError: (err: any) => setCatMsg(err.message),
+                              },
+                            )
+                          }
+                        >حفظ</button>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setShowAddCat(false); setNewCatName(''); }}>إلغاء</button>
+                      </>
+                    )}
+                  </div>
+                  {catMsg && <div className="err-text" style={{ marginTop: 4 }}>{catMsg}</div>}
                 </Field>
               )}
 

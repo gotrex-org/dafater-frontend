@@ -9,6 +9,7 @@ export const driverTripsApi = {
   update: (id: string, dto: UpdateDriverTripDto) => api.patch<DriverTrip>(`/driver-trips/${id}`, dto),
   addPayment: (id: string, dto: AddPaymentDto) => api.post<DriverTrip>(`/driver-trips/${id}/payments`, dto),
   deletePayment: (id: string, payId: string) => api.del<DriverTrip>(`/driver-trips/${id}/payments/${payId}`),
-  setArrival: (id: string, arrivalDate: string) => api.patch<DriverTrip>(`/driver-trips/${id}/arrival`, { arrivalDate }),
+  setArrival: (id: string, data: { arrivalDate: string; weightDiffAmount?: number }) => api.patch<DriverTrip>(`/driver-trips/${id}/arrival`, data),
+  patchWeightDiff: (id: string, amount: number) => api.patch<DriverTrip>(`/driver-trips/${id}/weight-diff`, { amount }),
   remove: (id: string) => api.del<void>(`/driver-trips/${id}`),
 };

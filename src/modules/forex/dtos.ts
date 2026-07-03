@@ -11,7 +11,7 @@ export interface DollarAgent {
 export interface DollarAgentTx {
   id: string;
   date: string;
-  type: 'EGP_IN' | 'USD_OUT';
+  type: 'EGP_IN' | 'USD_OUT' | 'SETTLE';
   egpAmount: number;
   usdAmount: number;
   exchangeRate: number;
@@ -28,3 +28,4 @@ export interface CreateAgentDto { name: string; phone?: string; note?: string }
 export interface UpdateAgentDto { name?: string; phone?: string; note?: string }
 export interface EgpInDto { date: string; egpAmount: number; treasuryId?: string; note?: string }
 export interface UsdOutDto { date: string; usdAmount: number; exchangeRate: number; partyId: string; note?: string }
+export interface SettleDto { date: string; egpAmount: number; direction: 'in' | 'out'; treasuryId?: string; note?: string }

@@ -5,10 +5,84 @@ import { EGP } from '@/lib/format';
 import { useTableState } from '@/lib/useTableState';
 import { SegmentedControl, SearchInput, MoneyInput } from '@/components/common';
 import { useAuth } from '@/lib/auth';
-import { useParties, useCreateParty, useUpdateParty, useDeleteParty } from '../hooks';
+import { useParties, useCreateParty, useUpdateParty, useDeleteParty, useLinkParty, useUnlinkParty, useAllParties } from '../hooks';
 import type { Party } from '../dtos';
 
-function PartyRow({ party, canDelete }: { party: Party; canDelete: boolean }) {
+function LinkPanel({ party, canManage, otherRole }: { party: Party; canManage: boolean; otherRole: 'CLIENT' | 'SUPPLIER' }) {
+  const linked = party.linkedParty ?? party.linkedFrom ?? null;
+  const { data: others } = useAllParties(otherRole);
+  const linkMut = useLinkParty();
+  const unlinkMut = useUnlinkParty();
+  const [show, setShow] = useState(false);
+  const [selectedUid, setSelectedUid] = useState('');
+  const [err, setErr] = useState('');
+
+  if (!canManage) {
+    if (!linked) return null;
+    return <span className="pill muted" style={{ fontSize: 11, marginInlineStart: 8 }}>مرتبط بـ {linked.name}</span>;
+  }
+
+  if (linked) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginInlineStart: 8 }}>
+        <span className="pill" style={{ fontSize: 11, background: 'var(--accent-soft, #e8f0fe)', color: 'var(--accent, #1a56db)' }}>
+          🔗 {linked.name}
+        </span>
+        <button
+          className="btn btn-ghost btn-sm"
+          style={{ fontSize: 11, padding: '2px 8px' }}
+          onClick={() => { if (confirm(`فك الربط مع "${linked.name}"؟`)) unlinkMut.mutate(party.id, { onError: (e: any) => alert(e.message) }); }}
+          disabled={unlinkMut.isPending}
+        >
+          فك الربط
+        </button>
+      </span>
+    );
+  }
+
+  if (!show) {
+    return (
+      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '2px 8px', marginInlineStart: 8 }} onClick={() => setShow(true)}>
+        + ربط
+      </button>
+    );
+  }
+
+  const choices = (others?.data ?? []).filter((p) => !p.linkedParty && !p.linkedFrom);
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginInlineStart: 8 }}>
+      <select
+        value={selectedUid}
+        onChange={(e) => setSelectedUid(e.target.value)}
+        style={{ padding: '4px 8px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 12 }}
+      >
+        <option value="">اختر {otherRole === 'CLIENT' ? 'عميل' : 'مورد'}…</option>
+        {choices.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+      <button
+        className="btn btn-primary btn-sm"
+        style={{ fontSize: 11, padding: '4px 10px' }}
+        disabled={!selectedUid || linkMut.isPending}
+        onClick={() => {
+          setErr('');
+          linkMut.mutate(
+            { id: party.id, linkedPartyUid: selectedUid },
+            { onSuccess: () => setShow(false), onError: (e: any) => setErr(e.message) },
+          );
+        }}
+      >
+        ربط
+      </button>
+      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => { setShow(false); setErr(''); }}>
+        إلغاء
+      </button>
+      {err && <span className="err-text" style={{ fontSize: 11 }}>{err}</span>}
+    </span>
+  );
+}
+
+function PartyRow({ party, canDelete, canManage }: { party: Party; canDelete: boolean; canManage: boolean }) {
   const update = useUpdateParty();
   const del = useDeleteParty();
   const [open, setOpen] = useState(false);
@@ -31,13 +105,16 @@ function PartyRow({ party, canDelete }: { party: Party; canDelete: boolean }) {
     del.mutate(party.id, { onError: (e: any) => setMsg(e.message) });
   };
 
+  const otherRole: 'CLIENT' | 'SUPPLIER' = party.role === 'CLIENT' ? 'SUPPLIER' : 'CLIENT';
+
   return (
     <div style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 12, marginBottom: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ flex: 1, fontWeight: 700 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ flex: 1, fontWeight: 700, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
           {party.name}
           {party.currency === 'USD' && <span className="pill" style={{ marginInlineStart: 6 }}>دولار</span>}
           {party.phone && <span className="muted" style={{ fontSize: 12, fontWeight: 400, marginInlineStart: 8 }}>{party.phone}</span>}
+          <LinkPanel party={party} canManage={canManage} otherRole={otherRole} />
         </span>
         <span className={`num ${(party.balance ?? 0) >= 0 ? 'deb' : 'cre'}`} style={{ fontWeight: 700 }}>{EGP(party.balance)}</span>
         <button className="btn btn-ghost btn-sm" onClick={() => setOpen((o) => !o)}>{open ? 'إغلاق' : 'تعديل'}</button>
@@ -62,7 +139,7 @@ function PartyRow({ party, canDelete }: { party: Party; canDelete: boolean }) {
 }
 
 export function PartiesRegistry() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const [role, setRole] = useState<'CLIENT' | 'SUPPLIER'>('CLIENT');
   const [search, setSearch] = useState('');
   const { page, setPage, pageSize } = useTableState();
@@ -74,6 +151,7 @@ export function PartiesRegistry() {
   const [pCurrency, setPCurrency] = useState<'EGP' | 'USD'>('EGP');
   const [pErr, setPErr] = useState('');
 
+  const canManage = !!user?.admin || can('settings');
   const roleLabel = role === 'CLIENT' ? 'عميل' : 'مورد';
 
   const addParty = () => {
@@ -105,7 +183,7 @@ export function PartiesRegistry() {
           options={[{ value: 'CLIENT', label: 'العملاء' }, { value: 'SUPPLIER', label: 'الموردين' }]}
         />
         <SearchInput value={search} onChange={setSearch} placeholder="بحث بالاسم…" />
-        {!adding && (
+        {!adding && canManage && (
           <button className="btn btn-ghost btn-sm" onClick={() => setAdding(true)}>+ {roleLabel} جديد</button>
         )}
       </div>
@@ -129,7 +207,7 @@ export function PartiesRegistry() {
       <div>
         {isLoading && <div className="empty">جاري التحميل…</div>}
         {!isLoading && pageRows.length === 0 && <div className="empty">لا يوجد</div>}
-        {pageRows.map((p) => <PartyRow key={p.id} party={p} canDelete={!!user?.admin} />)}
+        {pageRows.map((p) => <PartyRow key={p.id} party={p} canDelete={!!user?.admin} canManage={canManage} />)}
       </div>
 
       {total > pageSize && (

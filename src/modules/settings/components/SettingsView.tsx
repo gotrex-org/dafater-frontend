@@ -15,14 +15,31 @@ export function SettingsView() {
   const updateConfig = useUpdateConfig();
   const [email, setEmail] = useState('');
   const [msg, setMsg] = useState('');
+  const [graceDays, setGraceDays] = useState<number>(8);
+  const [feePerDay, setFeePerDay] = useState<number>(1200);
+  const [tripsMsg, setTripsMsg] = useState('');
 
-  useEffect(() => { if (config) setEmail(config.orderEmail); }, [config]);
+  useEffect(() => {
+    if (config) {
+      setEmail(config.orderEmail);
+      setGraceDays(config.delayGraceDays);
+      setFeePerDay(config.delayFeePerDay);
+    }
+  }, [config]);
 
   const saveEmail = () => {
     setMsg('');
     updateConfig.mutate(
       { orderEmail: email },
       { onSuccess: () => setMsg('تم الحفظ ✓'), onError: (e: any) => setMsg(e.message) },
+    );
+  };
+
+  const saveTripsConfig = () => {
+    setTripsMsg('');
+    updateConfig.mutate(
+      { delayGraceDays: graceDays, delayFeePerDay: feePerDay },
+      { onSuccess: () => setTripsMsg('تم الحفظ ✓'), onError: (e: any) => setTripsMsg(e.message) },
     );
   };
 
@@ -47,6 +64,31 @@ export function SettingsView() {
           <div className="toolbar">
             <button className="btn btn-primary btn-sm" onClick={saveEmail} disabled={updateConfig.isPending}>حفظ الإيميل</button>
             {msg && <span className="muted">{msg}</span>}
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="إعدادات رحلات السائقين" defaultOpen={false}>
+        <div className="card" style={{ padding: 16, display: 'grid', gap: 10 }}>
+          <Field label="فترة السماح (أيام قبل احتساب العطلة)">
+            <input
+              type="number"
+              min={0}
+              value={graceDays}
+              onChange={(e) => setGraceDays(Number(e.target.value))}
+            />
+          </Field>
+          <Field label="قيمة يوم العطلة (جنيه)">
+            <input
+              type="number"
+              min={0}
+              value={feePerDay}
+              onChange={(e) => setFeePerDay(Number(e.target.value))}
+            />
+          </Field>
+          <div className="toolbar">
+            <button className="btn btn-primary btn-sm" onClick={saveTripsConfig} disabled={updateConfig.isPending}>حفظ</button>
+            {tripsMsg && <span className="muted">{tripsMsg}</span>}
           </div>
         </div>
       </CollapsibleSection>

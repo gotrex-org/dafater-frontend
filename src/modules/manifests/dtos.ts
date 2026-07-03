@@ -17,6 +17,7 @@ export interface Manifest {
   clearingAgent?: string | null;
   note?: string | null;
   items: ManifestItem[];
+  driverTrips?: { arrivalDate?: string | null }[];
 }
 
 export interface CreateManifestDto {

@@ -19,16 +19,20 @@ export interface DriverTrip {
   departureDate: string;
   agreedFreight: number;
   delayFee: number;
+  weightDiffAmount: number;
   note?: string | null;
   arrivalDate?: string | null;
   delayTxId?: number | null;
+  weightDiffTxId?: number | null;
   payments: DriverPayment[];
   createdAt: string;
   // computed by findAll
   totalFreightPaid?: number;
   totalDelayPaid?: number;
+  totalWeightDiffPaid?: number;
   remainingFreight?: number;
   remainingDelay?: number;
+  remainingWeightDiff?: number;
   trulyClosed?: boolean;
 }
 
@@ -44,6 +48,7 @@ export interface CreateDriverTripDto {
   note?: string;
   initialPaid?: number;
   initialPaidNote?: string;
+  initialPaidTreasuryId?: string;
   teaMoney?: number;
   teaTreasuryId?: string;
 }
@@ -63,7 +68,7 @@ export interface AddPaymentDto {
   date: string;
   amount: number;
   note?: string;
-  paymentType?: 'freight' | 'delay';
+  paymentType?: 'freight' | 'delay' | 'weightDiff';
   treasuryId?: string;
   weightDiffAmount?: number;
 }

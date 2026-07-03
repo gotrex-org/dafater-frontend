@@ -19,9 +19,11 @@ export interface ProductMovement {
 export interface CreateProductDto {
   name: string;
   unit?: string;
+  service?: boolean;
 }
 
 export interface UpdateProductDto {
   name?: string;
   unit?: string;
+  service?: boolean;
 }

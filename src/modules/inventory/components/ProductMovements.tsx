@@ -3,11 +3,14 @@
 import { useState } from 'react';
 import { EGP, QTY, fmtDate } from '@/lib/format';
 import { PageTitle, DataTable, Spinner, SegmentedControl, Combobox, StatsGrid, StatCard, type Column } from '@/components/common';
-import { useProductMovements } from '../../products/hooks';
+import { useProductMovements, useAllProducts, useUpdateProduct } from '../../products/hooks';
 import type { ProductMovement } from '../../products/dtos';
 
 export function ProductMovements({ productId, name, onBack }: { productId: string; name: string; onBack: () => void }) {
   const { data = [], isLoading } = useProductMovements(productId);
+  const { data: products } = useAllProducts();
+  const updateProduct = useUpdateProduct();
+  const product = products?.data.find((p) => p.id === productId);
   const [tab, setTab] = useState<'all' | 'in' | 'out'>('all');
   const [q, setQ] = useState('');
 
@@ -33,6 +36,17 @@ export function ProductMovements({ productId, name, onBack }: { productId: strin
     <>
       <button className="btn btn-ghost btn-sm" onClick={onBack}>→ رجوع للمخزن</button>
       <PageTitle title={`تقرير الصنف: ${name}`} subtitle="كل الكميات اللي اتشريت واتباعت، ومن مين وله مين" />
+
+      {product !== undefined && (
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg2)', borderRadius: 8, cursor: 'pointer', marginBottom: 8 }}>
+          <input
+            type="checkbox"
+            checked={!!product.service}
+            onChange={() => updateProduct.mutate({ id: productId, dto: { service: !product.service } })}
+          />
+          <span style={{ fontSize: 13 }}>بند خدمة — يظهر تلقائياً في الفواتير والبيع الخارجي</span>
+        </label>
+      )}
 
       <StatsGrid columns={2}>
         <StatCard variant="blue" label="إجمالي المشترى (دخول)" value={QTY(bought)} />

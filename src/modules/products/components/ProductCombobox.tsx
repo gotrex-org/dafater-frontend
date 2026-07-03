@@ -13,6 +13,10 @@ type Opt = { kind: 'product'; product: Product } | { kind: 'create'; name: strin
  * - id mode (default): `value` is a product id, `onChange` emits the picked id.
  * - freeText mode: `value`/`onChange` are the raw name string (used by manifests),
  *   and any typed text is kept even if it matches no product.
+ *
+ * Auto-create on blur: in id mode, if the user types a name and moves away without
+ * picking from the dropdown, the component auto-selects an exact match or creates a
+ * new product — no manual "add" click required.
  */
 export function ProductCombobox({
   products,
@@ -33,10 +37,12 @@ export function ProductCombobox({
   );
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
+  const [pendingCreate, setPendingCreate] = useState(false);
 
   const q = query.trim().toLowerCase();
   const matches = (q ? products.filter((p) => p.name.toLowerCase().includes(q)) : products).slice(0, 100);
-  const hasExact = !!q && products.some((p) => p.name.toLowerCase() === q);
+  const exactProduct = q ? products.find((p) => p.name.toLowerCase() === q) : undefined;
+  const hasExact = !!exactProduct;
 
   const options: Opt[] = [
     ...matches.map((product) => ({ kind: 'product' as const, product })),
@@ -49,9 +55,13 @@ export function ProductCombobox({
       setQuery(opt.product.name);
       setOpen(false);
     } else {
+      setPendingCreate(true);
       createProduct.mutate(
         { name: opt.name },
-        { onSuccess: (p) => { onChange(freeText ? p.name : p.id); setQuery(p.name); setOpen(false); } },
+        {
+          onSuccess: (p) => { onChange(freeText ? p.name : p.id); setQuery(p.name); setOpen(false); setPendingCreate(false); },
+          onError: () => setPendingCreate(false),
+        },
       );
     }
   };
@@ -60,8 +70,8 @@ export function ProductCombobox({
     setQuery(v);
     setOpen(true);
     setHi(0);
-    if (freeText) onChange(v);          // keep raw text live for manifests
-    else if (value) onChange('');       // typing invalidates a prior id selection
+    if (freeText) onChange(v);
+    else if (value) onChange('');
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -75,11 +85,33 @@ export function ProductCombobox({
         e.preventDefault(); e.stopPropagation();
         commit(options[Math.min(hi, options.length - 1)]);
       } else if (freeText && query.trim()) {
-        onChange(query.trim()); setOpen(false); // let Enter bubble to move to next field
+        onChange(query.trim()); setOpen(false);
       }
     } else if (e.key === 'Escape') {
       if (open) { e.stopPropagation(); setOpen(false); }
     }
+  };
+
+  const onBlur = () => {
+    setTimeout(() => {
+      setOpen(false);
+      // id mode only — nothing to do in freeText mode
+      if (freeText || !query.trim() || value || pendingCreate) return;
+      if (exactProduct) {
+        // exact name match → auto-select without creating
+        onChange(exactProduct.id);
+      } else {
+        // new name → auto-create
+        setPendingCreate(true);
+        createProduct.mutate(
+          { name: query.trim() },
+          {
+            onSuccess: (p) => { onChange(p.id); setQuery(p.name); setPendingCreate(false); },
+            onError: () => setPendingCreate(false),
+          },
+        );
+      }
+    }, 120);
   };
 
   return (
@@ -89,7 +121,7 @@ export function ProductCombobox({
         placeholder={placeholder}
         onChange={(e) => onInput(e.target.value)}
         onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        onBlur={onBlur}
         onKeyDown={onKeyDown}
       />
       {open && options.length > 0 && (

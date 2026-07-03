@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { useTableState } from '@/lib/useTableState';
 import { PageTitle, DataTable, type Column } from '@/components/common';
+import { useAuth } from '@/lib/auth';
 import { useUsers } from '../../users/hooks';
-import { useAudit } from '../hooks';
+import { useAudit, useUndoAudit } from '../hooks';
 import type { AuditLog } from '../dtos';
 
 const COLORS = ['#0f6e5c', '#b23a2e', '#2c5a86', '#b98a2e', '#7a3e9d', '#0b7285', '#a83232'];
@@ -22,7 +23,9 @@ const FIELD_LABELS: Record<string, string> = {
 const ENTITY: Record<string, string> = {
   invoices: 'فاتورة', manifests: 'كشف عربية', parties: 'حساب/طرف', products: 'صنف', requests: 'طلب',
   deals: 'بيع خارجي', adjustments: 'تسوية مخزن', treasury: 'خزينة', transactions: 'حركة',
-  warehouses: 'مخزن', 'expense-categories': 'بند مصروف', users: 'مستخدم', orders: 'طلبية عميل', config: 'إعدادات',
+  warehouses: 'مخزن', 'expense-categories': 'بند مصروف', users: 'مستخدم', orders: 'طلبية عميل',
+  config: 'إعدادات', 'driver-trips': 'رحلة سائق', drivers: 'سائق', loans: 'سلفة',
+  'dollar-agents': 'وكيل دولار',
 };
 const ACTION: Record<string, string> = { CREATE: 'إضافة', UPDATE: 'تعديل', DELETE: 'حذف' };
 const ACTION_CLASS: Record<string, string> = { CREATE: 'cre', UPDATE: '', DELETE: 'deb' };
@@ -35,12 +38,58 @@ const fmtWhen = (iso: string) => {
   }
 };
 
+const UNDO_LABEL: Record<string, { btn: string; confirm: string }> = {
+  CREATE: { btn: 'إلغاء الإضافة', confirm: 'سيتم حذف هذا العنصر نهائياً. متأكد؟' },
+  DELETE: { btn: 'استرجاع المحذوف', confirm: 'سيتم استرجاع هذا العنصر. متأكد؟' },
+};
+
 function AuditDetail({ log, onBack }: { log: AuditLog; onBack: () => void }) {
+  const { user } = useAuth();
+  const undoAudit = useUndoAudit();
+  const [confirm, setConfirm] = useState(false);
+  const [undoErr, setUndoErr] = useState('');
+
+  const canUndo = user?.admin && (
+    (log.action === 'CREATE' && !!log.entityUid) ||
+    (log.action === 'DELETE' && !!log.snapshot)
+  );
+
+  const handleUndo = () => {
+    setUndoErr('');
+    undoAudit.mutate(log.id, {
+      onSuccess: onBack,
+      onError: (e: any) => { setConfirm(false); setUndoErr(e.message ?? 'حدث خطأ'); },
+    });
+  };
+
+  const undoLabels = UNDO_LABEL[log.action];
+
   return (
     <>
       <div className="toolbar">
         <button className="btn btn-ghost btn-sm" onClick={onBack}>→ رجوع للسجل</button>
+        {canUndo && (
+          confirm ? (
+            <>
+              <span className="muted" style={{ fontSize: 13 }}>{undoLabels.confirm}</span>
+              <button
+                className="btn btn-sm"
+                style={{ background: 'var(--debit)', color: '#fff' }}
+                onClick={handleUndo}
+                disabled={undoAudit.isPending}
+              >
+                {undoAudit.isPending ? '...' : 'نعم، تأكيد'}
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setConfirm(false)}>إلغاء</button>
+            </>
+          ) : (
+            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--debit)' }} onClick={() => setConfirm(true)}>
+              {undoLabels.btn}
+            </button>
+          )
+        )}
       </div>
+      {undoErr && <div className="err-text" style={{ margin: '8px 0' }}>{undoErr}</div>}
       <div className="card" style={{ padding: 20, maxWidth: 480 }}>
         <div className="page-title" style={{ marginBottom: 16 }}>
           <span className={ACTION_CLASS[log.action]}>{ACTION[log.action] ?? log.action}</span>
@@ -99,10 +148,23 @@ export function AuditView() {
   const { page, setPage, pageSize, setPageSize } = useTableState();
   const [user, setUser] = useState('');
   const [selected, setSelected] = useState<AuditLog | null>(null);
+  const [restoreErr, setRestoreErr] = useState('');
+  const { user: authUser } = useAuth();
   const { data: users } = useUsers();
   const { data, isLoading } = useAudit({ page, pageSize, user: user || undefined });
+  const undoAudit = useUndoAudit();
 
   if (selected) return <AuditDetail log={selected} onBack={() => setSelected(null)} />;
+
+  const handleRestore = (log: AuditLog, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const label = `${ENTITY[log.entity] ?? log.entity}${log.summary ? ` — ${log.summary}` : ''}`;
+    if (!window.confirm(`استرجاع "${label}"؟`)) return;
+    setRestoreErr('');
+    undoAudit.mutate(log.id, {
+      onError: (err: any) => setRestoreErr(err.message ?? 'حدث خطأ'),
+    });
+  };
 
   const columns: Column<AuditLog>[] = [
     { header: 'متى', cell: (r) => fmtWhen(r.createdAt), className: 'muted' },
@@ -123,11 +185,32 @@ export function AuditView() {
       ),
       className: 'muted',
     },
+    {
+      header: '',
+      cell: (r) => {
+        if (!authUser?.admin || r.action !== 'DELETE' || !r.snapshot) return null;
+        return (
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ color: 'var(--credit)', fontWeight: 700, whiteSpace: 'nowrap' }}
+            onClick={(e) => handleRestore(r, e)}
+            disabled={undoAudit.isPending}
+          >
+            ↩ استرجاع
+          </button>
+        );
+      },
+    },
   ];
 
   return (
     <>
       <PageTitle title="سجل النشاط" subtitle="كل التعديلات اللي بتحصل في النظام — مين عمل إيه وإمتى" />
+      {restoreErr && (
+        <div className="err-text" style={{ marginBottom: 12, padding: '10px 14px', background: 'rgba(178,58,46,.08)', borderRadius: 8 }}>
+          {restoreErr}
+        </div>
+      )}
       <div className="toolbar">
         <select value={user} onChange={(e) => { setUser(e.target.value); setPage(1); }} style={{ padding: '10px 12px', border: '1.5px solid var(--line)', borderRadius: 10 }}>
           <option value="">كل المستخدمين</option>

@@ -52,63 +52,92 @@ function LedgerPartyPicker({ value, onChange, allClients }: {
   allClients: { id: string; name: string }[];
 }) {
   const [search, setSearch] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
   const selected = allClients.filter((c) => value.includes(c.id));
-  const available = allClients.filter((c) => !value.includes(c.id) && c.name.includes(search));
+  const available = allClients.filter((c) => !value.includes(c.id) && (!search || c.name.includes(search)));
 
   return (
-    <div style={{ border: '1px solid var(--line)', borderRadius: 8, padding: 10, display: 'grid', gap: 8 }}>
-      <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>
-        عملاء مخصصون في كشف الحساب
-        <span style={{ marginRight: 6, fontWeight: 400 }}>({value.length === 0 ? 'يشوف الكل' : `${value.length} عميل`})</span>
+    <div style={{ border: '1px solid var(--line)', borderRadius: 8, padding: 12 }}>
+      {/* header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <span style={{ fontWeight: 700, fontSize: 13 }}>
+          كشف الحساب — العملاء المخصصون
+          <span className="muted" style={{ fontWeight: 400, marginInlineStart: 8 }}>
+            {value.length === 0 ? '(يشوف الكل)' : `${value.length} عميل`}
+          </span>
+        </span>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {value.length > 0 && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { onChange([]); setShowAdd(false); }}>
+              مسح الكل
+            </button>
+          )}
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setShowAdd((v) => !v); setSearch(''); }}>
+            {showAdd ? '× إلغاء' : '+ إضافة عميل'}
+          </button>
+        </div>
       </div>
 
-      {/* selected chips */}
+      {/* assigned clients table */}
+      {selected.length === 0 && !showAdd && (
+        <p className="muted" style={{ fontSize: 13, margin: 0 }}>لا يوجد تقييد — الموظف يشوف كل العملاء</p>
+      )}
       {selected.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {selected.map((c) => (
-            <span key={c.id} style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              padding: '3px 10px', borderRadius: 20,
-              background: 'var(--primary)', color: '#fff', fontSize: 12, fontWeight: 700,
-            }}>
-              {c.name}
-              <button
-                type="button"
-                onClick={() => onChange(value.filter((id) => id !== c.id))}
-                style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0, lineHeight: 1, fontSize: 14 }}
-              >×</button>
-            </span>
-          ))}
-        </div>
+        <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '1.5px solid var(--line)' }}>
+              <th style={{ textAlign: 'right', padding: '4px 8px', fontWeight: 600, color: 'var(--muted)' }}>العميل</th>
+              <th style={{ width: 60 }} />
+            </tr>
+          </thead>
+          <tbody>
+            {selected.map((c) => (
+              <tr key={c.id} style={{ borderBottom: '1px solid var(--line-soft)' }}>
+                <td style={{ padding: '7px 8px' }}>{c.name}</td>
+                <td style={{ textAlign: 'center', padding: '4px 8px' }}>
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-sm"
+                    style={{ fontSize: 12, padding: '3px 10px' }}
+                    onClick={() => onChange(value.filter((id) => id !== c.id))}
+                  >
+                    حذف
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
 
-      {/* search + add */}
-      <div style={{ display: 'flex', gap: 6 }}>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="ابحث عن عميل لإضافته…"
-          style={{ flex: 1, fontSize: 13 }}
-        />
-        {value.length > 0 && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange([])}>إزالة الكل</button>
-        )}
-      </div>
-
-      {search && (
-        <div style={{ maxHeight: 140, overflowY: 'auto', display: 'grid', gap: 2 }}>
-          {available.slice(0, 15).map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              className="btn btn-ghost btn-sm"
-              style={{ textAlign: 'right', justifyContent: 'flex-start' }}
-              onClick={() => { onChange([...value, c.id]); setSearch(''); }}
-            >
-              + {c.name}
-            </button>
-          ))}
-          {available.length === 0 && <div className="muted" style={{ fontSize: 12, padding: '4px 8px' }}>لا نتائج</div>}
+      {/* add panel */}
+      {showAdd && (
+        <div style={{ marginTop: selected.length > 0 ? 10 : 0 }}>
+          <input
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="ابحث عن عميل لإضافته…"
+            style={{ width: '100%', fontSize: 13, boxSizing: 'border-box' }}
+          />
+          {search && (
+            <div style={{ maxHeight: 180, overflowY: 'auto', display: 'grid', gap: 2, marginTop: 4, border: '1px solid var(--line)', borderRadius: 6, padding: 4 }}>
+              {available.slice(0, 20).map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  style={{ textAlign: 'right', justifyContent: 'flex-start' }}
+                  onClick={() => { onChange([...value, c.id]); setSearch(''); }}
+                >
+                  + {c.name}
+                </button>
+              ))}
+              {available.length === 0 && (
+                <p className="muted" style={{ fontSize: 12, margin: 0, padding: '4px 8px' }}>لا نتائج</p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

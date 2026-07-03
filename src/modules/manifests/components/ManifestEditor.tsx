@@ -11,6 +11,7 @@ import { useAllParties } from '../../parties/hooks';
 import { useCreateManifest, useUpdateManifest } from '../hooks';
 import { manifestsApi } from '../api';
 import { DriverTripEditor } from '../../driver-trips/components/DriverTripEditor';
+import { DriverCombo } from '../../drivers/components/DriverCombo';
 import type { Manifest, ManifestItem } from '../dtos';
 import type { DriverTrip } from '../../driver-trips/dtos';
 
@@ -163,7 +164,22 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
               placeholder="اختر عميل…"
             />
           </Field>
-          <Field label="اسم السائق"><input value={driverName} onChange={(e) => setDriverName(e.target.value)} /></Field>
+          <Field label="اسم السائق">
+            <DriverCombo
+              value={driverName}
+              onChange={setDriverName}
+              onSelect={(d) => {
+                setDriverName(d.name);
+                if (d.nationalId) setDriverNID(d.nationalId);
+                if (d.phone) setDriverPhone(d.phone);
+                const veh = parsePlate(d.vehicleNo ?? '');
+                if (veh.letters.some(Boolean) || veh.numbers) { setVehL(veh.letters); setVehNumbers(veh.numbers); }
+                const trl = parsePlate(d.trailerNo ?? '');
+                if (trl.letters.some(Boolean) || trl.numbers) { setTrlL(trl.letters); setTrlNumbers(trl.numbers); }
+                if (d.note && !note) setNote(d.note);
+              }}
+            />
+          </Field>
           <Field label="الرقم القومي للسائق"><input inputMode="numeric" value={driverNID} onChange={(e) => setDriverNID(e.target.value.replace(/\D/g, ''))} /></Field>
           <Field label="رقم تليفون السائق"><input inputMode="numeric" value={driverPhone} onChange={(e) => setDriverPhone(e.target.value.replace(/\D/g, ''))} /></Field>
           <Field label="رقم العربية (٣ حروف / أرقام)">

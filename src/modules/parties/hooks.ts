@@ -57,3 +57,20 @@ export function useDeleteParty() {
     onSuccess: () => qc.invalidateQueries({ queryKey: partyKeys.all }),
   });
 }
+
+export function useLinkParty() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, linkedPartyUid }: { id: string; linkedPartyUid: string }) =>
+      partiesApi.linkParty(id, linkedPartyUid),
+    onSuccess: () => qc.invalidateQueries({ queryKey: partyKeys.all }),
+  });
+}
+
+export function useUnlinkParty() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => partiesApi.unlinkParty(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: partyKeys.all }),
+  });
+}

@@ -7,7 +7,7 @@ import { useNavigationGuard } from '@/lib/useNavigationGuard';
 import { fieldNavKeyDown } from '@/lib/field-nav';
 import { PageTitle, Field, Combobox, MoneyInput } from '@/components/common';
 import { useAllParties } from '../../parties/hooks';
-import { useAllProducts, useCreateProduct } from '../../products/hooks';
+import { useAllProducts, useCreateProduct, useUpdateProduct } from '../../products/hooks';
 import { useAllWarehouses } from '../../warehouses/hooks';
 import { useAllTreasury } from '../../treasury/hooks';
 import { ManifestEditor } from '../../manifests/components/ManifestEditor';
@@ -41,6 +41,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
   const createInvoice = useCreateInvoice();
   const updateInvoice = useUpdateInvoice();
   const createProduct = useCreateProduct();
+  const updateProduct = useUpdateProduct();
 
   const [registering, setRegistering] = useState(false);
   const [regName, setRegName] = useState('');
@@ -80,15 +81,13 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
   const [saved, setSaved] = useState<Invoice | null>(null);
   const [makeManifest, setMakeManifest] = useState(false);
 
-  // prefill service lines for new sale invoices only
+  // prefill service lines for all new invoices
   useEffect(() => {
     if (prefilled || !products) return;
-    if (kind === 'SALE') {
-      const svc = products.data.filter((p) => p.service);
-      if (svc.length) setLines([...svc.map((p) => ({ _key: _nextKey++, productId: p.id, qty: '', price: '' })), blankLine()]);
-    }
+    const svc = products.data.filter((p) => p.service);
+    if (svc.length) setLines([...svc.map((p) => ({ _key: _nextKey++, productId: p.id, qty: '', price: '' })), blankLine()]);
     setPrefilled(true);
-  }, [products, prefilled, kind]);
+  }, [products, prefilled]);
 
   const isDirty = isEdit || !!partyId || lines.some((l) => !!(l.productId || l.qty || l.price));
   useNavigationGuard(isDirty);
@@ -204,41 +203,36 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
           <table>
             <thead><tr><th>الكمية</th><th>الصنف</th><th>السعر {isUSD ? '($)' : '(ج.م)'}</th><th>الإجمالي</th><th></th></tr></thead>
             <tbody>
-              {lines.map((l, i) => (
-                <tr key={l._key}>
-                  <td><MoneyInput value={l.qty} onChange={(v) => setLine(i, { qty: v })} placeholder="0" style={{ width: 80 }} /></td>
-                  <td style={{ minWidth: 320 }}>
-                    <ProductCombobox
-                      products={products?.data ?? []}
-                      value={l.productId}
-                      onChange={(id) => setLine(i, { productId: id })}
-                    />
-                  </td>
-                  <td><MoneyInput value={l.price} onChange={(v) => setLine(i, { price: v })} placeholder="0" style={{ width: 110 }} /></td>
-                  <td className="num">{money(Number(l.qty) * Number(l.price), cur)}</td>
-                  <td><button className="btn btn-danger btn-sm" onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}>×</button></td>
-                </tr>
-              ))}
+              {lines.map((l, i) => {
+                const prod = l.productId ? products?.data.find((p) => p.id === l.productId) : undefined;
+                return (
+                  <tr key={l._key}>
+                    <td><MoneyInput value={l.qty} onChange={(v) => setLine(i, { qty: v })} placeholder="0" style={{ width: 80 }} /></td>
+                    <td style={{ minWidth: 320 }}>
+                      <ProductCombobox
+                        products={products?.data ?? []}
+                        value={l.productId}
+                        onChange={(id) => setLine(i, { productId: id })}
+                      />
+                    </td>
+                    <td><MoneyInput value={l.price} onChange={(v) => setLine(i, { price: v })} placeholder="0" style={{ width: 110 }} /></td>
+                    <td className="num">{money(Number(l.qty) * Number(l.price), cur)}</td>
+                    <td style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                      {prod && (
+                        <button
+                          title={prod.service ? 'إلغاء التثبيت كبند افتراضي' : 'تثبيت — يظهر تلقائياً في كل فاتورة جديدة'}
+                          className="btn btn-ghost btn-sm"
+                          style={{ opacity: prod.service ? 1 : 0.35, fontSize: 15 }}
+                          onClick={() => updateProduct.mutate({ id: prod.id, dto: { service: !prod.service } })}
+                        >📌</button>
+                      )}
+                      <button className="btn btn-danger btn-sm" onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}>×</button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
-        </div>
-        <div style={{ padding: '10px 16px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button className="btn btn-ghost btn-sm" onClick={() => setLines((ls) => [...ls, blankLine()])}>+ إضافة صنف</button>
-          {can('invoices.registerProduct') && !registering && (
-            <button className="btn btn-ghost btn-sm" onClick={() => setRegistering(true)}>＋ تسجيل صنف جديد</button>
-          )}
-          {registering && (
-            <div
-              style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}
-              onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') registerProduct(); if (e.key === 'Escape') setRegistering(false); }}
-            >
-              <input autoFocus placeholder="اسم الصنف" value={regName} onChange={(e) => setRegName(e.target.value)} />
-              <input placeholder="الوحدة (اختياري)" value={regUnit} onChange={(e) => setRegUnit(e.target.value)} style={{ maxWidth: 130 }} />
-              <button className="btn btn-primary btn-sm" onClick={registerProduct} disabled={createProduct.isPending}>{createProduct.isPending ? '...' : 'حفظ في المخزون'}</button>
-              <button className="btn btn-ghost btn-sm" onClick={() => { setRegistering(false); setRegName(''); setRegUnit(''); setRegErr(''); }}>×</button>
-              {regErr && <span className="err-text">{regErr}</span>}
-            </div>
-          )}
         </div>
 
         <div className="form-grid">

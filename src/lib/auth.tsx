@@ -1,11 +1,13 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { setToken } from './api';
 import { authApi } from '@/modules/auth/api';
 import type { AuthUser } from './types';
 
 const USER_KEY = 'dafater-user';
+const IDLE_MS = 30 * 60 * 1000; // 30 minutes
+const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'] as const;
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -21,17 +23,28 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const logoutRef = useRef<() => void>(() => {});
 
   useEffect(() => {
+    // Load user from localStorage immediately (no flash on refresh)
     const raw = typeof window !== 'undefined' ? localStorage.getItem(USER_KEY) : null;
+    let hasLocal = false;
     if (raw) {
       try {
         setUser(JSON.parse(raw));
-      } catch {
-        /* ignore */
-      }
+        hasLocal = true;
+      } catch { /* ignore */ }
     }
-    setLoading(false);
+    if (!hasLocal) { setLoading(false); return; }
+    // Refresh from server so admin changes (ledgerPartyIds, views, etc.)
+    // take effect immediately without requiring re-login
+    authApi.me().then((fresh) => {
+      localStorage.setItem(USER_KEY, JSON.stringify(fresh));
+      setUser(fresh);
+    }).catch(() => {
+      // 401 → api interceptor clears localStorage and redirects to /login
+    }).finally(() => setLoading(false));
   }, []);
 
   const login = async (username: string, password: string) => {
@@ -46,6 +59,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(USER_KEY);
     setUser(null);
   };
+
+  // keep logoutRef in sync so the idle handler always calls the latest version
+  logoutRef.current = logout;
+
+  // idle-logout: attach listeners only while a user is logged in
+  useEffect(() => {
+    if (!user) return;
+
+    const reset = () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+      idleTimer.current = setTimeout(() => logoutRef.current(), IDLE_MS);
+    };
+
+    reset(); // start timer immediately on login
+    ACTIVITY_EVENTS.forEach((e) => window.addEventListener(e, reset, { passive: true }));
+
+    return () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+      ACTIVITY_EVENTS.forEach((e) => window.removeEventListener(e, reset));
+    };
+  }, [user?.id ?? null]);
 
   const can = (view: string) => !!user && (user.admin || user.views.includes(view));
 

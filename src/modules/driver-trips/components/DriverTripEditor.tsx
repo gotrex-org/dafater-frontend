@@ -4,7 +4,9 @@ import { useRef, useState } from 'react';
 import { todayISO } from '@/lib/format';
 import { Field, Combobox, MoneyInput, PageTitle, PlateInput, parsePlate, buildPlate } from '@/components/common';
 import { useAllParties } from '../../parties/hooks';
+import { useAllTreasury } from '../../treasury/hooks';
 import { useCreateDriverTrip } from '../hooks';
+import { DriverCombo } from '../../drivers/components/DriverCombo';
 import type { DriverTrip } from '../dtos';
 import type { Manifest } from '../../manifests/dtos';
 
@@ -16,6 +18,7 @@ interface Props {
 
 export function DriverTripEditor({ manifest, onSaved, onSkip }: Props) {
   const { data: parties } = useAllParties('CLIENT');
+  const { data: treasury } = useAllTreasury();
   const create = useCreateDriverTrip();
 
   const allClients = parties?.data ?? [];
@@ -37,6 +40,7 @@ export function DriverTripEditor({ manifest, onSaved, onSkip }: Props) {
   const [departureDate, setDepartureDate] = useState(manifest.date?.slice(0, 10) ?? todayISO());
   const [agreedFreight, setAgreedFreight] = useState('');
   const [initialPaid, setInitialPaid] = useState('');
+  const [initialPaidTreasuryId, setInitialPaidTreasuryId] = useState('');
   const [teaMoney, setTeaMoney] = useState('');
   const [note, setNote] = useState('');
   const [err, setErr] = useState('');
@@ -57,6 +61,7 @@ export function DriverTripEditor({ manifest, onSaved, onSkip }: Props) {
         agreedFreight: Number(agreedFreight),
         note: note.trim() || undefined,
         initialPaid: Number(initialPaid) || undefined,
+        initialPaidTreasuryId: initialPaidTreasuryId || undefined,
         teaMoney: Number(teaMoney) || undefined,
       },
       {
@@ -72,7 +77,18 @@ export function DriverTripEditor({ manifest, onSaved, onSkip }: Props) {
       <div className="card" style={{ padding: 20 }}>
         <div className="form-grid">
           <Field label="اسم السائق">
-            <input value={driverName} onChange={(e) => setDriverName(e.target.value)} />
+            <DriverCombo
+              value={driverName}
+              onChange={setDriverName}
+              onSelect={(d) => {
+                setDriverName(d.name);
+                const veh = parsePlate(d.vehicleNo ?? '');
+                if (veh.letters.some(Boolean) || veh.numbers) { setVehL(veh.letters); setVehNumbers(veh.numbers); }
+                const trl = parsePlate(d.trailerNo ?? '');
+                if (trl.letters.some(Boolean) || trl.numbers) { setTrlL(trl.letters); setTrlNumbers(trl.numbers); }
+                if (d.note && !note) setNote(d.note);
+              }}
+            />
           </Field>
           <Field label="العميل">
             <Combobox options={allClients} value={partyId} onChange={setPartyId} placeholder="اختر العميل…" />
@@ -99,6 +115,11 @@ export function DriverTripEditor({ manifest, onSaved, onSkip }: Props) {
               placeholder="0.00"
             />
           </Field>
+          {Number(initialPaid) > 0 && (
+            <Field label="خزينة الدفعة الأولى">
+              <Combobox options={treasury?.data ?? []} value={initialPaidTreasuryId} onChange={setInitialPaidTreasuryId} placeholder="اختياري…" />
+            </Field>
+          )}
           <Field label="شاي للسائق (اختياري)">
             <MoneyInput value={teaMoney} onChange={setTeaMoney} placeholder="0.00" />
           </Field>

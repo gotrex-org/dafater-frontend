@@ -14,6 +14,7 @@ import { PartyCombobox } from '../../invoices/components/PartyCombobox';
 import { ManifestEditor } from '../../manifests/components/ManifestEditor';
 import { useAuth } from '@/lib/auth';
 import { useCreateDeal, useUpdateDeal } from '../hooks';
+import { useUpdateProduct } from '../../products/hooks';
 import { dealsApi } from '../api';
 import type { Deal } from '../dtos';
 
@@ -30,6 +31,7 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
   const { data: treasury } = useAllTreasury();
   const createDeal = useCreateDeal();
   const updateDeal = useUpdateDeal();
+  const updateProduct = useUpdateProduct();
 
   const [date, setDate] = useState(() => initialDeal ? initialDeal.date.split('T')[0] : todayISO());
   const [no, setNo] = useState(() => initialDeal?.no ?? '');
@@ -58,6 +60,16 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
         }))
       : [blank()]
   );
+  const [prefilled, setPrefilled] = useState(!!initialDeal);
+
+  // prefill service lines for new deals
+  useEffect(() => {
+    if (prefilled || !products) return;
+    const svc = products.data.filter((p) => p.service);
+    if (svc.length) setLines([...svc.map((p) => ({ productId: p.id, qty: '', buyPrice: '', sellPrice: '' })), blank()]);
+    setPrefilled(true);
+  }, [products, prefilled]);
+
   const [error, setError] = useState('');
   const [saved, setSaved] = useState<{ clientName: string; items: { name: string; qty: number }[] } | null>(null);
   const [makeManifest, setMakeManifest] = useState(false);
@@ -161,22 +173,32 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
               </tr>
             </thead>
             <tbody>
-              {lines.map((l, i) => (
-                <tr key={i}>
-                  <td style={{ minWidth: 240 }}>
-                    <ProductCombobox products={products?.data ?? []} value={l.productId} onChange={(id) => setLine(i, { productId: id })} />
-                  </td>
-                  <td><MoneyInput value={l.qty} onChange={(v) => setLine(i, { qty: v })} placeholder="0" style={{ width: 70 }} /></td>
-                  <td><MoneyInput value={l.buyPrice} placeholder="0" onChange={(v) => setLine(i, { buyPrice: v })} style={{ width: 100 }} /></td>
-                  <td><MoneyInput value={l.sellPrice} placeholder="0" onChange={(v) => setLine(i, { sellPrice: v })} style={{ width: 100 }} /></td>
-                  <td><button className="btn btn-danger btn-sm" onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}>×</button></td>
-                </tr>
-              ))}
+              {lines.map((l, i) => {
+                const prod = l.productId ? products?.data.find((p) => p.id === l.productId) : undefined;
+                return (
+                  <tr key={i}>
+                    <td style={{ minWidth: 240 }}>
+                      <ProductCombobox products={products?.data ?? []} value={l.productId} onChange={(id) => setLine(i, { productId: id })} />
+                    </td>
+                    <td><MoneyInput value={l.qty} onChange={(v) => setLine(i, { qty: v })} placeholder="0" style={{ width: 70 }} /></td>
+                    <td><MoneyInput value={l.buyPrice} placeholder="0" onChange={(v) => setLine(i, { buyPrice: v })} style={{ width: 100 }} /></td>
+                    <td><MoneyInput value={l.sellPrice} placeholder="0" onChange={(v) => setLine(i, { sellPrice: v })} style={{ width: 100 }} /></td>
+                    <td style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                      {prod && (
+                        <button
+                          title={prod.service ? 'إلغاء التثبيت كبند افتراضي' : 'تثبيت — يظهر تلقائياً في كل فاتورة جديدة'}
+                          className="btn btn-ghost btn-sm"
+                          style={{ opacity: prod.service ? 1 : 0.35, fontSize: 15 }}
+                          onClick={() => updateProduct.mutate({ id: prod.id, dto: { service: !prod.service } })}
+                        >📌</button>
+                      )}
+                      <button className="btn btn-danger btn-sm" onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}>×</button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
-        </div>
-        <div style={{ padding: '10px 16px' }}>
-          <button className="btn btn-ghost btn-sm" onClick={() => setLines((ls) => [...ls, blank()])}>+ إضافة صنف</button>
         </div>
 
         <div className="form-grid" style={{ borderTop: '1px solid var(--line-soft)' }}>

@@ -1,6 +1,13 @@
 export type PartyRole = 'CLIENT' | 'SUPPLIER' | 'AGENT';
 export type PartyType = 'INVOICE' | 'LEDGER';
 
+export interface LinkedPartyRef {
+  id: string;
+  uid: string;
+  name: string;
+  role: PartyRole;
+}
+
 export interface Party {
   id: string;
   name: string;
@@ -12,6 +19,8 @@ export interface Party {
   hidden: boolean;
   balance?: number;
   lastActivity?: string | null;
+  linkedParty?: LinkedPartyRef | null;
+  linkedFrom?: LinkedPartyRef | null;
 }
 
 export interface CreatePartyDto {
@@ -33,13 +42,19 @@ export interface LedgerRow {
   debit: number;
   credit: number;
   balance: number;
+  partyRole?: PartyRole | null;
+  partyName?: string | null;
   invoiceUid?: string | null;
   dealUid?: string | null;
+  manifestDate?: string | null;
+  manifestNo?: string | null;
+  manifestArrived?: boolean;
   invoiceItems?: { name: string; qty: number; price: number }[] | null;
 }
 
 export interface LedgerStatement {
   party: Party;
+  linkedParty?: LinkedPartyRef | null;
   opening: number;
   rows: LedgerRow[];
   balance: number;

@@ -9,11 +9,12 @@ import { useAllWarehouses, useWarehouseStock, useCreateWarehouse } from '../../w
 import type { StockRow } from '../../warehouses/dtos';
 import { ProductMovements } from './ProductMovements';
 import { LoansView } from '../../loans/components/LoansView';
+import { StockAdjustment } from '../../adjustments/components/StockAdjustment';
 
 export function InventoryView() {
   const { can } = useAuth();
   const canLoans = can('inventory.loans');
-  const [view, setView] = useState<'stock' | 'loans'>('stock');
+  const [view, setView] = useState<'stock' | 'loans' | 'adjust'>('stock');
   const [prod, setProd] = useState<StockRow | null>(null);
   const { data: warehouses } = useAllWarehouses();
   const canAddWarehouse = can('inventory.addWarehouse');
@@ -72,14 +73,24 @@ export function InventoryView() {
           {canLoans && (
             <button className={`btn btn-sm ${view === 'loans' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setView('loans')}>البضاعة المعارة</button>
           )}
+          <button className={`btn btn-sm ${view === 'adjust' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setView('adjust')}>تسوية المخزن</button>
         </div>
       </div>
+
+      {view === 'adjust' && (
+        <div style={{ marginTop: 16 }}>
+          <div className="toolbar" style={{ marginBottom: 12 }}>
+            <div style={{ minWidth: 200 }}><Combobox options={warehouses?.data ?? []} value={whId} onChange={setWhId} placeholder="المخزن" /></div>
+          </div>
+          {whId && <StockAdjustment warehouseId={whId} />}
+        </div>
+      )}
 
       {view === 'loans' && canLoans ? (
         <div style={{ marginTop: 16 }}>
           <LoansView defaultWarehouseId={whId} />
         </div>
-      ) : (
+      ) : view !== 'adjust' && (
         <>
           <div className="toolbar">
             <div style={{ minWidth: 200 }}><Combobox options={warehouses?.data ?? []} value={whId} onChange={setWhId} placeholder="المخزن" /></div>

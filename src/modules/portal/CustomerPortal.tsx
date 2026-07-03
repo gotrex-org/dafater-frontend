@@ -25,6 +25,7 @@ interface MyManifest {
   vehicleNo?: string | null; trailerNo?: string | null; driverName?: string | null;
   driverPhone?: string | null; driverNID?: string | null; note?: string | null;
   items: ManifestItem[];
+  driverTrips?: { arrivalDate: string | null }[];
 }
 
 interface LedgerRow {
@@ -397,29 +398,116 @@ function ManifestReadView({ m, onBack }: { m: MyManifest; onBack: () => void }) 
   );
 }
 
+const ARCHIVE_KEY = 'portal_archived_manifests';
+
+function useArchivedManifests() {
+  const [archived, setArchived] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(ARCHIVE_KEY) || '[]')); }
+    catch { return new Set(); }
+  });
+  const toggle = (id: string) => setArchived((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    localStorage.setItem(ARCHIVE_KEY, JSON.stringify([...next]));
+    return next;
+  });
+  return { archived, toggle };
+}
+
+function ManifestRow({ m, onSelect, onArchive, archiveLabel }: {
+  m: MyManifest; onSelect: () => void; onArchive: () => void; archiveLabel: string;
+}) {
+  return (
+    <tr style={{ cursor: 'pointer' }}>
+      <td onClick={onSelect}><b>{m.no}</b></td>
+      <td className="muted" onClick={onSelect}>{fmtDate(m.date)}</td>
+      <td onClick={onSelect}>{m.driverName || '—'}</td>
+      <td className="muted" onClick={onSelect}>{m.vehicleNo || '—'}</td>
+      <td className="muted" onClick={onSelect}>{m.trailerNo || '—'}</td>
+      <td>
+        <button
+          className="btn btn-ghost btn-sm"
+          style={{ fontSize: 11, whiteSpace: 'nowrap' }}
+          onClick={(e) => { e.stopPropagation(); onArchive(); }}
+        >
+          {archiveLabel}
+        </button>
+      </td>
+    </tr>
+  );
+}
+
 function ManifestsTab() {
   const { data, isLoading } = useMyManifests();
   const [selected, setSelected] = useState<MyManifest | null>(null);
+  const [showArchive, setShowArchive] = useState(false);
+  const { archived, toggle } = useArchivedManifests();
+
   if (selected) return <ManifestReadView m={selected} onBack={() => setSelected(null)} />;
   if (isLoading) return <div className="empty">جاري التحميل…</div>;
   if (!data?.length) return <div className="empty">لا توجد كشوفات عربيات مرتبطة بحسابك</div>;
+
+  const byDate = (a: MyManifest, b: MyManifest) => new Date(b.date).getTime() - new Date(a.date).getTime();
+  const active = data.filter((m) => !archived.has(m.id)).sort(byDate);
+  const archiveList = data.filter((m) => archived.has(m.id)).sort(byDate);
+
+  const thead = (
+    <thead><tr><th>رقم</th><th>التاريخ</th><th>السائق</th><th>العربية</th><th>المقطورة</th><th></th></tr></thead>
+  );
+
   return (
-    <div className="tbl-wrap">
-      <table>
-        <thead><tr><th>رقم</th><th>التاريخ</th><th>السائق</th><th>العربية</th><th>المقطورة</th></tr></thead>
-        <tbody>
-          {data.map((m) => (
-            <tr key={m.id} style={{ cursor: 'pointer' }} onClick={() => setSelected(m)}>
-              <td><b>{m.no}</b></td>
-              <td className="muted">{fmtDate(m.date)}</td>
-              <td>{m.driverName || '—'}</td>
-              <td className="muted">{m.vehicleNo || '—'}</td>
-              <td className="muted">{m.trailerNo || '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <>
+      <div className="tbl-wrap">
+        <table>
+          {thead}
+          <tbody>
+            {active.length === 0 && (
+              <tr><td colSpan={6} className="empty">لا توجد كشوفات نشطة</td></tr>
+            )}
+            {active.map((m) => (
+              <ManifestRow
+                key={m.id} m={m}
+                onSelect={() => setSelected(m)}
+                onArchive={() => toggle(m.id)}
+                archiveLabel="أرشفة ↓"
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ marginTop: 20 }}>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => setShowArchive((v) => !v)}
+          style={{ fontSize: 13, marginBottom: 8 }}
+        >
+          {showArchive ? '▾' : '▸'} الأرشيف {archiveList.length > 0 ? `(${archiveList.length})` : ''}
+        </button>
+
+        {showArchive && (
+          archiveList.length === 0
+            ? <div className="empty" style={{ fontSize: 13 }}>الأرشيف فارغ</div>
+            : (
+              <div className="tbl-wrap">
+                <table style={{ opacity: 0.75 }}>
+                  {thead}
+                  <tbody>
+                    {archiveList.map((m) => (
+                      <ManifestRow
+                        key={m.id} m={m}
+                        onSelect={() => setSelected(m)}
+                        onArchive={() => toggle(m.id)}
+                        archiveLabel="↑ استعادة"
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+        )}
+      </div>
+    </>
   );
 }
 

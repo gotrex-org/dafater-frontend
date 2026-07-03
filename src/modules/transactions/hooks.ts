@@ -19,6 +19,7 @@ function invalidateLedgers(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ['parties'] });
   qc.invalidateQueries({ queryKey: ['treasury'] });
   qc.invalidateQueries({ queryKey: ['dashboard'] });
+  qc.invalidateQueries({ queryKey: ['driver-trips'] });
 }
 
 export function usePostEntry() {

@@ -4,12 +4,12 @@ import { useState } from 'react';
 import { EGP, fmtDate } from '@/lib/format';
 import { useTableState } from '@/lib/useTableState';
 import { useAuth } from '@/lib/auth';
-import { PageTitle, DataTable, StatsGrid, StatCard, CollapsibleSection, type Column } from '@/components/common';
+import { PageTitle, DataTable, StatsGrid, StatCard, CollapsibleSection, MoneyInput, type Column } from '@/components/common';
 import {
   useAllTreasury, useTreasuryMovements, useExpensesByCategory,
   useCreateTreasury, useUpdateTreasury, useDeleteTreasury,
 } from '../hooks';
-import { useDeleteTransaction } from '../../transactions/hooks';
+import { useDeleteTransaction, usePostEntry } from '../../transactions/hooks';
 import { ForexView } from '../../forex/components/ForexView';
 import { EditTransactionModal } from '../../transactions/components/EditTransactionModal';
 import type { TreasuryAccount, TreasuryMovement, ExpenseByCategory } from '../dtos';
@@ -35,26 +35,49 @@ export function TreasuryView() {
   const [picked, setPicked] = useState<TreasuryAccount | null>(null);
   const [newName, setNewName] = useState('');
   const [newCurrency, setNewCurrency] = useState<'EGP' | 'USD'>('EGP');
+  const [newOpening, setNewOpening] = useState('');
   const [editName, setEditName] = useState('');
   const [editCurrency, setEditCurrency] = useState<'EGP' | 'USD'>('EGP');
+  const [editOpening, setEditOpening] = useState('');
   const [err, setErr] = useState('');
 
   const createTreasury = useCreateTreasury();
   const updateTreasury = useUpdateTreasury();
   const deleteTreasury = useDeleteTreasury();
 
-  const reset = () => { setMode(null); setPicked(null); setNewName(''); setNewCurrency('EGP'); setEditName(''); setEditCurrency('EGP'); setErr(''); };
+  // settlement state
+  const [showSettle, setShowSettle] = useState(false);
+  const [settleType, setSettleType] = useState<'deposit' | 'withdraw'>('deposit');
+  const [settleTreasuryId, setSettleTreasuryId] = useState('');
+  const [settleAmount, setSettleAmount] = useState('');
+  const [settleNote, setSettleNote] = useState('');
+  const [settleErr, setSettleErr] = useState('');
+  const postEntry = usePostEntry();
 
-  const openEdit = (a: TreasuryAccount) => { setPicked(a); setEditName(a.name); setEditCurrency(a.currency); setMode('edit-form'); setErr(''); };
+  const resetSettle = () => { setShowSettle(false); setSettleTreasuryId(''); setSettleAmount(''); setSettleNote(''); setSettleErr(''); };
+
+  const submitSettle = () => {
+    if (!settleTreasuryId) return setSettleErr('اختر الخزنة');
+    const amt = parseFloat(settleAmount);
+    if (!amt || amt <= 0) return setSettleErr('أدخل مبلغ صحيح');
+    postEntry.mutate(
+      { type: settleType, date: new Date().toISOString().slice(0, 10), amount: amt, treasuryId: settleTreasuryId, note: settleNote || undefined },
+      { onSuccess: resetSettle, onError: (e: any) => setSettleErr(e.message) },
+    );
+  };
+
+  const reset = () => { setMode(null); setPicked(null); setNewName(''); setNewCurrency('EGP'); setNewOpening(''); setEditName(''); setEditCurrency('EGP'); setEditOpening(''); setErr(''); };
+
+  const openEdit = (a: TreasuryAccount) => { setPicked(a); setEditName(a.name); setEditCurrency(a.currency); setEditOpening(String(a.opening ?? 0)); setMode('edit-form'); setErr(''); };
 
   const saveAdd = () => {
     if (!newName.trim()) return setErr('اكتب اسم الخزنة');
-    createTreasury.mutate({ name: newName.trim(), currency: newCurrency }, { onSuccess: reset, onError: (e: any) => setErr(e.message) });
+    createTreasury.mutate({ name: newName.trim(), currency: newCurrency, opening: Number(newOpening) || 0 }, { onSuccess: reset, onError: (e: any) => setErr(e.message) });
   };
 
   const saveEdit = () => {
     if (!editName.trim()) return setErr('اكتب الاسم');
-    updateTreasury.mutate({ id: picked!.id, dto: { name: editName.trim(), currency: editCurrency } }, { onSuccess: reset, onError: (e: any) => setErr(e.message) });
+    updateTreasury.mutate({ id: picked!.id, dto: { name: editName.trim(), currency: editCurrency, opening: Number(editOpening) || 0 } }, { onSuccess: reset, onError: (e: any) => setErr(e.message) });
   };
 
   const confirmDelete = (a: TreasuryAccount) => {
@@ -134,6 +157,7 @@ export function TreasuryView() {
                 <option value="EGP">جنيه</option>
                 <option value="USD">دولار</option>
               </select>
+              <MoneyInput value={newOpening} onChange={setNewOpening} placeholder="رصيد افتتاحي" style={{ maxWidth: 140 }} />
               <button className="btn btn-primary btn-sm" onClick={saveAdd} disabled={createTreasury.isPending}>حفظ</button>
               <button className="btn btn-ghost btn-sm" onClick={reset}>إلغاء</button>
               {err && <span className="err-text">{err}</span>}
@@ -165,6 +189,7 @@ export function TreasuryView() {
                 <option value="EGP">جنيه</option>
                 <option value="USD">دولار</option>
               </select>
+              <MoneyInput value={editOpening} onChange={setEditOpening} placeholder="رصيد افتتاحي" style={{ maxWidth: 140 }} />
               <button className="btn btn-primary btn-sm" onClick={saveEdit} disabled={updateTreasury.isPending}>حفظ</button>
               <button className="btn btn-ghost btn-sm" onClick={() => setMode('edit-pick')}>رجوع</button>
               <button className="btn btn-ghost btn-sm" onClick={reset}>إلغاء</button>
@@ -189,6 +214,62 @@ export function TreasuryView() {
         </>
       )}
 
+      {/* ── settlement panel ── */}
+      {(can('entry') || can('treasury.settle')) && (
+        <>
+          <div className="toolbar" style={{ marginBottom: showSettle ? 0 : undefined }}>
+            <button
+              className={`btn btn-sm ${showSettle ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => { setShowSettle((v) => !v); setSettleErr(''); }}
+            >
+              {showSettle ? '× إلغاء' : '+ إيداع / سحب'}
+            </button>
+          </div>
+
+          {showSettle && (
+            <div className="card" style={{ padding: 14, marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <select
+                value={settleType}
+                onChange={(e) => setSettleType(e.target.value as 'deposit' | 'withdraw')}
+                style={{ padding: '10px 12px', border: '1.5px solid var(--line)', borderRadius: 10 }}
+              >
+                <option value="deposit">إيداع</option>
+                <option value="withdraw">سحب</option>
+              </select>
+              <select
+                value={settleTreasuryId}
+                onChange={(e) => setSettleTreasuryId(e.target.value)}
+                style={{ padding: '10px 12px', border: '1.5px solid var(--line)', borderRadius: 10, minWidth: 140 }}
+              >
+                <option value="">اختر الخزنة</option>
+                {accs.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                placeholder="المبلغ"
+                value={settleAmount}
+                onChange={(e) => setSettleAmount(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') submitSettle(); if (e.key === 'Escape') resetSettle(); }}
+                style={{ width: 130 }}
+                min={0}
+              />
+              <input
+                placeholder="بيان (اختياري)"
+                value={settleNote}
+                onChange={(e) => setSettleNote(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') submitSettle(); if (e.key === 'Escape') resetSettle(); }}
+                style={{ flex: 1, minWidth: 140 }}
+              />
+              <button className="btn btn-primary btn-sm" onClick={submitSettle} disabled={postEntry.isPending}>تسجيل</button>
+              <button className="btn btn-ghost btn-sm" onClick={resetSettle}>إلغاء</button>
+              {settleErr && <span className="err-text">{settleErr}</span>}
+            </div>
+          )}
+        </>
+      )}
+
       {/* ── balance cards (original style) ── */}
       <StatsGrid columns={2}>
         {accs.map((a) => (
@@ -196,44 +277,48 @@ export function TreasuryView() {
         ))}
       </StatsGrid>
 
-      {(user?.admin || can('treasury.forex') || can('forex')) && (
+      {(user?.admin || can('treasury.forex')) && (
         <CollapsibleSection title="وسطاء الصرف" defaultOpen={false}>
           <ForexView embedded />
         </CollapsibleSection>
       )}
 
-      <CollapsibleSection title="المصروفات حسب البند" defaultOpen={false}>
-        <DataTable columns={expenseCols} rows={byCat ?? []} rowKey={(c) => c.categoryId ?? c.category} emptyText="لا يوجد" />
-      </CollapsibleSection>
+      {(user?.admin || can('treasury.expenses')) && (
+        <CollapsibleSection title="المصروفات حسب البند" defaultOpen={false}>
+          <DataTable columns={expenseCols} rows={byCat ?? []} rowKey={(c) => c.categoryId ?? c.category} emptyText="لا يوجد" />
+        </CollapsibleSection>
+      )}
 
-      <CollapsibleSection title="كل الحركات النقدية">
-        <div className="toolbar" style={{ marginBottom: 8 }}>
-          <select
-            value={filterTreasuryId}
-            onChange={(e) => { setFilterTreasuryId(e.target.value); setPage(1); }}
-            style={{ padding: '8px 12px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 13, minWidth: 180 }}
-          >
-            <option value="">كل الخزائن</option>
-            {accs.map((a) => (
-              <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>
-            ))}
-          </select>
-          {filterTreasuryId && (
-            <button className="btn btn-ghost btn-sm" onClick={() => { setFilterTreasuryId(''); setPage(1); }}>× مسح</button>
-          )}
-        </div>
-        <DataTable
-          columns={moveCols}
-          rows={moves?.data ?? []}
-          rowKey={(m) => m.id}
-          loading={isLoading}
-          emptyText="لا توجد حركات"
-          meta={moves?.meta}
-          onPage={setPage}
-          pageSize={pageSize}
-          onPageSize={setPageSize}
-        />
-      </CollapsibleSection>
+      {(user?.admin || can('treasury.movements')) && (
+        <CollapsibleSection title="كل الحركات النقدية">
+          <div className="toolbar" style={{ marginBottom: 8 }}>
+            <select
+              value={filterTreasuryId}
+              onChange={(e) => { setFilterTreasuryId(e.target.value); setPage(1); }}
+              style={{ padding: '8px 12px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 13, minWidth: 180 }}
+            >
+              <option value="">كل الخزائن</option>
+              {accs.map((a) => (
+                <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>
+              ))}
+            </select>
+            {filterTreasuryId && (
+              <button className="btn btn-ghost btn-sm" onClick={() => { setFilterTreasuryId(''); setPage(1); }}>× مسح</button>
+            )}
+          </div>
+          <DataTable
+            columns={moveCols}
+            rows={moves?.data ?? []}
+            rowKey={(m) => m.id}
+            loading={isLoading}
+            emptyText="لا توجد حركات"
+            meta={moves?.meta}
+            onPage={setPage}
+            pageSize={pageSize}
+            onPageSize={setPageSize}
+          />
+        </CollapsibleSection>
+      )}
     </>
   );
 }

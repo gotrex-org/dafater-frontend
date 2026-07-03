@@ -44,11 +44,18 @@ export function useUpdateDriverTrip() {
   });
 }
 
+function invalidateAfterPayment(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: [KEY] });
+  qc.invalidateQueries({ queryKey: ['parties'] });
+  qc.invalidateQueries({ queryKey: ['treasury'] });
+  qc.invalidateQueries({ queryKey: ['dashboard'] });
+}
+
 export function useAddPayment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, dto }: { id: string; dto: AddPaymentDto }) => driverTripsApi.addPayment(id, dto),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [KEY] }),
+    onSuccess: () => invalidateAfterPayment(qc),
   });
 }
 
@@ -56,14 +63,27 @@ export function useDeletePayment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ tripId, payId }: { tripId: string; payId: string }) => driverTripsApi.deletePayment(tripId, payId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [KEY] }),
+    onSuccess: () => invalidateAfterPayment(qc),
+  });
+}
+
+export function useUpdateWeightDiff() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, amount }: { id: string; amount: number }) => driverTripsApi.patchWeightDiff(id, amount),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [KEY] });
+      qc.invalidateQueries({ queryKey: ['parties'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    },
   });
 }
 
 export function useSetArrival() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, arrivalDate }: { id: string; arrivalDate: string }) => driverTripsApi.setArrival(id, arrivalDate),
+    mutationFn: ({ id, arrivalDate, weightDiffAmount }: { id: string; arrivalDate: string; weightDiffAmount?: number }) =>
+      driverTripsApi.setArrival(id, { arrivalDate, weightDiffAmount }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [KEY] });
       qc.invalidateQueries({ queryKey: ['parties'] });

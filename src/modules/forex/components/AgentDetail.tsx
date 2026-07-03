@@ -5,7 +5,7 @@ import { fmtDate, EGP } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import { Field, Combobox, MoneyInput } from '@/components/common';
 import { useAllParties } from '../../parties/hooks';
-import { useForexAgent, useUsdOut, useDeleteAgentTx, useUpdateAgent } from '../hooks';
+import { useForexAgent, useUsdOut, useDeleteAgentTx, useUpdateAgent, useSettle } from '../hooks';
 
 function today() { return new Date().toISOString().slice(0, 10); }
 
@@ -14,10 +14,18 @@ export function AgentDetail({ agentUid, onBack, initialMode }: { agentUid: strin
   const { data: agent, isLoading } = useForexAgent(agentUid);
   const { data: suppliers } = useAllParties('SUPPLIER');
   const usdOut = useUsdOut(agentUid);
+  const settle = useSettle(agentUid);
   const deleteTx = useDeleteAgentTx(agentUid);
   const updateAgent = useUpdateAgent();
 
-  const [mode, setMode] = useState<null | 'usd' | 'edit'>(initialMode ?? null);
+  const [mode, setMode] = useState<null | 'usd' | 'settle' | 'edit'>(initialMode ?? null);
+
+  // settle form
+  const [stDate, setStDate] = useState(today());
+  const [stAmt, setStAmt] = useState('');
+  const [stDir, setStDir] = useState<'in' | 'out'>('in');
+  const [stNote, setStNote] = useState('');
+  const [stErr, setStErr] = useState('');
 
   // USD_OUT form
   const [usdDate, setUsdDate] = useState(today());
@@ -94,6 +102,7 @@ export function AgentDetail({ agentUid, onBack, initialMode }: { agentUid: strin
       {/* action buttons */}
       <div className="toolbar" style={{ marginBottom: 16 }}>
         <button className="btn btn-primary btn-sm" onClick={() => setMode(mode === 'usd' ? null : 'usd')}>+ توريد دولار لعميل</button>
+        <button className="btn btn-ghost btn-sm" onClick={() => setMode(mode === 'settle' ? null : 'settle')}>+ تسوية حساب</button>
       </div>
 
       {/* USD_OUT form */}
@@ -125,6 +134,51 @@ export function AgentDetail({ agentUid, onBack, initialMode }: { agentUid: strin
           {usdErr && <div className="err-text" style={{ marginTop: 8 }}>{usdErr}</div>}
           <div className="toolbar" style={{ marginTop: 12 }}>
             <button className="btn btn-primary btn-sm" onClick={saveUsd} disabled={usdOut.isPending}>حفظ</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setMode(null)}>إلغاء</button>
+          </div>
+        </div>
+      )}
+
+      {/* settle form */}
+      {mode === 'settle' && (
+        <div className="card" style={{ padding: 16, marginBottom: 16, border: '1.5px dashed var(--line)' }}>
+          <b style={{ fontSize: 14, display: 'block', marginBottom: 6 }}>تسوية حساب</b>
+          {balance !== 0 && (
+            <div className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
+              الرصيد الحالي: <b className={balance > 0 ? 'deb' : 'cre'}>{EGP(Math.abs(balance))}</b>
+              {balance > 0 ? ' (متبقّي عنده)' : ' (نستحق له)'}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <Field label="التاريخ"><input type="date" value={stDate} onChange={(e) => setStDate(e.target.value)} /></Field>
+            <Field label="المبلغ (ج.م)"><MoneyInput value={stAmt} onChange={setStAmt} placeholder="0.00" style={{ maxWidth: 130 }} /></Field>
+            <Field label="النوع">
+              <select value={stDir} onChange={(e) => setStDir(e.target.value as 'in' | 'out')} style={{ minWidth: 170 }}>
+                <option value="in">خصم — استرداد من الوكيل</option>
+                <option value="out">إضافة — دفع للوكيل</option>
+              </select>
+            </Field>
+            <Field label="ملاحظة"><input value={stNote} onChange={(e) => setStNote(e.target.value)} placeholder="اختياري…" style={{ maxWidth: 200 }} /></Field>
+          </div>
+          {stErr && <div className="err-text" style={{ marginTop: 8 }}>{stErr}</div>}
+          <div className="toolbar" style={{ marginTop: 12 }}>
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={settle.isPending}
+              onClick={() => {
+                setStErr('');
+                if (!stAmt || Number(stAmt) <= 0) return setStErr('اكتب المبلغ');
+                settle.mutate(
+                  { date: stDate, egpAmount: Number(stAmt), direction: stDir, note: stNote || undefined },
+                  {
+                    onSuccess: () => { setStAmt(''); setStNote(''); setStDir('in'); setMode(null); },
+                    onError: (e: any) => setStErr(e.message),
+                  },
+                );
+              }}
+            >
+              {settle.isPending ? '...' : 'تسوية'}
+            </button>
             <button className="btn btn-ghost btn-sm" onClick={() => setMode(null)}>إلغاء</button>
           </div>
         </div>
@@ -163,13 +217,21 @@ export function AgentDetail({ agentUid, onBack, initialMode }: { agentUid: strin
                 <td>
                   {tx.type === 'EGP_IN'
                     ? <span className="pill" style={{ background: 'var(--credit-bg)', color: 'var(--credit)' }}>استلم جنيه</span>
-                    : <span className="pill" style={{ background: 'var(--debit-bg)', color: 'var(--debit)' }}>ورّد دولار</span>}
+                    : tx.type === 'USD_OUT'
+                    ? <span className="pill" style={{ background: 'var(--debit-bg)', color: 'var(--debit)' }}>ورّد دولار</span>
+                    : tx.egpAmount >= 0
+                    ? <span className="pill" style={{ background: 'var(--credit-bg)', color: 'var(--credit)' }}>تسوية — استلمنا</span>
+                    : <span className="pill" style={{ background: 'var(--debit-bg)', color: 'var(--debit)' }}>تسوية — دفعنا</span>}
                 </td>
                 <td className="muted" style={{ fontSize: 12 }}>
-                  {tx.type === 'EGP_IN' ? (tx.treasury?.name ?? '') : (tx.party?.name ?? '')}
+                  {tx.type === 'EGP_IN' || tx.type === 'SETTLE' ? (tx.treasury?.name ?? '') : (tx.party?.name ?? '')}
                   {tx.note && <span> — {tx.note}</span>}
                 </td>
-                <td className="num cre">{tx.type === 'EGP_IN' ? EGP(tx.egpAmount) : EGP(tx.usdAmount * tx.exchangeRate)}</td>
+                <td className="num cre">
+                  {tx.type === 'EGP_IN' ? EGP(tx.egpAmount)
+                    : tx.type === 'SETTLE' ? EGP(Math.abs(tx.egpAmount))
+                    : EGP(tx.usdAmount * tx.exchangeRate)}
+                </td>
                 <td className="num">{tx.type === 'USD_OUT' ? `$${tx.usdAmount.toLocaleString('en', { minimumFractionDigits: 2 })}` : '—'}</td>
                 <td className="num muted">{tx.type === 'USD_OUT' ? tx.exchangeRate : '—'}</td>
                 {user?.admin && (

@@ -9,4 +9,7 @@ export const auditApi = {
     const q = toQuery(rest) + (user ? `&user=${encodeURIComponent(user)}` : '');
     return api.get<Paginated<AuditLog>>(`/audit${q}`);
   },
+  trash: (params: ListParams = {}) =>
+    api.get<Paginated<AuditLog>>(`/audit/trash${toQuery(params)}`),
+  undo: (id: string) => api.post<{ ok: boolean }>(`/audit/${id}/undo`, {}),
 };

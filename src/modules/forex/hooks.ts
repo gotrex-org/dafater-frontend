@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { forexApi } from './api';
-import type { CreateAgentDto, UpdateAgentDto, EgpInDto, UsdOutDto } from './dtos';
+import type { CreateAgentDto, UpdateAgentDto, EgpInDto, UsdOutDto, SettleDto } from './dtos';
 
 const KEYS = { all: ['forex'] as const, one: (uid: string) => ['forex', uid] as const };
 
@@ -55,6 +55,14 @@ export function useUsdOut(agentUid: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (dto: UsdOutDto) => forexApi.usdOut(agentUid, dto),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: KEYS.all }); qc.invalidateQueries({ queryKey: KEYS.one(agentUid) }); },
+  });
+}
+
+export function useSettle(agentUid: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (dto: SettleDto) => forexApi.settle(agentUid, dto),
     onSuccess: () => { qc.invalidateQueries({ queryKey: KEYS.all }); qc.invalidateQueries({ queryKey: KEYS.one(agentUid) }); },
   });
 }

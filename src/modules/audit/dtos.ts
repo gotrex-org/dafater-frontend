@@ -5,7 +5,9 @@ export interface AuditLog {
   userName: string;
   action: 'CREATE' | 'UPDATE' | 'DELETE';
   entity: string;
+  entityUid?: string | null;
   summary?: string | null;
   diff?: Record<string, AuditDiffEntry> | null;
+  snapshot?: any;
   createdAt: string;
 }

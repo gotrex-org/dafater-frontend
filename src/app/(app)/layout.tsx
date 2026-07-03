@@ -27,14 +27,14 @@ const NAV: { href: string; label: string; view: string }[] = [
   { href: '/invoices', label: 'الفواتير', view: 'invoices' },
   { href: '/deals', label: 'البيع الخارجي', view: 'deals' },
   { href: '/manifests', label: 'كشوفات العربيات', view: 'manifests' },
-  { href: '/driver-trips', label: 'كشف السائقين', view: 'manifests' },
+  { href: '/driver-trips', label: 'كشف السائقين', view: 'driver-trips' },
   { href: '/requests', label: 'الطلبيات', view: 'requests' },
   { href: '/ledger', label: 'كشف الحساب', view: 'ledger' },
   { href: '/inventory', label: 'المخازن', view: 'inventory' },
   { href: '/treasury', label: 'الخزنة', view: 'treasury' },
   { href: '/settings', label: 'الإعدادات', view: 'settings' },
   { href: '/audit', label: 'سجل النشاط', view: 'audit' },
-  { href: '/today', label: 'تقرير اليوم', view: 'treasury' },
+  { href: '/today', label: 'تقرير اليوم', view: 'today' },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

@@ -32,6 +32,18 @@ export function ManifestsView() {
       />
     );
 
+  const manifestStatus = (m: Manifest): 'arrived' | 'pending' | 'none' => {
+    const trips = m.driverTrips ?? [];
+    if (!trips.length) return 'none';
+    return trips.some((t) => t.arrivalDate) ? 'arrived' : 'pending';
+  };
+
+  const STATUS_STYLE: Record<string, React.CSSProperties> = {
+    arrived: { background: 'rgba(178,58,46,0.10)', borderRight: '3px solid var(--debit)' },
+    pending: { background: 'rgba(15,110,92,0.10)', borderRight: '3px solid var(--credit)' },
+    none: {},
+  };
+
   const columns: Column<Manifest>[] = [
     { header: 'رقم', cell: (m) => m.no },
     { header: 'العميل', cell: (m) => m.clientName },
@@ -39,6 +51,15 @@ export function ManifestsView() {
     { header: 'العربية', cell: (m) => m.vehicleNo || '—', className: 'muted' },
     { header: 'المقطورة', cell: (m) => m.trailerNo || '—', className: 'muted' },
     { header: 'التاريخ', cell: (m) => fmtDate(m.date), className: 'muted' },
+    {
+      header: 'الحالة',
+      cell: (m) => {
+        const s = manifestStatus(m);
+        if (s === 'arrived') return <span className="deb" style={{ fontWeight: 700, fontSize: 12 }}>وصلت ✓</span>;
+        if (s === 'pending') return <span className="cre" style={{ fontWeight: 700, fontSize: 12 }}>في الطريق</span>;
+        return <span className="muted" style={{ fontSize: 12 }}>—</span>;
+      },
+    },
   ];
 
   return (
@@ -60,6 +81,7 @@ export function ManifestsView() {
         rows={data?.data ?? []}
         rowKey={(m) => m.id}
         onRowClick={(m) => setViewId(m.id)}
+        rowStyle={(m) => STATUS_STYLE[manifestStatus(m)]}
         loading={isLoading}
         emptyText="لا توجد كشوفات"
         meta={data?.meta}
