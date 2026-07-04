@@ -3,10 +3,10 @@ FROM node:20-alpine AS build
 WORKDIR /app
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-COPY package*.json ./
-RUN npm install
+COPY package.json yarn.lock* ./
+RUN yarn install
 COPY . .
-RUN npm run build
+RUN yarn build
 
 # ---- runtime stage (standalone) ----
 FROM node:20-alpine AS runtime
