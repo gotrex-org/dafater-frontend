@@ -5,6 +5,7 @@ import { Field, Combobox } from '@/components/common';
 import { PERMISSIONS } from '@/lib/permissions';
 import { useAuth } from '@/lib/auth';
 import { useAllParties } from '../../parties/hooks';
+import { useAllTreasury } from '../../treasury/hooks';
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '../hooks';
 import type { User } from '../dtos';
 
@@ -46,24 +47,28 @@ function PermTree({ admin, views, setViews }: { admin: boolean; views: string[];
   );
 }
 
-function LedgerPartyPicker({ value, onChange, allClients }: {
+function MultiSelectPicker({ value, onChange, allItems, title, unitLabel, emptyHint, addPlaceholder }: {
   value: string[];
   onChange: (ids: string[]) => void;
-  allClients: { id: string; name: string }[];
+  allItems: { id: string; name: string }[];
+  title: string;
+  unitLabel: string; // e.g. "عميل" / "خزينة"
+  emptyHint: string;
+  addPlaceholder: string;
 }) {
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
-  const selected = allClients.filter((c) => value.includes(c.id));
-  const available = allClients.filter((c) => !value.includes(c.id) && (!search || c.name.includes(search)));
+  const selected = allItems.filter((c) => value.includes(c.id));
+  const available = allItems.filter((c) => !value.includes(c.id) && (!search || c.name.includes(search)));
 
   return (
     <div style={{ border: '1px solid var(--line)', borderRadius: 8, padding: 12 }}>
       {/* header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <span style={{ fontWeight: 700, fontSize: 13 }}>
-          كشف الحساب — العملاء المخصصون
+          {title}
           <span className="muted" style={{ fontWeight: 400, marginInlineStart: 8 }}>
-            {value.length === 0 ? '(يشوف الكل)' : `${value.length} عميل`}
+            {value.length === 0 ? '(يشوف الكل)' : `${value.length} ${unitLabel}`}
           </span>
         </span>
         <div style={{ display: 'flex', gap: 6 }}>
@@ -73,20 +78,20 @@ function LedgerPartyPicker({ value, onChange, allClients }: {
             </button>
           )}
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setShowAdd((v) => !v); setSearch(''); }}>
-            {showAdd ? '× إلغاء' : '+ إضافة عميل'}
+            {showAdd ? '× إلغاء' : `+ إضافة ${unitLabel}`}
           </button>
         </div>
       </div>
 
-      {/* assigned clients table */}
+      {/* assigned items table */}
       {selected.length === 0 && !showAdd && (
-        <p className="muted" style={{ fontSize: 13, margin: 0 }}>لا يوجد تقييد — الموظف يشوف كل العملاء</p>
+        <p className="muted" style={{ fontSize: 13, margin: 0 }}>{emptyHint}</p>
       )}
       {selected.length > 0 && (
         <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1.5px solid var(--line)' }}>
-              <th style={{ textAlign: 'right', padding: '4px 8px', fontWeight: 600, color: 'var(--muted)' }}>العميل</th>
+              <th style={{ textAlign: 'right', padding: '4px 8px', fontWeight: 600, color: 'var(--muted)' }}>{unitLabel}</th>
               <th style={{ width: 60 }} />
             </tr>
           </thead>
@@ -117,7 +122,7 @@ function LedgerPartyPicker({ value, onChange, allClients }: {
             autoFocus
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="ابحث عن عميل لإضافته…"
+            placeholder={addPlaceholder}
             style={{ width: '100%', fontSize: 13, boxSizing: 'border-box' }}
           />
           {search && (
@@ -149,6 +154,7 @@ function UserRow({ user, canDelete }: { user: User; canDelete: boolean }) {
   const update = useUpdateUser();
   const del = useDeleteUser();
   const { data: clients } = useAllParties('CLIENT');
+  const { data: treasuries } = useAllTreasury();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(user.name);
   const [username, setUsername] = useState(user.username ?? '');
@@ -157,12 +163,15 @@ function UserRow({ user, canDelete }: { user: User; canDelete: boolean }) {
   const [admin, setAdmin] = useState(user.admin);
   const [views, setViews] = useState<string[]>(user.views);
   const [ledgerPartyIds, setLedgerPartyIds] = useState<string[]>(user.ledgerPartyIds ?? []);
+  const [treasuryIds, setTreasuryIds] = useState<string[]>(user.treasuryIds ?? []);
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [msg, setMsg] = useState('');
 
   const allClients = clients?.data ?? [];
+  const allTreasuries = treasuries?.data ?? [];
   const hasLedger = admin || views.includes('ledger');
+  const hasTreasury = admin || views.includes('treasury');
 
   const save = () => {
     setMsg('');
@@ -178,6 +187,7 @@ function UserRow({ user, canDelete }: { user: User; canDelete: boolean }) {
           admin: role === 'STAFF' ? admin : false,
           views: role === 'STAFF' ? views : [],
           ledgerPartyIds: role === 'STAFF' ? ledgerPartyIds : [],
+          treasuryIds: role === 'STAFF' ? treasuryIds : [],
           ...(pin ? { pin } : {}),
         },
       },
@@ -187,6 +197,7 @@ function UserRow({ user, canDelete }: { user: User; canDelete: boolean }) {
           if (me?.id === user.id) syncUser({
             name: updated.name, admin: updated.admin, views: updated.views,
             ledgerPartyIds: updated.ledgerPartyIds,
+            treasuryIds: updated.treasuryIds,
             role: updated.role as any, partyId: updated.party?.id, partyName: updated.party?.name,
           });
         },
@@ -235,10 +246,25 @@ function UserRow({ user, canDelete }: { user: User; canDelete: boolean }) {
               )}
               <PermTree admin={admin} views={views} setViews={setViews} />
               {hasLedger && (
-                <LedgerPartyPicker
+                <MultiSelectPicker
                   value={ledgerPartyIds}
                   onChange={setLedgerPartyIds}
-                  allClients={allClients}
+                  allItems={allClients}
+                  title="كشف الحساب — العملاء المخصصون"
+                  unitLabel="عميل"
+                  emptyHint="لا يوجد تقييد — الموظف يشوف كل العملاء"
+                  addPlaceholder="ابحث عن عميل لإضافته…"
+                />
+              )}
+              {hasTreasury && (
+                <MultiSelectPicker
+                  value={treasuryIds}
+                  onChange={setTreasuryIds}
+                  allItems={allTreasuries}
+                  title="الخزائن المسموح بها"
+                  unitLabel="خزينة"
+                  emptyHint="لا يوجد تقييد — الموظف يشوف ويصرف من كل الخزائن"
+                  addPlaceholder="ابحث عن خزينة لإضافتها…"
                 />
               )}
             </>
@@ -264,6 +290,7 @@ function UserRow({ user, canDelete }: { user: User; canDelete: boolean }) {
 function NewUser() {
   const create = useCreateUser();
   const { data: clients } = useAllParties('CLIENT');
+  const { data: treasuries } = useAllTreasury();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
@@ -274,10 +301,13 @@ function NewUser() {
   const [admin, setAdmin] = useState(false);
   const [views, setViews] = useState<string[]>(['dash']);
   const [ledgerPartyIds, setLedgerPartyIds] = useState<string[]>([]);
+  const [treasuryIds, setTreasuryIds] = useState<string[]>([]);
   const [msg, setMsg] = useState('');
 
   const allClients = clients?.data ?? [];
+  const allTreasuries = treasuries?.data ?? [];
   const hasLedger = admin || views.includes('ledger');
+  const hasTreasury = admin || views.includes('treasury');
 
   const submit = () => {
     setMsg('');
@@ -289,11 +319,11 @@ function NewUser() {
       {
         name: name.trim(), username: username.trim(), pin, role,
         ...(role === 'CUSTOMER'
-          ? { partyId, admin: false, views: [], ledgerPartyIds: [] }
-          : { admin, views: admin ? [] : views, ledgerPartyIds: admin ? [] : ledgerPartyIds }),
+          ? { partyId, admin: false, views: [], ledgerPartyIds: [], treasuryIds: [] }
+          : { admin, views: admin ? [] : views, ledgerPartyIds: admin ? [] : ledgerPartyIds, treasuryIds: admin ? [] : treasuryIds }),
       },
       {
-        onSuccess: () => { setName(''); setUsername(''); setPin(''); setAdmin(false); setViews(['dash']); setLedgerPartyIds([]); setPartyId(''); setRole('STAFF'); setOpen(false); },
+        onSuccess: () => { setName(''); setUsername(''); setPin(''); setAdmin(false); setViews(['dash']); setLedgerPartyIds([]); setTreasuryIds([]); setPartyId(''); setRole('STAFF'); setOpen(false); },
         onError: (e: any) => setMsg(e.message),
       },
     );
@@ -334,10 +364,25 @@ function NewUser() {
           </label>
           <PermTree admin={admin} views={views} setViews={setViews} />
           {hasLedger && (
-            <LedgerPartyPicker
+            <MultiSelectPicker
               value={ledgerPartyIds}
               onChange={setLedgerPartyIds}
-              allClients={allClients}
+              allItems={allClients}
+              title="كشف الحساب — العملاء المخصصون"
+              unitLabel="عميل"
+              emptyHint="لا يوجد تقييد — الموظف يشوف كل العملاء"
+              addPlaceholder="ابحث عن عميل لإضافته…"
+            />
+          )}
+          {hasTreasury && (
+            <MultiSelectPicker
+              value={treasuryIds}
+              onChange={setTreasuryIds}
+              allItems={allTreasuries}
+              title="الخزائن المسموح بها"
+              unitLabel="خزينة"
+              emptyHint="لا يوجد تقييد — الموظف يشوف ويصرف من كل الخزائن"
+              addPlaceholder="ابحث عن خزينة لإضافتها…"
             />
           )}
         </>

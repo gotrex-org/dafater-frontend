@@ -20,6 +20,7 @@ export interface AuthUser {
   admin: boolean;
   views: string[];
   ledgerPartyIds: string[];   // empty = all; otherwise restricted to these party UIDs
+  treasuryIds: string[];      // empty = all; otherwise restricted to these treasury UIDs
   role: 'STAFF' | 'CUSTOMER';
   partyId?: string;
   partyName?: string;

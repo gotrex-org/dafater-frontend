@@ -5,6 +5,7 @@ export interface User {
   admin: boolean;
   views: string[];
   ledgerPartyIds: string[];
+  treasuryIds: string[];
   role: 'STAFF' | 'CUSTOMER';
   party?: { id: string; name: string } | null;
   createdAt?: string;
@@ -17,6 +18,7 @@ export interface CreateUserDto {
   admin?: boolean;
   views?: string[];
   ledgerPartyIds?: string[];
+  treasuryIds?: string[];
   role?: 'STAFF' | 'CUSTOMER';
   partyId?: string;
 }
