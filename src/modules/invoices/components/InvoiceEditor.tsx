@@ -234,6 +234,9 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
             </tbody>
           </table>
         </div>
+        <div style={{ padding: '10px 16px' }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => setLines((ls) => [...ls, blankLine()])}>+ إضافة صنف</button>
+        </div>
 
         <div className="form-grid">
           <Field label="المدفوع نقدًا الآن"><MoneyInput value={paid} onChange={setPaid} placeholder="0.00" /></Field>

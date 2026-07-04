@@ -200,6 +200,9 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
             </tbody>
           </table>
         </div>
+        <div style={{ padding: '10px 16px' }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => setLines((ls) => [...ls, blank()])}>+ إضافة صنف</button>
+        </div>
 
         <div className="form-grid" style={{ borderTop: '1px solid var(--line-soft)' }}>
           <Field label="ناولون (رسوم مناولة/شحن — تُضاف على العميل)">
