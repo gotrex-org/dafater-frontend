@@ -32,7 +32,15 @@ http.interceptors.request.use((config) => {
 
 // normalize errors + handle expired/invalid sessions
 http.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    // Toast a confirmation for successful writes (POST/PATCH/PUT/DELETE) — not
+    // GET, since list/detail fetches happen constantly and would spam toasts.
+    const method = res.config.method?.toLowerCase();
+    if (method && method !== 'get') {
+      toast.success('تم بنجاح');
+    }
+    return res;
+  },
   (error: AxiosError<any>) => {
     const status = error.response?.status;
 
