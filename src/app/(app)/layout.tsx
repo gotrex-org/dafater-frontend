@@ -52,7 +52,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <header className="appbar">
       <span className="logo">دفا<b>تر</b></span>
       <div className="userbox">
-        <span>أهلاً <b>{user.name}</b></span>
+        <span>أهلاً بك <b>{user.name}</b></span>
         <button className="logout" onClick={() => { logout(); router.replace('/login'); }}>خروج</button>
       </div>
     </header>
