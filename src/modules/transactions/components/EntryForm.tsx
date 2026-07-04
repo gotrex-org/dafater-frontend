@@ -364,7 +364,7 @@ export function EntryForm() {
               {type === 'expense' && (
                 <Field label="بند المصروف" full>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <div style={{ flex: 1, minWidth: 160 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <Combobox options={cats?.data ?? []} value={categoryId} onChange={setCategoryId} />
                     </div>
                     {!showAddCat ? (
