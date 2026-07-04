@@ -7,7 +7,7 @@ import { PageTitle, DataTable, SegmentedControl, Spinner, Combobox, Field, Money
 import { useAuth } from '@/lib/auth';
 import { InvoiceDetailById } from '../../invoices/components/InvoiceDetail';
 import { DealDetailById } from '../../deals/components/DealsView';
-import { usePostEntry, useUpdateTransaction } from '../../transactions/hooks';
+import { usePostEntry, useUpdateTransaction, useDeleteTransaction } from '../../transactions/hooks';
 import { useParties, usePartyLedger } from '../hooks';
 import { PartiesRegistry } from './PartiesRegistry';
 import type { Party, PartyRole, LedgerRow } from '../dtos';
@@ -108,6 +108,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const [editNote, setEditNote] = useState('');
   const [editErr, setEditErr] = useState('');
   const updateTxn = useUpdateTransaction();
+  const deleteTxn = useDeleteTransaction();
   const [invoiceUid, setInvoiceUid] = useState<string | null>(null);
   const [dealUid, setDealUid] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -340,8 +341,20 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                   <span className="muted" style={{ fontSize: 13 }}>الرصيد</span><span className="num">{EGP(sel.balance)}</span>
                 </div>
                 <div className="toolbar" style={{ marginTop: 14 }}>
-                  {can('entry') && (
+                  {!sel.invoiceUid && !sel.dealUid && can('entry.edit') && (
                     <button className="btn btn-ghost btn-sm" onClick={() => setSelEditing(true)}>✏ تعديل</button>
+                  )}
+                  {!sel.invoiceUid && !sel.dealUid && can('entry.delete') && (
+                    <button
+                      className="btn btn-danger btn-sm"
+                      disabled={deleteTxn.isPending}
+                      onClick={() => {
+                        if (!window.confirm(`حذف الحركة "${sel.type}"؟ هذا الإجراء لا يمكن التراجع عنه.`)) return;
+                        deleteTxn.mutate(sel.id, { onSuccess: () => setSel(null) });
+                      }}
+                    >
+                      حذف
+                    </button>
                   )}
                   <button className="btn btn-ghost btn-sm" onClick={() => setSel(null)}>إغلاق</button>
                 </div>
