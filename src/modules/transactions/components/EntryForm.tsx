@@ -55,47 +55,46 @@ function PendingCollections() {
   return (
     <div className="section">
       <h2>حسابات معلّقة <span style={{ color: 'var(--debit)', fontSize: 13 }}>on pending</span></h2>
-      <div className="card pending-tbl">
-        <table>
-          <thead><tr><th>التاريخ</th><th>المبلغ</th><th>الخزينة</th><th>البيان</th><th>صاحبها</th><th></th></tr></thead>
-          <tbody>
-            {pending.map((p) => (
-              <tr key={p.id}>
-                <td data-l="التاريخ">{fmtDate(p.date)}</td>
-                <td data-l="المبلغ" className="num">{EGP(p.cashIn)}</td>
-                <td data-l="الخزينة" className="muted pc-hide">{p.treasury?.name ?? '—'}</td>
-                <td data-l="البيان" className="muted pc-hide">{p.note || '—'} <span style={{ color: 'var(--debit)', fontWeight: 700 }}>on pending</span></td>
-                <td data-l="صاحبها" style={{ minWidth: 180 }}>
-                  <Combobox options={clients?.data ?? []} value={sel[p.id] || ''} onChange={(id) => setSel((s) => ({ ...s, [p.id]: id }))} placeholder="اختر العميل" />
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <label style={{ display: 'flex', gap: 5, alignItems: 'center', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                      <input type="checkbox" checked={feeEnabled[p.id] ?? true} onChange={(e) => setFeeEnabled((f) => ({ ...f, [p.id]: e.target.checked }))} />
-                      رسوم نقل
-                    </label>
-                    {feeEnabled[p.id] && (
-                      <MoneyInput value={fee[p.id] ?? ''} onChange={(v) => setFee((f) => ({ ...f, [p.id]: v }))} placeholder="500" style={{ width: 90 }} />
-                    )}
-                    {can('entry.resolve') && (
-                      <button
-                        className="btn btn-primary btn-sm"
-                        disabled={!sel[p.id] || resolve.isPending}
-                        onClick={() => resolve.mutate({
-                          id: p.id,
-                          partyId: sel[p.id],
-                          transferFee: feeEnabled[p.id] && fee[p.id] ? Number(fee[p.id]) : undefined,
-                        })}
-                      >
-                        ترحيل لحسابه
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="card" style={{ overflow: 'hidden' }}>
+        {pending.map((p, i) => (
+          <div key={p.id} style={{ padding: '14px 16px', borderBottom: i < pending.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* meta row: date + amount + treasury */}
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 700 }}>{fmtDate(p.date)}</span>
+              <span className="num" style={{ color: 'var(--credit)', fontWeight: 700 }}>{EGP(p.cashIn)}</span>
+              {p.treasury?.name && <span className="muted" style={{ fontSize: 13 }}>{p.treasury.name}</span>}
+              {p.note && <span className="muted" style={{ fontSize: 13 }}>{p.note} <span style={{ color: 'var(--debit)', fontWeight: 700 }}>on pending</span></span>}
+            </div>
+            {/* client picker */}
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)', fontWeight: 700, marginBottom: 4 }}>صاحبها</div>
+              <Combobox options={clients?.data ?? []} value={sel[p.id] || ''} onChange={(id) => setSel((s) => ({ ...s, [p.id]: id }))} placeholder="اختر العميل" />
+            </div>
+            {/* actions */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', gap: 5, alignItems: 'center', fontWeight: 600 }}>
+                <input type="checkbox" checked={feeEnabled[p.id] ?? true} onChange={(e) => setFeeEnabled((f) => ({ ...f, [p.id]: e.target.checked }))} />
+                رسوم نقل
+              </label>
+              {feeEnabled[p.id] && (
+                <MoneyInput value={fee[p.id] ?? ''} onChange={(v) => setFee((f) => ({ ...f, [p.id]: v }))} placeholder="500" style={{ width: 90 }} />
+              )}
+              {can('entry.resolve') && (
+                <button
+                  className="btn btn-primary btn-sm"
+                  disabled={!sel[p.id] || resolve.isPending}
+                  onClick={() => resolve.mutate({
+                    id: p.id,
+                    partyId: sel[p.id],
+                    transferFee: feeEnabled[p.id] && fee[p.id] ? Number(fee[p.id]) : undefined,
+                  })}
+                >
+                  ترحيل لحسابه
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
