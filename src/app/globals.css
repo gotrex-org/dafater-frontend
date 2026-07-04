@@ -267,6 +267,24 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
   .invoice-items .combo > input { width: 100%; }
 }
 
+/* ── entry form — usd row + fee row + submit ────────────────────── */
+.usd-row {
+  display: flex; gap: 8px; align-items: stretch;
+}
+.usd-row input { width: 100%; }
+
+.fee-row {
+  padding: 0 16px 10px;
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .usd-row { flex-direction: column; gap: 8px; }
+  .usd-row input { width: 100% !important; }
+  .fee-row { padding: 0 12px 10px; }
+  .entry-submit { width: 100%; justify-content: center; }
+}
+
 /* ── entry form tabs — scroll horizontally, no wrap ─────────────── */
 .entry-tabs {
   overflow-x: auto;

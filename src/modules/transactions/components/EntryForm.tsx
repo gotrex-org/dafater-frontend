@@ -440,9 +440,9 @@ export function EntryForm() {
 
               <Field label={usdPay ? `المبلغ (مصري) + سعر الدولار${usdResult ? ` = ${usdResult.toFixed(2)} $` : ''}` : diffCur ? `المبلغ (${treasuryCur})` : 'المبلغ'}>
                 {usdPay ? (
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <MoneyInput value={amount} onChange={setAmount} placeholder="بالمصري" />
-                    <MoneyInput value={rate} onChange={setRate} placeholder="سعر $" style={{ width: 80 }} />
+                  <div className="usd-row">
+                    <MoneyInput value={amount} onChange={setAmount} placeholder="بالمصري" style={{ flex: 1, minWidth: 0 }} />
+                    <MoneyInput value={rate} onChange={setRate} placeholder="سعر $" style={{ width: 90, minWidth: 0 }} />
                   </div>
                 ) : (
                   <MoneyInput value={amount} onChange={setAmount} placeholder="0.00" />
@@ -451,17 +451,18 @@ export function EntryForm() {
               <Field label="البيان" full><input value={note} onChange={(e) => setNote(e.target.value)} /></Field>
             </div>
             {(type === 'collect' || type === 'unknownCollect') && (
-              <div style={{ padding: '0 16px 8px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 700 }}>
-                  <input type="checkbox" checked={addFee} onChange={(e) => setAddFee(e.target.checked)} /> إضافة رسوم نقل النقدية {type === 'unknownCollect' ? '(تتسجّل على العميل وقت الترحيل)' : '(تُسجّل على العميل)'}
+              <div className="fee-row">
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 700, flex: 1 }}>
+                  <input type="checkbox" checked={addFee} onChange={(e) => setAddFee(e.target.checked)} />
+                  <span>إضافة رسوم نقل {type === 'unknownCollect' ? '(تُسجَّل وقت الترحيل)' : '(تُسجَّل على العميل)'}</span>
                 </label>
-                {addFee && <MoneyInput value={feeAmount} onChange={setFeeAmount} placeholder="500" style={{ width: 120 }} />}
+                {addFee && <MoneyInput value={feeAmount} onChange={setFeeAmount} placeholder="500" style={{ width: 110, minWidth: 0 }} />}
               </div>
             )}
             <div className="err-text" style={{ padding: '0 16px' }}>{error}</div>
             {msg && <div style={{ padding: '0 16px', color: 'var(--credit)', fontWeight: 700 }}>{msg}</div>}
             <div className="toolbar" style={{ padding: 16 }}>
-              <button className="btn btn-primary" onClick={submit} disabled={postEntry.isPending}>تسجيل الحركة</button>
+              <button className="btn btn-primary entry-submit" onClick={submit} disabled={postEntry.isPending}>تسجيل الحركة</button>
             </div>
           </>
         )}
