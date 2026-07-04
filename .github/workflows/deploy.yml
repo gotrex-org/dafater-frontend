@@ -19,7 +19,7 @@ jobs:
             set -e
             cd /root/projects/dafater-frontend
             git pull origin main
-            cd /root/projects
+            cd /root/projects/infra
             docker compose build frontend
             docker compose up -d --no-deps frontend
             docker image prune -f
