@@ -2,6 +2,7 @@
 // Keeps the same `api.get/post/patch/put/del` surface used across all modules,
 // but adds interceptors (auth header, 401 handling, error normalization).
 import axios, { AxiosError, AxiosInstance } from 'axios';
+import { toast } from './toast';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 const TOKEN_KEY = 'dafater-token';
@@ -50,6 +51,7 @@ http.interceptors.response.use(
       ? body.message.join('، ')
       : body?.message || error.message || `HTTP ${status ?? ''}`.trim();
 
+    toast.error(message);
     return Promise.reject(new Error(message));
   },
 );
