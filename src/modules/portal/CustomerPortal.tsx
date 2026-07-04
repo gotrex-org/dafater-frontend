@@ -4,11 +4,14 @@ import { Fragment, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { fmtDate, fmtDateTime, EGP } from '@/lib/format';
+import { ProductCombobox } from '../products/components/ProductCombobox';
 import type { AuthUser, Paginated } from '@/lib/types';
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
-interface CatalogProduct { uid: string; name: string; unit?: string | null }
+// Note: the API's uid-serializer interceptor renames the DB's `uid` column to
+// `id` on every response, so /products/catalog rows arrive shaped `{id, ...}`.
+interface CatalogProduct { id: string; name: string; unit?: string | null }
 
 interface MyOrderItem { id?: string; name: string; qty: number; received?: number }
 interface MyOrder {
@@ -127,16 +130,16 @@ function OrderForm({ products }: { products: CatalogProduct[] }) {
       <div style={{ display: 'grid', gap: 8, marginBottom: 10 }}>
         {lines.map((l, i) => (
           <div key={l._key} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <select
-              value={l.productName}
-              onChange={(e) => setLine(i, { productName: e.target.value })}
-              style={{ flex: 1, padding: '10px 12px', border: '1.5px solid var(--line)', borderRadius: 10 }}
-            >
-              <option value="">-- اختر الصنف --</option>
-              {products.map((p) => (
-                <option key={p.uid} value={p.name}>{p.name}{p.unit ? ` (${p.unit})` : ''}</option>
-              ))}
-            </select>
+            <div style={{ flex: 1 }}>
+              <ProductCombobox
+                products={products}
+                value={l.productName}
+                onChange={(v) => setLine(i, { productName: v })}
+                freeText
+                allowCreate={false}
+                placeholder="اكتب اسم الصنف…"
+              />
+            </div>
             <input type="number" min="1" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} placeholder="الكمية" style={{ width: 90 }} />
             {lines.length > 1 && (
               <button className="btn btn-danger btn-sm" onClick={() => setLines((ls) => ls.filter((x) => x._key !== l._key))}>×</button>
@@ -414,36 +417,60 @@ function useArchivedManifests() {
   return { archived, toggle };
 }
 
-function ManifestRow({ m, onSelect, onArchive, archiveLabel }: {
-  m: MyManifest; onSelect: () => void; onArchive: () => void; archiveLabel: string;
+function ManifestRow({ m, expanded, onToggle, onArchive, archiveLabel, onPrint }: {
+  m: MyManifest; expanded: boolean; onToggle: () => void; onArchive: () => void; archiveLabel: string; onPrint: () => void;
 }) {
+  const totalQty = m.items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
   return (
-    <tr style={{ cursor: 'pointer' }}>
-      <td onClick={onSelect}><b>{m.no}</b></td>
-      <td className="muted" onClick={onSelect}>{fmtDate(m.date)}</td>
-      <td onClick={onSelect}>{m.driverName || '—'}</td>
-      <td className="muted" onClick={onSelect}>{m.vehicleNo || '—'}</td>
-      <td className="muted" onClick={onSelect}>{m.trailerNo || '—'}</td>
-      <td>
-        <button
-          className="btn btn-ghost btn-sm"
-          style={{ fontSize: 11, whiteSpace: 'nowrap' }}
-          onClick={(e) => { e.stopPropagation(); onArchive(); }}
-        >
-          {archiveLabel}
-        </button>
-      </td>
-    </tr>
+    <>
+      <tr style={{ cursor: 'pointer' }} onClick={onToggle}>
+        <td><b>{m.no}</b></td>
+        <td className="muted">{fmtDate(m.date)}</td>
+        <td>{m.driverName || '—'}</td>
+        <td className="muted">{m.vehicleNo || '—'}</td>
+        <td className="muted">{m.trailerNo || '—'}</td>
+        <td>
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ fontSize: 11, whiteSpace: 'nowrap' }}
+            onClick={(e) => { e.stopPropagation(); onArchive(); }}
+          >
+            {archiveLabel}
+          </button>
+        </td>
+      </tr>
+      {expanded && (
+        <tr>
+          <td colSpan={6} style={{ padding: 0, background: 'var(--bg-soft)' }}>
+            <div style={{ padding: '10px 16px' }}>
+              <table style={{ width: '100%', fontSize: 13.5 }}>
+                <thead>
+                  <tr><th style={{ textAlign: 'right', width: 90 }}>الكمية</th><th style={{ textAlign: 'right' }}>الصنف</th></tr>
+                </thead>
+                <tbody>
+                  {m.items.map((it, i) => <tr key={i}><td className="num">{it.qty}</td><td>{it.name}</td></tr>)}
+                  <tr style={{ fontWeight: 700 }}><td className="num">{totalQty}</td><td>إجمالي العدد</td></tr>
+                </tbody>
+              </table>
+              <div className="toolbar" style={{ marginTop: 8 }}>
+                <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); onPrint(); }}>🖨 عرض الكشف الكامل للطباعة</button>
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
 function ManifestsTab() {
   const { data, isLoading } = useMyManifests();
-  const [selected, setSelected] = useState<MyManifest | null>(null);
+  const [printing, setPrinting] = useState<MyManifest | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showArchive, setShowArchive] = useState(false);
   const { archived, toggle } = useArchivedManifests();
 
-  if (selected) return <ManifestReadView m={selected} onBack={() => setSelected(null)} />;
+  if (printing) return <ManifestReadView m={printing} onBack={() => setPrinting(null)} />;
   if (isLoading) return <div className="empty">جاري التحميل…</div>;
   if (!data?.length) return <div className="empty">لا توجد كشوفات عربيات مرتبطة بحسابك</div>;
 
@@ -454,6 +481,8 @@ function ManifestsTab() {
   const thead = (
     <thead><tr><th>رقم</th><th>التاريخ</th><th>السائق</th><th>العربية</th><th>المقطورة</th><th></th></tr></thead>
   );
+
+  const toggleExpanded = (id: string) => setExpandedId((cur) => (cur === id ? null : id));
 
   return (
     <>
@@ -467,9 +496,11 @@ function ManifestsTab() {
             {active.map((m) => (
               <ManifestRow
                 key={m.id} m={m}
-                onSelect={() => setSelected(m)}
+                expanded={expandedId === m.id}
+                onToggle={() => toggleExpanded(m.id)}
                 onArchive={() => toggle(m.id)}
                 archiveLabel="أرشفة ↓"
+                onPrint={() => setPrinting(m)}
               />
             ))}
           </tbody>
@@ -496,9 +527,11 @@ function ManifestsTab() {
                     {archiveList.map((m) => (
                       <ManifestRow
                         key={m.id} m={m}
-                        onSelect={() => setSelected(m)}
+                        expanded={expandedId === m.id}
+                        onToggle={() => toggleExpanded(m.id)}
                         onArchive={() => toggle(m.id)}
                         archiveLabel="↑ استعادة"
+                        onPrint={() => setPrinting(m)}
                       />
                     ))}
                   </tbody>
