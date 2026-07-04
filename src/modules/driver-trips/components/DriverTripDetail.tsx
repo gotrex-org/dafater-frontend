@@ -5,9 +5,12 @@ import { EGP, fmtDate, todayISO } from '@/lib/format';
 import { Field, Combobox, MoneyInput, PlateInput, parsePlate, buildPlate } from '@/components/common';
 import { useAllParties } from '../../parties/hooks';
 import { useAllTreasury } from '../../treasury/hooks';
+import { useConfig } from '../../config/hooks';
 import { useAddPayment, useDeletePayment, useSetArrival, useUpdateDriverTrip, useUpdateWeightDiff } from '../hooks';
 import type { DriverTrip } from '../dtos';
 
+// Fallbacks only — actual values come from useConfig() (إعدادات رحلات السائقين)
+// and are what the backend actually computes with.
 const DELAY_THRESHOLD = 8;
 const DELAY_RATE = 1200;
 
@@ -30,8 +33,11 @@ export function DriverTripDetail({ trip, onBack }: Props) {
   const updateWeightDiff = useUpdateWeightDiff();
   const { data: parties } = useAllParties('CLIENT');
   const { data: treasury } = useAllTreasury();
+  const { data: config } = useConfig();
   const allTreasury = treasury?.data ?? [];
   const allClients = parties?.data ?? [];
+  const graceDays = config?.delayGraceDays ?? DELAY_THRESHOLD;
+  const feeRate = config?.delayFeePerDay ?? DELAY_RATE;
 
   // ─── Edit form state ──────────────────────────────────────────────────────
   const [showEdit, setShowEdit]       = useState(false);
@@ -116,17 +122,18 @@ export function DriverTripDetail({ trip, onBack }: Props) {
   const days            = isClosed ? daysBetween(trip.departureDate, trip.arrivalDate!) : null;
   const delayFee        = trip.delayFee ?? 0;
   const weightDiffTotal = trip.weightDiffAmount ?? 0;
-  const delayDays       = days !== null ? Math.max(0, days - DELAY_THRESHOLD) : 0;
+  const delayDays       = days !== null ? Math.max(0, days - graceDays) : 0;
   const remainingDelay  = Math.max(0, delayFee - delayPaid);
   const remainingWD     = Math.max(0, weightDiffTotal - wdPaid);
   const hasUnpaidDelay  = isClosed && delayFee > 0 && remainingDelay > 0;
   const hasUnpaidWD     = isClosed && weightDiffTotal > 0 && remainingWD > 0;
   const isTrulyClosed   = isClosed && remainingDelay === 0 && remainingWD === 0;
 
-  // Preview if arrival not yet set
-  const previewDays = !isClosed ? daysBetween(trip.departureDate, arrivalDate) : null;
-  const previewDelay = previewDays !== null ? Math.max(0, previewDays - DELAY_THRESHOLD) : 0;
-  const previewFee = previewDelay * DELAY_RATE;
+  // Live preview of the entered arrivalDate (used both for the initial "تسجيل
+  // الوصول" flow and when correcting an already-closed trip's arrival date).
+  const previewDays = daysBetween(trip.departureDate, arrivalDate);
+  const previewDelay = Math.max(0, previewDays - graceDays);
+  const previewFee = previewDelay * feeRate;
 
   const [payType, setPayType] = useState<'freight' | 'delay' | 'weightDiff'>('freight');
   const [payTreasuryId, setPayTreasuryId] = useState('');
@@ -143,6 +150,13 @@ export function DriverTripDetail({ trip, onBack }: Props) {
     );
   };
 
+  const openEditArrival = () => {
+    setArrivalDate(trip.arrivalDate!.slice(0, 10));
+    setArrWeightDiff(weightDiffTotal > 0 ? String(weightDiffTotal) : '');
+    setArrErr('');
+    setShowArrival(true);
+  };
+
   const saveArrival = () => {
     setArrErr('');
     if (!arrivalDate) return setArrErr('اختر تاريخ الوصول');
@@ -153,12 +167,15 @@ export function DriverTripDetail({ trip, onBack }: Props) {
     if (wd > 0) parts.push(`فرق وزن ${EGP(wd)}`);
     const hasParty = !!trip.party;
     const partyNote = hasParty ? ` على حساب ${trip.party!.name}` : ' (لا يوجد حساب مرتبط — لن يُرحَّل)';
+    const verb = isClosed ? 'سيتم تعديل' : 'سيتم ترحيل';
     const msg = parts.length > 0
-      ? `سيتم ترحيل: ${parts.join(' + ')}${partyNote}. تأكيد؟`
-      : `تسجيل وصول — ${previewDays} يوم. تأكيد؟`;
+      ? `${verb}: ${parts.join(' + ')}${partyNote}. تأكيد؟`
+      : `${isClosed ? 'تعديل تاريخ الوصول' : 'تسجيل وصول'} — ${previewDays} يوم. تأكيد؟`;
     if (!window.confirm(msg)) return;
     setArrival.mutate(
-      { id: trip.id, arrivalDate, weightDiffAmount: wd || undefined },
+      // explicit 0 (not `wd || undefined`) so correcting a trip's weight-diff
+      // down to zero actually clears it instead of falling back to the old value
+      { id: trip.id, arrivalDate, weightDiffAmount: wd },
       { onSuccess: () => { setShowArrival(false); setArrWeightDiff(''); }, onError: (e: any) => setArrErr(e.message) },
     );
   };
@@ -183,7 +200,12 @@ export function DriverTripDetail({ trip, onBack }: Props) {
               {isClosed && (
                 <>
                   <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>تاريخ الوصول</div>
-                  <div style={{ fontWeight: 700 }}>{fmtDate(trip.arrivalDate!)}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ fontWeight: 700 }}>{fmtDate(trip.arrivalDate!)}</div>
+                    {!showArrival && (
+                      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '2px 6px' }} onClick={openEditArrival}>✏</button>
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -422,10 +444,10 @@ export function DriverTripDetail({ trip, onBack }: Props) {
       </div>
 
       {/* Arrival section */}
-      {!isClosed && (
+      {(!isClosed || showArrival) && (
         <div className="card" style={{ padding: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showArrival ? 12 : 0 }}>
-            <b style={{ fontSize: 14 }}>تسجيل الوصول</b>
+            <b style={{ fontSize: 14 }}>{isClosed ? 'تعديل تاريخ الوصول' : 'تسجيل الوصول'}</b>
             {!showArrival && (
               <button className="btn btn-primary btn-sm" onClick={() => setShowArrival(true)}>تسجيل وصول</button>
             )}
@@ -443,7 +465,7 @@ export function DriverTripDetail({ trip, onBack }: Props) {
                   <div style={{ paddingBottom: 2 }}>
                     {(() => {
                       const d = daysBetween(trip.departureDate, arrivalDate);
-                      const del = Math.max(0, d - DELAY_THRESHOLD);
+                      const del = Math.max(0, d - graceDays);
                       return (
                         <div style={{ display: 'flex', gap: 10 }}>
                           <div className="card" style={{ padding: '8px 14px', background: 'var(--bg-soft)', textAlign: 'center' }}>
@@ -453,7 +475,7 @@ export function DriverTripDetail({ trip, onBack }: Props) {
                           {del > 0 && (
                             <div className="card" style={{ padding: '8px 14px', background: 'var(--debit-bg)', textAlign: 'center' }}>
                               <div className="muted" style={{ fontSize: 11 }}>عطلة</div>
-                              <div className="deb" style={{ fontWeight: 700 }}>{del} يوم = {EGP(del * DELAY_RATE)}</div>
+                              <div className="deb" style={{ fontWeight: 700 }}>{del} يوم = {EGP(del * feeRate)}</div>
                             </div>
                           )}
                           {del === 0 && (
@@ -470,7 +492,7 @@ export function DriverTripDetail({ trip, onBack }: Props) {
               {arrErr && <div className="err-text" style={{ marginTop: 8 }}>{arrErr}</div>}
               <div className="toolbar" style={{ marginTop: 12 }}>
                 <button className="btn btn-primary btn-sm" onClick={saveArrival} disabled={setArrival.isPending}>
-                  {setArrival.isPending ? '...' : 'تأكيد الوصول'}
+                  {setArrival.isPending ? '...' : (isClosed ? 'حفظ التعديل' : 'تأكيد الوصول')}
                 </button>
                 <button className="btn btn-ghost btn-sm" onClick={() => { setShowArrival(false); setArrErr(''); }}>إلغاء</button>
               </div>
@@ -479,7 +501,7 @@ export function DriverTripDetail({ trip, onBack }: Props) {
         </div>
       )}
 
-      {isClosed && (
+      {isClosed && !showArrival && (
         <div style={{ padding: '8px 0', color: 'var(--muted)', fontSize: 13, textAlign: 'center' }}>
           الرحلة مغلقة — وصل {fmtDate(trip.arrivalDate!)} ({days} يوم)
         </div>
