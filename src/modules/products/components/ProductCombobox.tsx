@@ -17,18 +17,26 @@ type Opt = { kind: 'product'; product: Product } | { kind: 'create'; name: strin
  * Auto-create on blur: in id mode, if the user types a name and moves away without
  * picking from the dropdown, the component auto-selects an exact match or creates a
  * new product — no manual "add" click required.
+ *
+ * allowCreate=false (freeText mode only): no "add new" suggestion is shown at all —
+ * the dropdown is purely a filtered list of real catalog matches to help autofill,
+ * and it never calls the create-product API. Typing is always the value regardless
+ * of whether anything is picked from the list. Use for untrusted/anonymous callers
+ * (e.g. the public order form) who shouldn't be able to write into the Product catalog.
  */
 export function ProductCombobox({
   products,
   value,
   onChange,
   freeText = false,
+  allowCreate = true,
   placeholder = 'اكتب أو اختر الصنف…',
 }: {
   products: Product[];
   value: string;
   onChange: (v: string) => void;
   freeText?: boolean;
+  allowCreate?: boolean;
   placeholder?: string;
 }) {
   const createProduct = useCreateProduct();
@@ -46,7 +54,7 @@ export function ProductCombobox({
 
   const options: Opt[] = [
     ...matches.map((product) => ({ kind: 'product' as const, product })),
-    ...(q && !hasExact ? [{ kind: 'create' as const, name: query.trim() }] : []),
+    ...(q && !hasExact && allowCreate ? [{ kind: 'create' as const, name: query.trim() }] : []),
   ];
 
   const commit = (opt: Opt) => {

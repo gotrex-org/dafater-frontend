@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { ProductCombobox } from '../../products/components/ProductCombobox';
+import { usePublicProducts } from '../../products/hooks';
 import { useCreateOrder } from '../hooks';
 
 interface Line { name: string; qty: number; }
@@ -14,6 +16,7 @@ export function PublicOrderForm() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const createOrder = useCreateOrder();
+  const { data: products } = usePublicProducts();
 
   useEffect(() => {
     api.get<{ orderEmail: string }>('/config').then((c) => setEmail(c.orderEmail)).catch(() => {});
@@ -53,7 +56,16 @@ export function PublicOrderForm() {
         <div style={{ marginTop: 12, fontWeight: 700, fontSize: 13 }}>الأصناف</div>
         {lines.map((l, i) => (
           <div key={i} style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <input placeholder="الصنف" value={l.name} onChange={(e) => setLines((ls) => ls.map((x, idx) => idx === i ? { ...x, name: e.target.value } : x))} style={{ flex: 1, padding: '10px 12px', border: '1.5px solid var(--line)', borderRadius: 10 }} />
+            <div style={{ flex: 1 }}>
+              <ProductCombobox
+                products={products ?? []}
+                value={l.name}
+                onChange={(v) => setLines((ls) => ls.map((x, idx) => idx === i ? { ...x, name: v } : x))}
+                freeText
+                allowCreate={false}
+                placeholder="الصنف"
+              />
+            </div>
             <input type="number" value={l.qty} onChange={(e) => setLines((ls) => ls.map((x, idx) => idx === i ? { ...x, qty: Number(e.target.value) } : x))} style={{ width: 70, padding: '10px 12px', border: '1.5px solid var(--line)', borderRadius: 10 }} />
           </div>
         ))}

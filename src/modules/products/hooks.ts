@@ -19,6 +19,11 @@ export function useAllProducts() {
   return useProducts({ all: true });
 }
 
+/** No-auth product list for the public (no-login) order form's item suggestions. */
+export function usePublicProducts() {
+  return useQuery({ queryKey: ['products', 'public-catalog'], queryFn: () => productsApi.publicCatalog() });
+}
+
 export function useProductMovements(id: string | null) {
   return useQuery({
     queryKey: ['products', 'movements', id],
