@@ -17,6 +17,9 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           script: |
             set -e
+            if [ ! -d "${{ secrets.SERVER_PATH }}/dafater-frontend" ]; then
+              git clone https://github.com/gotrex-org/dafater-frontend.git ${{ secrets.SERVER_PATH }}/dafater-frontend
+            fi
             cd ${{ secrets.SERVER_PATH }}/dafater-frontend
             git pull origin main
             cd ${{ secrets.SERVER_PATH }}/dafater-backend
