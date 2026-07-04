@@ -55,17 +55,17 @@ function PendingCollections() {
   return (
     <div className="section">
       <h2>حسابات معلّقة <span style={{ color: 'var(--debit)', fontSize: 13 }}>on pending</span></h2>
-      <div className="card tbl-wrap combo-table">
+      <div className="card pending-tbl">
         <table>
           <thead><tr><th>التاريخ</th><th>المبلغ</th><th>الخزينة</th><th>البيان</th><th>صاحبها</th><th></th></tr></thead>
           <tbody>
             {pending.map((p) => (
               <tr key={p.id}>
-                <td>{fmtDate(p.date)}</td>
-                <td className="num">{EGP(p.cashIn)}</td>
-                <td className="muted">{p.treasury?.name ?? '—'}</td>
-                <td className="muted">{p.note || '—'} <span style={{ color: 'var(--debit)', fontWeight: 700 }}>on pending</span></td>
-                <td style={{ minWidth: 180 }}>
+                <td data-l="التاريخ">{fmtDate(p.date)}</td>
+                <td data-l="المبلغ" className="num">{EGP(p.cashIn)}</td>
+                <td data-l="الخزينة" className="muted pc-hide">{p.treasury?.name ?? '—'}</td>
+                <td data-l="البيان" className="muted pc-hide">{p.note || '—'} <span style={{ color: 'var(--debit)', fontWeight: 700 }}>on pending</span></td>
+                <td data-l="صاحبها" style={{ minWidth: 180 }}>
                   <Combobox options={clients?.data ?? []} value={sel[p.id] || ''} onChange={(id) => setSel((s) => ({ ...s, [p.id]: id }))} placeholder="اختر العميل" />
                 </td>
                 <td>
@@ -318,9 +318,9 @@ export function EntryForm() {
     <>
       <PageTitle title="الإدخال اليومي" subtitle="التحصيل، الدفع للموردين، المصاريف، التحويلات وتسوية الحسابات" />
       <div className="card" onKeyDown={fieldNavKeyDown}>
-        <div className="toolbar" style={{ padding: 14 }}>
+        <div className="toolbar entry-tabs" style={{ padding: 14 }}>
           {allowedTabs.map((tb) => (
-            <button key={tb.t} className={`btn btn-sm ${type === tb.t ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setType(tb.t)}>{tb.label}</button>
+            <button key={tb.t} className={`btn btn-sm ${type === tb.t ? 'btn-primary' : 'btn-ghost'}`} style={{ whiteSpace: 'nowrap' }} onClick={() => setType(tb.t)}>{tb.label}</button>
           ))}
         </div>
 
