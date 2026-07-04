@@ -17,12 +17,12 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           script: |
             set -e
-            if [ ! -d "${{ secrets.SERVER_PATH }}/defater-frontend" ]; then
-              git clone https://github.com/gotrex-org/dafater-frontend.git ${{ secrets.SERVER_PATH }}/defater-frontend
+            if [ ! -d "${{ secrets.SERVER_PATH }}/dafater-frontend" ]; then
+              git clone https://github.com/gotrex-org/dafater-frontend.git ${{ secrets.SERVER_PATH }}/dafater-frontend
             fi
-            cd ${{ secrets.SERVER_PATH }}/defater-frontend
+            cd ${{ secrets.SERVER_PATH }}/dafater-frontend
             git pull origin main
-            cd ${{ secrets.SERVER_PATH }}/defater-backend
+            cd ${{ secrets.SERVER_PATH }}/dafater-backend
             docker compose build frontend
             docker compose up -d --no-deps frontend
             docker image prune -f
