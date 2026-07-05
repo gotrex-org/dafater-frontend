@@ -7,6 +7,7 @@ import { useDashboard } from '../../dashboard/hooks';
 import { useConfig, useUpdateConfig } from '../../config/hooks';
 import { UsersManager } from '../../users/components/UsersManager';
 import { PartiesRegistry } from '../../parties/components/PartiesRegistry';
+import { ProductsManager } from '../../products/components/ProductsManager';
 
 export function SettingsView() {
   const { user, can } = useAuth();
@@ -95,6 +96,10 @@ export function SettingsView() {
 
       <CollapsibleSection title="سجل العملاء والموردين" defaultOpen={false}>
         <PartiesRegistry />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="سجل الأصناف" defaultOpen={false}>
+        <ProductsManager />
       </CollapsibleSection>
 
       {(user?.admin || can('settings.users')) && <UsersManager />}
