@@ -6,6 +6,7 @@ import { useTableState } from '@/lib/useTableState';
 import { SegmentedControl, SearchInput, MoneyInput } from '@/components/common';
 import { useAuth } from '@/lib/auth';
 import { useParties, useCreateParty, useUpdateParty, useDeleteParty, useLinkParty, useUnlinkParty, useAllParties } from '../hooks';
+import { confirmCascadeDelete } from '@/lib/cascadeDelete';
 import type { Party } from '../dtos';
 
 function LinkPanel({ party, canManage, otherRole }: { party: Party; canManage: boolean; otherRole: 'CLIENT' | 'SUPPLIER' }) {
@@ -102,7 +103,7 @@ function PartyRow({ party, canDelete, canManage }: { party: Party; canDelete: bo
 
   const remove = () => {
     if (!confirm(`حذف ${party.name}؟ لا يمكن التراجع.`)) return;
-    del.mutate(party.id, { onError: (e: any) => setMsg(e.message) });
+    confirmCascadeDelete(del, party.id, { onOtherError: (e) => setMsg(e.message) });
   };
 
   const otherRole: 'CLIENT' | 'SUPPLIER' = party.role === 'CLIENT' ? 'SUPPLIER' : 'CLIENT';

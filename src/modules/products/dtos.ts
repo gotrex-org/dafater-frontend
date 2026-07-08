@@ -3,6 +3,15 @@ export interface Product {
   name: string;
   unit?: string | null;
   service?: boolean;
+  pinSale?: boolean;
+  pinPurchase?: boolean;
+  price?: number;
+}
+
+export interface LastPrice {
+  productId: string;
+  price: number;
+  date: string;
 }
 
 export interface ProductMovement {
@@ -20,10 +29,16 @@ export interface CreateProductDto {
   name: string;
   unit?: string;
   service?: boolean;
+  pinSale?: boolean;
+  pinPurchase?: boolean;
+  price?: number;
 }
 
 export interface UpdateProductDto {
   name?: string;
   unit?: string;
   service?: boolean;
+  pinSale?: boolean;
+  pinPurchase?: boolean;
+  price?: number;
 }

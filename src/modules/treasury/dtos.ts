@@ -24,6 +24,8 @@ export interface TreasuryMovement {
   party?: { name: string } | null;
   treasury?: { id: string; name: string; currency: string } | null;
   treasury2?: { id: string; name: string; currency: string } | null;
+  // Running balance as of this row — only computed when filtered to a single treasury.
+  balance?: number;
 }
 
 export interface ExpenseByCategory {

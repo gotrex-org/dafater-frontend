@@ -15,5 +15,5 @@ export const invoicesApi = {
   update: (id: string, dto: UpdateInvoiceDto) => api.patch<Invoice>(`/invoices/${id}`, dto),
   updateCommission: (id: string, dto: { commissionAmount?: number; commissionPartyId?: string }) =>
     api.patch<void>(`/invoices/${id}/commission`, dto),
-  remove: (id: string) => api.del<void>(`/invoices/${id}`),
+  remove: (id: string, cascade?: boolean) => api.del<void>(`/invoices/${id}${cascade ? '?cascade=true' : ''}`),
 };

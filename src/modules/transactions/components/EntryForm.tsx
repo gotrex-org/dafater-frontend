@@ -8,7 +8,8 @@ import { PageTitle, Field, Combobox, MoneyInput } from '@/components/common';
 import { PartyCombobox } from '../../invoices/components/PartyCombobox';
 import { useAllParties } from '../../parties/hooks';
 import { useAllTreasury } from '../../treasury/hooks';
-import { useAllExpenseCategories, useCreateCategory } from '../../expense-categories/hooks';
+import { useAllExpenseCategories } from '../../expense-categories/hooks';
+import { ExpenseCategoriesManager } from '../../expense-categories/components/ExpenseCategoriesManager';
 import { usePostEntry, usePendingCollections, useResolveCollection } from '../hooks';
 import { useForexAgents, useEgpInAny } from '../../forex/hooks';
 import { usePendingDriverTrips, useAddPayment } from '../../driver-trips/hooks';
@@ -233,10 +234,6 @@ export function EntryForm() {
   const { data: agents } = useAllParties('AGENT');
   const { data: treasury } = useAllTreasury();
   const { data: cats } = useAllExpenseCategories();
-  const createCategory = useCreateCategory();
-  const [newCatName, setNewCatName] = useState('');
-  const [showAddCat, setShowAddCat] = useState(false);
-  const [catMsg, setCatMsg] = useState('');
   const { data: forexAgents } = useForexAgents();
   const postEntry = usePostEntry();
   const egpInMutation = useEgpInAny();
@@ -362,52 +359,10 @@ export function EntryForm() {
 
               {type === 'expense' && (
                 <Field label="بند المصروف" full>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <Combobox options={cats?.data ?? []} value={categoryId} onChange={setCategoryId} />
-                    </div>
-                    {!showAddCat ? (
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setShowAddCat(true); setCatMsg(''); }}>+ بند جديد</button>
-                    ) : (
-                      <>
-                        <input
-                          autoFocus
-                          value={newCatName}
-                          onChange={(e) => setNewCatName(e.target.value)}
-                          placeholder="اسم البند"
-                          style={{ flex: 1, minWidth: 120 }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && newCatName.trim()) {
-                              createCategory.mutate(
-                                { name: newCatName.trim() },
-                                {
-                                  onSuccess: (cat) => { setCategoryId((cat as any).uid); setNewCatName(''); setShowAddCat(false); setCatMsg(''); },
-                                  onError: (err: any) => setCatMsg(err.message),
-                                },
-                              );
-                            }
-                            if (e.key === 'Escape') { setShowAddCat(false); setNewCatName(''); }
-                          }}
-                        />
-                        <button
-                          type="button"
-                          className="btn btn-primary btn-sm"
-                          disabled={!newCatName.trim() || createCategory.isPending}
-                          onClick={() =>
-                            createCategory.mutate(
-                              { name: newCatName.trim() },
-                              {
-                                onSuccess: (cat) => { setCategoryId((cat as any).uid); setNewCatName(''); setShowAddCat(false); setCatMsg(''); },
-                                onError: (err: any) => setCatMsg(err.message),
-                              },
-                            )
-                          }
-                        >حفظ</button>
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setShowAddCat(false); setNewCatName(''); }}>إلغاء</button>
-                      </>
-                    )}
+                  <Combobox options={cats?.data ?? []} value={categoryId} onChange={setCategoryId} />
+                  <div style={{ marginTop: 8 }}>
+                    <ExpenseCategoriesManager canManage={can('settings')} />
                   </div>
-                  {catMsg && <div className="err-text" style={{ marginTop: 4 }}>{catMsg}</div>}
                 </Field>
               )}
 
@@ -432,8 +387,8 @@ export function EntryForm() {
               {type === 'adjust' && (
                 <Field label="اتجاه التسوية">
                   <select value={direction} onChange={(e) => setDirection(e.target.value as 'debit' | 'credit')}>
-                    <option value="debit">مدين (يزيد المستحق عليه)</option>
-                    <option value="credit">دائن (يقلل المستحق عليه)</option>
+                    <option value="debit">عليه (يزيد المستحق عليه)</option>
+                    <option value="credit">له (يقلل المستحق عليه)</option>
                   </select>
                 </Field>
               )}

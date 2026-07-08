@@ -154,6 +154,7 @@ function UserRow({ user, canDelete }: { user: User; canDelete: boolean }) {
   const update = useUpdateUser();
   const del = useDeleteUser();
   const { data: clients } = useAllParties('CLIENT');
+  const { data: allParties } = useAllParties();
   const { data: treasuries } = useAllTreasury();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(user.name);
@@ -169,6 +170,7 @@ function UserRow({ user, canDelete }: { user: User; canDelete: boolean }) {
   const [msg, setMsg] = useState('');
 
   const allClients = clients?.data ?? [];
+  const ledgerParties = allParties?.data ?? [];
   const allTreasuries = treasuries?.data ?? [];
   const hasLedger = admin || views.includes('ledger');
   const hasTreasury = admin || views.includes('treasury');
@@ -249,11 +251,11 @@ function UserRow({ user, canDelete }: { user: User; canDelete: boolean }) {
                 <MultiSelectPicker
                   value={ledgerPartyIds}
                   onChange={setLedgerPartyIds}
-                  allItems={allClients}
-                  title="كشف الحساب — العملاء المخصصون"
-                  unitLabel="عميل"
-                  emptyHint="لا يوجد تقييد — الموظف يشوف كل العملاء"
-                  addPlaceholder="ابحث عن عميل لإضافته…"
+                  allItems={ledgerParties}
+                  title="كشف الحساب — عملاء/موردين مخصصين"
+                  unitLabel="طرف"
+                  emptyHint="لا يوجد تقييد — الموظف يشوف كل العملاء والموردين"
+                  addPlaceholder="ابحث عن عميل أو مورد لإضافته…"
                 />
               )}
               {hasTreasury && (
@@ -290,6 +292,7 @@ function UserRow({ user, canDelete }: { user: User; canDelete: boolean }) {
 function NewUser() {
   const create = useCreateUser();
   const { data: clients } = useAllParties('CLIENT');
+  const { data: allParties } = useAllParties();
   const { data: treasuries } = useAllTreasury();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -305,6 +308,7 @@ function NewUser() {
   const [msg, setMsg] = useState('');
 
   const allClients = clients?.data ?? [];
+  const ledgerParties = allParties?.data ?? [];
   const allTreasuries = treasuries?.data ?? [];
   const hasLedger = admin || views.includes('ledger');
   const hasTreasury = admin || views.includes('treasury');
@@ -367,11 +371,11 @@ function NewUser() {
             <MultiSelectPicker
               value={ledgerPartyIds}
               onChange={setLedgerPartyIds}
-              allItems={allClients}
-              title="كشف الحساب — العملاء المخصصون"
-              unitLabel="عميل"
-              emptyHint="لا يوجد تقييد — الموظف يشوف كل العملاء"
-              addPlaceholder="ابحث عن عميل لإضافته…"
+              allItems={ledgerParties}
+              title="كشف الحساب — عملاء/موردين مخصصين"
+              unitLabel="طرف"
+              emptyHint="لا يوجد تقييد — الموظف يشوف كل العملاء والموردين"
+              addPlaceholder="ابحث عن عميل أو مورد لإضافته…"
             />
           )}
           {hasTreasury && (

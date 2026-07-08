@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useTableState } from '@/lib/useTableState';
-import { SearchInput } from '@/components/common';
+import { EGP } from '@/lib/format';
+import { SearchInput, MoneyInput } from '@/components/common';
 import { useAuth } from '@/lib/auth';
 import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from '../hooks';
+import { confirmCascadeDelete } from '@/lib/cascadeDelete';
 import type { Product } from '../dtos';
 
 function ProductRow({ product, canManage }: { product: Product; canManage: boolean }) {
@@ -14,19 +16,20 @@ function ProductRow({ product, canManage }: { product: Product; canManage: boole
   const [name, setName] = useState(product.name);
   const [unit, setUnit] = useState(product.unit ?? '');
   const [service, setService] = useState(!!product.service);
+  const [price, setPrice] = useState(product.price ? String(product.price) : '');
   const [msg, setMsg] = useState('');
 
   const save = () => {
     if (!name.trim()) return setMsg('اكتب الاسم');
     update.mutate(
-      { id: product.id, dto: { name: name.trim(), unit: unit.trim() || undefined, service } },
+      { id: product.id, dto: { name: name.trim(), unit: unit.trim() || undefined, service, price: Number(price) || 0 } },
       { onSuccess: () => { setMsg('تم الحفظ ✓'); setOpen(false); }, onError: (e: any) => setMsg(e.message) },
     );
   };
 
   const remove = () => {
     if (!confirm(`حذف ${product.name}؟ لا يمكن التراجع.`)) return;
-    del.mutate(product.id, { onError: (e: any) => setMsg(e.message) });
+    confirmCascadeDelete(del, product.id, { onOtherError: (e) => setMsg(e.message) });
   };
 
   return (
@@ -36,6 +39,7 @@ function ProductRow({ product, canManage }: { product: Product; canManage: boole
           {product.name}
           {product.unit && <span className="muted" style={{ fontSize: 12, fontWeight: 400, marginInlineStart: 8 }}>({product.unit})</span>}
           {product.service && <span className="pill" style={{ marginInlineStart: 6 }}>خدمة</span>}
+          {!!product.price && <span className="muted num" style={{ fontSize: 12, fontWeight: 400, marginInlineStart: 8 }}>سعر التقييم: {EGP(product.price)}</span>}
         </span>
         {canManage && <button className="btn btn-ghost btn-sm" onClick={() => setOpen((o) => !o)}>{open ? 'إغلاق' : 'تعديل'}</button>}
         {canManage && <button className="btn btn-danger btn-sm" onClick={remove} disabled={del.isPending}>حذف</button>}
@@ -44,6 +48,7 @@ function ProductRow({ product, canManage }: { product: Product; canManage: boole
         <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input placeholder="الاسم" value={name} onChange={(e) => setName(e.target.value)} style={{ flex: 1, minWidth: 130 }} />
           <input placeholder="الوحدة (اختياري)" value={unit} onChange={(e) => setUnit(e.target.value)} style={{ maxWidth: 140 }} />
+          <MoneyInput value={price} onChange={setPrice} placeholder="سعر التقييم" style={{ maxWidth: 140 }} />
           <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer' }}>
             <input type="checkbox" checked={service} onChange={(e) => setService(e.target.checked)} />
             بند خدمة (بدون مخزون)
@@ -67,6 +72,7 @@ export function ProductsManager() {
   const [pName, setPName] = useState('');
   const [pUnit, setPUnit] = useState('');
   const [pService, setPService] = useState(false);
+  const [pPrice, setPPrice] = useState('');
   const [pErr, setPErr] = useState('');
 
   const canManage = !!user?.admin || can('settings');
@@ -75,8 +81,8 @@ export function ProductsManager() {
     if (!pName.trim()) { setPErr('اكتب الاسم'); return; }
     setPErr('');
     createProduct.mutate(
-      { name: pName.trim(), unit: pUnit.trim() || undefined, service: pService },
-      { onSuccess: () => { setPName(''); setPUnit(''); setPService(false); setAdding(false); }, onError: (e: any) => setPErr(e.message) },
+      { name: pName.trim(), unit: pUnit.trim() || undefined, service: pService, price: Number(pPrice) || 0 },
+      { onSuccess: () => { setPName(''); setPUnit(''); setPService(false); setPPrice(''); setAdding(false); }, onError: (e: any) => setPErr(e.message) },
     );
   };
 
@@ -106,6 +112,7 @@ export function ProductsManager() {
             onKeyDown={(e) => { if (e.key === 'Enter') addProduct(); if (e.key === 'Escape') setAdding(false); }}
             style={{ flex: 1, minWidth: 150 }} />
           <input placeholder="الوحدة (اختياري)" value={pUnit} onChange={(e) => setPUnit(e.target.value)} style={{ maxWidth: 150 }} />
+          <MoneyInput value={pPrice} onChange={setPPrice} placeholder="سعر التقييم (اختياري)" style={{ maxWidth: 150 }} />
           <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer' }}>
             <input type="checkbox" checked={pService} onChange={(e) => setPService(e.target.checked)} />
             بند خدمة (بدون مخزون)

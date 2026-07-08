@@ -10,5 +10,5 @@ export const treasuryApi = {
   expensesByCategory: () => api.get<ExpenseByCategory[]>('/treasury/expenses-by-category'),
   create: (dto: TreasuryDto) => api.post<TreasuryAccount>('/treasury', dto),
   update: (id: string, dto: TreasuryDto) => api.patch<TreasuryAccount>(`/treasury/${id}`, dto),
-  remove: (id: string) => api.del<void>(`/treasury/${id}`),
+  remove: (id: string, cascade?: boolean) => api.del<void>(`/treasury/${id}${cascade ? '?cascade=true' : ''}`),
 };

@@ -24,6 +24,10 @@ export function usePublicProducts() {
   return useQuery({ queryKey: ['products', 'public-catalog'], queryFn: () => productsApi.publicCatalog() });
 }
 
+export function useLastPrices(kind: 'SALE' | 'PURCHASE') {
+  return useQuery({ queryKey: ['products', 'last-prices', kind], queryFn: () => productsApi.lastPrices(kind) });
+}
+
 export function useProductMovements(id: string | null) {
   return useQuery({
     queryKey: ['products', 'movements', id],
@@ -51,7 +55,7 @@ export function useUpdateProduct() {
 export function useDeleteProduct() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => productsApi.remove(id),
+    mutationFn: ({ id, cascade }: { id: string; cascade?: boolean }) => productsApi.remove(id, cascade),
     onSuccess: () => qc.invalidateQueries({ queryKey: productKeys.all }),
   });
 }

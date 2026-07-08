@@ -65,7 +65,7 @@ export function useUpdateInvoiceCommission() {
 export function useDeleteInvoice() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => invoicesApi.remove(id),
+    mutationFn: ({ id, cascade }: { id: string; cascade?: boolean }) => invoicesApi.remove(id, cascade),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: invoiceKeys.all });
       qc.invalidateQueries({ queryKey: ['parties'] });

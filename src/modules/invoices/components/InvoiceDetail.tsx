@@ -7,6 +7,7 @@ import { PageTitle, Spinner, Field, MoneyInput } from '@/components/common';
 import { useAuth } from '@/lib/auth';
 import { useParty } from '../../parties/hooks';
 import { useInvoice, useDeleteInvoice, useUpdateInvoiceCommission } from '../hooks';
+import { confirmCascadeDelete } from '@/lib/cascadeDelete';
 import type { Invoice } from '../dtos';
 import { InvoiceEditor } from './InvoiceEditor';
 import { CommissionPicker } from './CommissionPicker';
@@ -47,8 +48,8 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
   if (editing) return <InvoiceEditor kind={invoice.kind} invoice={invoice} onClose={() => setEditing(false)} onUpdated={onBack} />;
 
   const handleDelete = () => {
-    if (!window.confirm(`حذف فاتورة ${kindLabel} رقم ${invoice.no}؟ سيتم حذف جميع الحركات المرتبطة بها. هذا الإجراء لا يمكن التراجع عنه.`)) return;
-    deleteInvoice.mutate(invoice.id, { onSuccess: onBack });
+    if (!window.confirm(`حذف فاتورة ${kindLabel} رقم ${invoice.no}؟ هذا الإجراء لا يمكن التراجع عنه.`)) return;
+    confirmCascadeDelete(deleteInvoice, invoice.id, { onSuccess: onBack });
   };
 
   return (

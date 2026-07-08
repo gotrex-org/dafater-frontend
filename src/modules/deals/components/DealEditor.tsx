@@ -96,6 +96,7 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
     if (!clientId) return setError('اختر العميل');
     if (!supplierId) return setError('اختر المورد');
     if (items.length === 0) return setError('أضف صنفًا واحدًا على الأقل');
+    if ((num(paidIn) > 0 || num(paidOut) > 0) && !treasuryId) return setError('اخترت مبلغ محصّل/مدفوع — لازم تختار الخزنة اللي المبلغ خارج/داخل منها');
 
     const dto = {
       date, no: no.trim() || undefined, clientId, supplierId, items,

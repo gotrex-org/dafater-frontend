@@ -12,6 +12,8 @@ import {
 import { useDeleteTransaction, usePostEntry } from '../../transactions/hooks';
 import { ForexView } from '../../forex/components/ForexView';
 import { EditTransactionModal } from '../../transactions/components/EditTransactionModal';
+import { ExpenseCategoriesManager } from '../../expense-categories/components/ExpenseCategoriesManager';
+import { confirmCascadeDelete } from '@/lib/cascadeDelete';
 import type { TreasuryAccount, TreasuryMovement, ExpenseByCategory } from '../dtos';
 
 const cashIn = (m: TreasuryMovement) => (m.cashIn || 0) + (m.cashIn2 || 0);
@@ -81,8 +83,8 @@ export function TreasuryView() {
   };
 
   const confirmDelete = (a: TreasuryAccount) => {
-    if (!window.confirm(`حذف خزنة "${a.name}"؟ تأكد أنها فارغة وليس فيها حركات.`)) return;
-    deleteTreasury.mutate(a.id, { onSuccess: reset, onError: (e: any) => setErr(e.message) });
+    if (!window.confirm(`حذف خزنة "${a.name}"؟`)) return;
+    confirmCascadeDelete(deleteTreasury, a.id, { onSuccess: reset, onOtherError: (e) => setErr(e.message) });
   };
 
   const handleDeleteMove = (m: TreasuryMovement, e: React.MouseEvent) => {
@@ -111,6 +113,9 @@ export function TreasuryView() {
     { header: 'البيان', cell: (m) => m.note || m.party?.name || '', className: 'muted' },
     { header: 'داخل', cell: (m) => (cashIn(m) ? EGP(cashIn(m)) : ''), className: 'num cre' },
     { header: 'خارج', cell: (m) => (cashOut(m) ? EGP(cashOut(m)) : ''), className: 'num deb' },
+    // Balance of the row's own treasury as of that movement — backend computes this even
+    // when browsing all treasuries merged (each row uses its own account's running total).
+    { header: 'الرصيد', cell: (m) => EGP(m.balance ?? 0), className: 'num' },
     {
       header: '',
       cell: (m) => !m.invoiceId && !m.dealId && can('entry') ? (
@@ -285,6 +290,7 @@ export function TreasuryView() {
 
       {(user?.admin || can('treasury.expenses')) && (
         <CollapsibleSection title="المصروفات حسب البند" defaultOpen={false}>
+          <ExpenseCategoriesManager canManage={canManage} />
           <DataTable columns={expenseCols} rows={byCat ?? []} rowKey={(c) => c.categoryId ?? c.category} emptyText="لا يوجد" />
         </CollapsibleSection>
       )}

@@ -18,6 +18,12 @@ const FIELD_LABELS: Record<string, string> = {
   clientName: 'العميل', driverName: 'السائق',
   vehicleNo: 'رقم العربية', trailerNo: 'رقم المقطورة',
   agreedFreight: 'الناولون المتفق', unit: 'الوحدة', status: 'الحالة',
+  items: 'الأصناف', qty: 'الكمية', no: 'الرقم', price: 'السعر', buyPrice: 'سعر الشراء',
+  transactions: 'الحركات المالية', payments: 'المدفوعات', requests: 'الطلبات',
+  debit: 'عليه', credit: 'له', cashIn: 'وارد', cashOut: 'صادر',
+  type: 'النوع', amount: 'المبلغ', paymentType: 'نوع الدفعة', received: 'المستلم',
+  opening: 'الرصيد الافتتاحي', currency: 'العملة', role: 'النوع الأساسي',
+  service: 'بند خدمة',
 };
 
 const ENTITY: Record<string, string> = {
@@ -42,6 +48,52 @@ const UNDO_LABEL: Record<string, { btn: string; confirm: string }> = {
   CREATE: { btn: 'إلغاء الإضافة', confirm: 'سيتم حذف هذا العنصر نهائياً. متأكد؟' },
   DELETE: { btn: 'استرجاع المحذوف', confirm: 'سيتم استرجاع هذا العنصر. متأكد؟' },
 };
+
+// Raw internal ids (numeric PK, and un-nameable FK scalars like `partyId`) are noise here —
+// the actual related record (e.g. `party: {name}`) is already included in the snapshot
+// wherever it matters, so hiding the bare *Id columns doesn't lose information.
+const SNAPSHOT_SKIP_KEYS = new Set(['id', 'createdAt', 'updatedAt']);
+const isSkippableKey = (key: string, value: unknown) =>
+  SNAPSHOT_SKIP_KEYS.has(key) || (/Id$/.test(key) && (value === null || typeof value !== 'object'));
+
+function formatScalar(v: unknown): string {
+  if (v == null) return '(فارغ)';
+  if (typeof v === 'boolean') return v ? 'نعم' : 'لا';
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
+    try { return new Date(v).toLocaleDateString('ar-EG'); } catch { return v; }
+  }
+  return String(v);
+}
+
+function SnapshotValue({ value, depth = 0 }: { value: any; depth?: number }) {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <span className="muted" style={{ fontSize: 13 }}>—</span>;
+    return (
+      <div style={{ display: 'grid', gap: 6 }}>
+        {value.map((item, i) => (
+          <div key={i} style={{ border: '1px solid var(--line-soft)', borderRadius: 6, padding: 8 }}>
+            <SnapshotValue value={item} depth={depth + 1} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value).filter(([k, v]) => !isSkippableKey(k, v));
+    if (entries.length === 0) return <span className="muted" style={{ fontSize: 13 }}>—</span>;
+    return (
+      <div style={{ display: 'grid', gap: 6 }}>
+        {entries.map(([k, v]) => (
+          <div key={k} style={{ display: 'grid', gridTemplateColumns: depth === 0 ? 'auto 1fr' : '1fr', gap: '2px 16px', alignItems: 'baseline' }}>
+            <span className="muted" style={{ fontSize: 12, fontWeight: 700 }}>{FIELD_LABELS[k] ?? k}</span>
+            {v && typeof v === 'object' ? <SnapshotValue value={v} depth={depth + 1} /> : <span style={{ fontSize: 13 }}>{formatScalar(v)}</span>}
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return <span style={{ fontSize: 13 }}>{formatScalar(value)}</span>;
+}
 
 function AuditDetail({ log, onBack }: { log: AuditLog; onBack: () => void }) {
   const { user } = useAuth();
@@ -90,7 +142,7 @@ function AuditDetail({ log, onBack }: { log: AuditLog; onBack: () => void }) {
         )}
       </div>
       {undoErr && <div className="err-text" style={{ margin: '8px 0' }}>{undoErr}</div>}
-      <div className="card" style={{ padding: 20, maxWidth: 480 }}>
+      <div className="card" style={{ padding: 20, maxWidth: 680 }}>
         <div className="page-title" style={{ marginBottom: 16 }}>
           <span className={ACTION_CLASS[log.action]}>{ACTION[log.action] ?? log.action}</span>
           {' '}
@@ -116,6 +168,15 @@ function AuditDetail({ log, onBack }: { log: AuditLog; onBack: () => void }) {
             </>
           )}
         </div>
+
+        {log.snapshot && (
+          <div style={{ marginTop: 16, borderTop: '1px solid var(--line-soft)', paddingTop: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-soft)', marginBottom: 10 }}>
+              {log.action === 'DELETE' ? 'بيانات العنصر المحذوف' : 'بيانات العنصر'}
+            </div>
+            <SnapshotValue value={log.snapshot} />
+          </div>
+        )}
 
         {log.action === 'UPDATE' && log.diff && Object.keys(log.diff).length > 0 && (
           <div style={{ marginTop: 16, borderTop: '1px solid var(--line-soft)', paddingTop: 14 }}>

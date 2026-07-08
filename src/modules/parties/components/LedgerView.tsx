@@ -37,7 +37,7 @@ function LedgerTab() {
 
   const all = data?.data ?? [];
   const filtered = all.filter((p) => {
-    if (isRestricted && role === 'CLIENT' && !restrictedIds.includes(p.id)) return false;
+    if (isRestricted && !restrictedIds.includes(p.id)) return false;
     return p.name.includes(search.trim());
   });
   const sorted = [...filtered].sort((a, b) => {
@@ -239,7 +239,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
             <table>
               <thead>
                 <tr>
-                  <th>التاريخ</th><th>النوع</th><th>البيان</th><th>مدين</th><th>دائن</th>
+                  <th>التاريخ</th><th>النوع</th><th>البيان</th><th>عليه</th><th>له</th>
                   {kind === 'all' && <th>الرصيد</th>}
                 </tr>
               </thead>
@@ -336,8 +336,8 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                   <span className="muted" style={{ fontSize: 13 }}>التاريخ</span><span>{fmtDate(sel.date)}</span>
                   <span className="muted" style={{ fontSize: 13 }}>النوع</span><span>{sel.type}</span>
                   {sel.note && <><span className="muted" style={{ fontSize: 13 }}>البيان</span><span>{sel.note}</span></>}
-                  {sel.debit > 0 && <><span className="muted" style={{ fontSize: 13 }}>مدين</span><span className="deb num">{EGP(sel.debit)}</span></>}
-                  {sel.credit > 0 && <><span className="muted" style={{ fontSize: 13 }}>دائن</span><span className="cre num">{EGP(sel.credit)}</span></>}
+                  {sel.debit > 0 && <><span className="muted" style={{ fontSize: 13 }}>عليه</span><span className="deb num">{EGP(sel.debit)}</span></>}
+                  {sel.credit > 0 && <><span className="muted" style={{ fontSize: 13 }}>له</span><span className="cre num">{EGP(sel.credit)}</span></>}
                   <span className="muted" style={{ fontSize: 13 }}>الرصيد</span><span className="num">{EGP(sel.balance)}</span>
                 </div>
                 <div className="toolbar" style={{ marginTop: 14 }}>

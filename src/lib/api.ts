@@ -4,7 +4,13 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import { toast } from './toast';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+// An explicitly-empty NEXT_PUBLIC_API_URL (set at build time) means "same origin,
+// relative path" — used in production so the API host follows whatever the browser
+// used to load the page (domain or bare IP) instead of a hardcoded absolute URL.
+// Unset (local dev) still falls back to the standalone API container's port.
+const BASE = process.env.NEXT_PUBLIC_API_URL !== undefined
+  ? process.env.NEXT_PUBLIC_API_URL
+  : 'http://localhost:4000';
 const TOKEN_KEY = 'dafater-token';
 
 export function getToken(): string | null {
@@ -60,7 +66,9 @@ http.interceptors.response.use(
       : body?.message || error.message || `HTTP ${status ?? ''}`.trim();
 
     toast.error(message);
-    return Promise.reject(new Error(message));
+    const err = new Error(message) as Error & { status?: number };
+    err.status = status;
+    return Promise.reject(err);
   },
 );
 

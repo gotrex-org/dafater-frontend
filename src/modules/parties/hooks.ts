@@ -53,7 +53,7 @@ export function useUpdateParty() {
 export function useDeleteParty() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => partiesApi.remove(id),
+    mutationFn: ({ id, cascade }: { id: string; cascade?: boolean }) => partiesApi.remove(id, cascade),
     onSuccess: () => qc.invalidateQueries({ queryKey: partyKeys.all }),
   });
 }

@@ -1,21 +1,70 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { EGP, QTY } from '@/lib/format';
 import type { PageMeta } from '@/lib/types';
-import { PageTitle, DataTable, StatsGrid, StatCard, SearchInput, Combobox, type Column } from '@/components/common';
+import { PageTitle, DataTable, StatsGrid, StatCard, SearchInput, Combobox, MoneyInput, type Column } from '@/components/common';
 import { useAuth } from '@/lib/auth';
-import { useAllWarehouses, useWarehouseStock, useCreateWarehouse } from '../../warehouses/hooks';
+import { useAllWarehouses, useWarehouseStock, useCreateWarehouse, warehouseKeys } from '../../warehouses/hooks';
 import type { StockRow } from '../../warehouses/dtos';
+import { useUpdateProduct } from '../../products/hooks';
 import { ProductMovements } from './ProductMovements';
 import { LoansView } from '../../loans/components/LoansView';
 import { StockAdjustment } from '../../adjustments/components/StockAdjustment';
+import { WarehouseStockPrint } from './WarehouseStockPrint';
+
+function CostCell({ row, canEdit }: { row: StockRow; canEdit: boolean }) {
+  const qc = useQueryClient();
+  const updateProduct = useUpdateProduct();
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState('');
+
+  if (!canEdit) return <>{EGP(row.cost)}</>;
+
+  if (!editing) {
+    return (
+      <span
+        style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+        title="اضغط لتعديل سعر الصنف"
+        onClick={(e) => { e.stopPropagation(); setVal(String(row.cost || '')); setEditing(true); }}
+      >
+        {EGP(row.cost)}
+        <span style={{ opacity: 0.5, fontSize: 12 }}>✏</span>
+      </span>
+    );
+  }
+
+  const save = () => {
+    updateProduct.mutate(
+      { id: row.productId, dto: { price: Number(val) || 0 } },
+      { onSuccess: () => { qc.invalidateQueries({ queryKey: warehouseKeys.all }); setEditing(false); } },
+    );
+  };
+
+  return (
+    <span onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+      <MoneyInput
+        value={val}
+        onChange={setVal}
+        placeholder="0"
+        style={{ width: 90 }}
+        autoFocus
+        onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+      />
+      <button className="btn btn-primary btn-sm" style={{ padding: '2px 8px' }} onClick={save} disabled={updateProduct.isPending}>✓</button>
+      <button className="btn btn-ghost btn-sm" style={{ padding: '2px 8px' }} onClick={() => setEditing(false)}>×</button>
+    </span>
+  );
+}
 
 export function InventoryView() {
-  const { can } = useAuth();
+  const { user, can } = useAuth();
   const canLoans = can('inventory.loans');
+  const canEditPrice = !!user?.admin || can('settings');
   const [view, setView] = useState<'stock' | 'loans' | 'adjust'>('stock');
   const [prod, setProd] = useState<StockRow | null>(null);
+  const [printing, setPrinting] = useState(false);
   const { data: warehouses } = useAllWarehouses();
   const canAddWarehouse = can('inventory.addWarehouse');
   const createWarehouse = useCreateWarehouse();
@@ -54,11 +103,15 @@ export function InventoryView() {
   const meta: PageMeta = { total, page, pageSize, totalPages, hasNext: page < totalPages, hasPrev: page > 1 };
 
   if (prod) return <ProductMovements productId={prod.productId} name={prod.name} onBack={() => setProd(null)} />;
+  if (printing) {
+    const whName = warehouses?.data.find((w) => w.id === whId)?.name ?? '';
+    return <WarehouseStockPrint warehouseId={whId} warehouseName={whName} onClose={() => setPrinting(false)} />;
+  }
 
   const columns: Column<StockRow>[] = [
     { header: 'الصنف', cell: (r) => r.name },
     { header: 'الرصيد', cell: (r) => <span className={r.qty < 0 ? 'deb' : ''}>{QTY(r.qty)} {r.unit || ''}</span>, className: 'num' },
-    { header: 'متوسط التكلفة', cell: (r) => EGP(r.cost), className: 'num muted' },
+    { header: 'سعر التقييم', cell: (r) => <CostCell row={r} canEdit={canEditPrice} />, className: 'num muted' },
     { header: 'القيمة', cell: (r) => EGP(r.value), className: 'num' },
   ];
 
@@ -100,6 +153,7 @@ export function InventoryView() {
             {canAddWarehouse && !addingWh && (
               <button className="btn btn-ghost btn-sm" onClick={() => setAddingWh(true)}>+ مخزن جديد</button>
             )}
+            {whId && <button className="btn btn-ghost btn-sm sp" onClick={() => setPrinting(true)}>🖨 طباعة رصيد المخزن</button>}
           </div>
           {canAddWarehouse && addingWh && (
             <div className="toolbar" style={{ gap: 6 }}>

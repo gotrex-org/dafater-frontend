@@ -47,7 +47,7 @@ export function useUpdateTreasury() {
 export function useDeleteTreasury() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => treasuryApi.remove(id),
+    mutationFn: ({ id, cascade }: { id: string; cascade?: boolean }) => treasuryApi.remove(id, cascade),
     onSuccess: () => qc.invalidateQueries({ queryKey: treasuryKeys.all }),
   });
 }

@@ -5,6 +5,7 @@ import { fmtDate, EGP } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import { Field, Combobox, MoneyInput } from '@/components/common';
 import { useAllParties } from '../../parties/hooks';
+import { useAllTreasury } from '../../treasury/hooks';
 import { useForexAgent, useUsdOut, useDeleteAgentTx, useUpdateAgent, useSettle } from '../hooks';
 
 function today() { return new Date().toISOString().slice(0, 10); }
@@ -13,6 +14,7 @@ export function AgentDetail({ agentUid, onBack, initialMode }: { agentUid: strin
   const { user } = useAuth();
   const { data: agent, isLoading } = useForexAgent(agentUid);
   const { data: suppliers } = useAllParties('SUPPLIER');
+  const { data: treasury } = useAllTreasury();
   const usdOut = useUsdOut(agentUid);
   const settle = useSettle(agentUid);
   const deleteTx = useDeleteAgentTx(agentUid);
@@ -24,6 +26,7 @@ export function AgentDetail({ agentUid, onBack, initialMode }: { agentUid: strin
   const [stDate, setStDate] = useState(today());
   const [stAmt, setStAmt] = useState('');
   const [stDir, setStDir] = useState<'in' | 'out'>('in');
+  const [stTreasuryId, setStTreasuryId] = useState('');
   const [stNote, setStNote] = useState('');
   const [stErr, setStErr] = useState('');
 
@@ -158,6 +161,9 @@ export function AgentDetail({ agentUid, onBack, initialMode }: { agentUid: strin
                 <option value="out">إضافة — دفع للوكيل</option>
               </select>
             </Field>
+            <Field label="الخزنة">
+              <Combobox options={treasury?.data ?? []} value={stTreasuryId} onChange={setStTreasuryId} placeholder="اختر الخزنة…" />
+            </Field>
             <Field label="ملاحظة"><input value={stNote} onChange={(e) => setStNote(e.target.value)} placeholder="اختياري…" style={{ maxWidth: 200 }} /></Field>
           </div>
           {stErr && <div className="err-text" style={{ marginTop: 8 }}>{stErr}</div>}
@@ -168,10 +174,11 @@ export function AgentDetail({ agentUid, onBack, initialMode }: { agentUid: strin
               onClick={() => {
                 setStErr('');
                 if (!stAmt || Number(stAmt) <= 0) return setStErr('اكتب المبلغ');
+                if (!stTreasuryId) return setStErr('اختر الخزنة اللي المبلغ خارج/داخل منها');
                 settle.mutate(
-                  { date: stDate, egpAmount: Number(stAmt), direction: stDir, note: stNote || undefined },
+                  { date: stDate, egpAmount: Number(stAmt), direction: stDir, treasuryId: stTreasuryId, note: stNote || undefined },
                   {
-                    onSuccess: () => { setStAmt(''); setStNote(''); setStDir('in'); setMode(null); },
+                    onSuccess: () => { setStAmt(''); setStNote(''); setStDir('in'); setStTreasuryId(''); setMode(null); },
                     onError: (e: any) => setStErr(e.message),
                   },
                 );

@@ -26,8 +26,8 @@ function TxnDetail({
     ...(txn.party ? [{ label: 'الطرف', value: txn.party.name }] : []),
     ...(txn.treasury ? [{ label: 'الخزنة', value: txn.treasury.name }] : []),
     ...(txn.note ? [{ label: 'البيان', value: txn.note }] : []),
-    ...(txn.debit ? [{ label: 'مدين', value: EGP(txn.debit), cls: 'num deb' }] : []),
-    ...(txn.credit ? [{ label: 'دائن', value: EGP(txn.credit), cls: 'num cre' }] : []),
+    ...(txn.debit ? [{ label: 'عليه', value: EGP(txn.debit), cls: 'num deb' }] : []),
+    ...(txn.credit ? [{ label: 'له', value: EGP(txn.credit), cls: 'num cre' }] : []),
     ...((txn.cashIn ?? 0) > 0 ? [{ label: 'داخل الخزنة', value: EGP(txn.cashIn!), cls: 'num cre' }] : []),
     ...((txn.cashOut ?? 0) > 0 ? [{ label: 'خارج الخزنة', value: EGP(txn.cashOut!), cls: 'num deb' }] : []),
   ];
@@ -132,8 +132,8 @@ export function DailyReport() {
     { header: 'النوع', cell: (r) => r.type },
     { header: 'الطرف', cell: (r) => r.party?.name ?? r.treasury?.name ?? '—', className: 'muted' },
     { header: 'البيان', cell: (r) => r.note ?? '', className: 'muted' },
-    { header: 'مدين', cell: (r) => (r.debit ? EGP(r.debit) : ''), className: 'num deb' },
-    { header: 'دائن', cell: (r) => (r.credit ? EGP(r.credit) : ''), className: 'num cre' },
+    { header: 'عليه', cell: (r) => (r.debit ? EGP(r.debit) : ''), className: 'num deb' },
+    { header: 'له', cell: (r) => (r.credit ? EGP(r.credit) : ''), className: 'num cre' },
     { header: 'داخل الخزنة', cell: (r) => (r.cashIn ? EGP(r.cashIn) : ''), className: 'num cre' },
     { header: 'خارج الخزنة', cell: (r) => (r.cashOut ? EGP(r.cashOut) : ''), className: 'num deb' },
     {

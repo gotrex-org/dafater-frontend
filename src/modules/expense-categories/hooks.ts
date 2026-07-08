@@ -25,3 +25,19 @@ export function useCreateCategory() {
     onSuccess: () => qc.invalidateQueries({ queryKey: categoryKeys.all }),
   });
 }
+
+export function useUpdateCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, dto }: { id: string; dto: CategoryDto }) => expenseCategoriesApi.update(id, dto),
+    onSuccess: () => qc.invalidateQueries({ queryKey: categoryKeys.all }),
+  });
+}
+
+export function useDeleteCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => expenseCategoriesApi.remove(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: categoryKeys.all }),
+  });
+}

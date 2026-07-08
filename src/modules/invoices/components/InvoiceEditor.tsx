@@ -1,14 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { money, todayISO } from '@/lib/format';
+import { money, todayISO, QTY } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import { useNavigationGuard } from '@/lib/useNavigationGuard';
 import { fieldNavKeyDown } from '@/lib/field-nav';
 import { PageTitle, Field, Combobox, MoneyInput } from '@/components/common';
 import { useAllParties } from '../../parties/hooks';
-import { useAllProducts, useCreateProduct, useUpdateProduct } from '../../products/hooks';
-import { useAllWarehouses } from '../../warehouses/hooks';
+import { partiesApi } from '../../parties/api';
+import { useAllProducts, useCreateProduct, useUpdateProduct, useLastPrices } from '../../products/hooks';
+import { useAllWarehouses, useWarehouseStock } from '../../warehouses/hooks';
 import { useAllTreasury } from '../../treasury/hooks';
 import { ManifestEditor } from '../../manifests/components/ManifestEditor';
 import { useCreateInvoice, useUpdateInvoice } from '../hooks';
@@ -59,6 +60,22 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
   const [no, setNo] = useState(invoice?.no ?? '');
   const [date, setDate] = useState(invoice?.date?.slice(0, 10) ?? todayISO());
   const [partyId, setPartyId] = useState(invoice?.party?.id ?? '');
+  const [directSale, setDirectSale] = useState(false);
+  const [directSaleLoading, setDirectSaleLoading] = useState(false);
+
+  // "بيع مباشر" — skip picking a customer by silently using a shared system
+  // party (created once, reused every time) instead.
+  const toggleDirectSale = (on: boolean) => {
+    setDirectSale(on);
+    if (on) {
+      setDirectSaleLoading(true);
+      partiesApi.directSale()
+        .then((p) => setPartyId(p.id))
+        .finally(() => setDirectSaleLoading(false));
+    } else {
+      setPartyId('');
+    }
+  };
 
   // Auto-fill invoice number when party is selected (create mode only)
   useEffect(() => {
@@ -66,6 +83,10 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
     invoicesApi.nextNo(partyId).then(({ no: n }) => setNo(n)).catch(() => {});
   }, [partyId, isEdit]);
   const [warehouseId, setWarehouseId] = useState(invoice?.warehouse?.id ?? '');
+  const { data: stock } = useWarehouseStock(warehouseId || undefined);
+  const stockByProduct = new Map((stock ?? []).map((r) => [r.productId, r]));
+  const { data: lastPrices } = useLastPrices(kind);
+  const lastPriceByProduct = new Map((lastPrices ?? []).map((r) => [r.productId, r]));
   const [treasuryId, setTreasuryId] = useState('');
   const [paid, setPaid] = useState(invoice ? String(invoice.paid || '') : '');
   const [note, setNote] = useState(invoice?.note ?? '');
@@ -81,13 +102,13 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
   const [saved, setSaved] = useState<Invoice | null>(null);
   const [makeManifest, setMakeManifest] = useState(false);
 
-  // prefill service lines for all new invoices
+  // prefill pinned lines for new invoices — which items pin depends on the invoice kind
   useEffect(() => {
     if (prefilled || !products) return;
-    const svc = products.data.filter((p) => p.service);
-    if (svc.length) setLines([...svc.map((p) => ({ _key: _nextKey++, productId: p.id, qty: '', price: '' })), blankLine()]);
+    const pinned = products.data.filter((p) => (kind === 'SALE' ? p.pinSale : p.pinPurchase));
+    if (pinned.length) setLines([...pinned.map((p) => ({ _key: _nextKey++, productId: p.id, qty: '', price: '' })), blankLine()]);
     setPrefilled(true);
-  }, [products, prefilled]);
+  }, [products, prefilled, kind]);
 
   const isDirty = isEdit || !!partyId || lines.some((l) => !!(l.productId || l.qty || l.price));
   useNavigationGuard(isDirty);
@@ -112,6 +133,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
     if (!partyId) return setError('اختر الطرف');
     if (!warehouseId) return setError('اختر المخزن');
     if (items.length === 0) return setError('أضف صنفًا واحدًا على الأقل');
+    if (Number(paid) > 0 && !treasuryId) return setError('اخترت مبلغ مدفوع — لازم تختار الخزنة اللي المبلغ خارج/داخل منها');
 
     if (isEdit) {
       updateInvoice.mutate(
@@ -186,7 +208,17 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
           {!isEdit && <Field label="رقم الفاتورة"><input value={no} onChange={(e) => setNo(e.target.value)} placeholder={partyId ? '…' : 'اختر العميل أولاً'} style={no ? { fontWeight: 700 } : {}} /></Field>}
           <Field label="التاريخ"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
           <Field label={kind === 'SALE' ? 'العميل' : 'المورد'}>
-            <PartyCombobox parties={parties?.data ?? []} value={partyId} onChange={setPartyId} role={role} />
+            {directSale ? (
+              <span className="muted" style={{ fontSize: 13 }}>{directSaleLoading ? '...' : 'بيع مباشر — بدون عميل محدد'}</span>
+            ) : (
+              <PartyCombobox parties={parties?.data ?? []} value={partyId} onChange={setPartyId} role={role} />
+            )}
+            {kind === 'SALE' && !isEdit && (
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, fontWeight: 600, marginTop: 6, cursor: 'pointer' }}>
+                <input type="checkbox" checked={directSale} onChange={(e) => toggleDirectSale(e.target.checked)} />
+                بيع مباشر (بدون اختيار عميل)
+              </label>
+            )}
           </Field>
           <Field label="المخزن">
             <Combobox options={warehouses?.data ?? []} value={warehouseId} onChange={setWarehouseId} />
@@ -205,6 +237,9 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
             <tbody>
               {lines.map((l, i) => {
                 const prod = l.productId ? products?.data.find((p) => p.id === l.productId) : undefined;
+                const stockRow = prod && !prod.service ? stockByProduct.get(l.productId) : undefined;
+                const lastPrice = prod ? lastPriceByProduct.get(l.productId) : undefined;
+                const pinned = prod ? (kind === 'SALE' ? !!prod.pinSale : !!prod.pinPurchase) : false;
                 return (
                   <tr key={l._key}>
                     <td><MoneyInput value={l.qty} onChange={(v) => setLine(i, { qty: v })} placeholder="0" style={{ width: 80 }} /></td>
@@ -214,16 +249,40 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
                         value={l.productId}
                         onChange={(id) => setLine(i, { productId: id })}
                       />
+                      {prod && !prod.service && (
+                        <div style={{ fontSize: 12, marginTop: 3, fontWeight: 700 }} className={(stockRow?.qty ?? 0) < 0 ? 'deb' : 'muted'}>
+                          {warehouseId
+                            ? `الرصيد بالمخزن: ${QTY(stockRow?.qty ?? 0)} ${stockRow?.unit || prod.unit || ''}`
+                            : 'اختر المخزن لمعرفة الرصيد'}
+                        </div>
+                      )}
                     </td>
-                    <td><MoneyInput value={l.price} onChange={(v) => setLine(i, { price: v })} placeholder="0" style={{ width: 110 }} /></td>
+                    <td>
+                      <MoneyInput value={l.price} onChange={(v) => setLine(i, { price: v })} placeholder="0" style={{ width: 110 }} />
+                      {lastPrice && (
+                        <div
+                          className="muted"
+                          style={{ fontSize: 12, marginTop: 3, cursor: 'pointer' }}
+                          title="اضغط لاستخدام آخر سعر"
+                          onClick={() => setLine(i, { price: String(lastPrice.price) })}
+                        >
+                          آخر سعر: {money(lastPrice.price, cur)}
+                        </div>
+                      )}
+                    </td>
                     <td className="num">{money(Number(l.qty) * Number(l.price), cur)}</td>
                     <td style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                       {prod && (
                         <button
-                          title={prod.service ? 'إلغاء التثبيت كبند افتراضي' : 'تثبيت — يظهر تلقائياً في كل فاتورة جديدة'}
+                          title={pinned ? 'إلغاء التثبيت كبند افتراضي' : `تثبيت — يظهر تلقائياً في كل فاتورة ${kind === 'SALE' ? 'بيع' : 'شراء'} جديدة`}
                           className="btn btn-ghost btn-sm"
-                          style={{ opacity: prod.service ? 1 : 0.35, fontSize: 15 }}
-                          onClick={() => updateProduct.mutate({ id: prod.id, dto: { service: !prod.service } })}
+                          style={{ opacity: pinned ? 1 : 0.35, fontSize: 15 }}
+                          onClick={() => updateProduct.mutate({
+                            id: prod.id,
+                            dto: kind === 'SALE'
+                              ? { pinSale: !pinned, service: !pinned || prod.service }
+                              : { pinPurchase: !pinned, service: !pinned || prod.service },
+                          })}
                         >📌</button>
                       )}
                       <button className="btn btn-danger btn-sm" onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}>×</button>

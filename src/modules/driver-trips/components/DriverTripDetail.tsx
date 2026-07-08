@@ -141,6 +141,7 @@ export function DriverTripDetail({ trip, onBack }: Props) {
   const savePayment = () => {
     setPayErr('');
     if (!Number(payAmt) || Number(payAmt) <= 0) return setPayErr('اكتب المبلغ');
+    if (!payTreasuryId) return setPayErr('اختر الخزنة اللي المبلغ خارج منها');
     addPayment.mutate(
       { id: trip.id, dto: { date: payDate, amount: Number(payAmt), note: payNote || undefined, paymentType: payType, treasuryId: payTreasuryId || undefined } },
       {
@@ -372,7 +373,7 @@ export function DriverTripDetail({ trip, onBack }: Props) {
                 <MoneyInput value={payAmt} onChange={setPayAmt} placeholder="0.00" style={{ maxWidth: 130 }} />
               </Field>
               <Field label="الخزنة">
-                <Combobox options={allTreasury} value={payTreasuryId} onChange={setPayTreasuryId} placeholder="اختياري…" />
+                <Combobox options={allTreasury} value={payTreasuryId} onChange={setPayTreasuryId} placeholder="اختر الخزنة…" />
               </Field>
               <Field label="ملاحظة">
                 <input value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder="اختياري…" style={{ maxWidth: 200 }} />

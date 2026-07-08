@@ -304,7 +304,7 @@ function LedgerTab() {
           <table>
             <thead>
               <tr>
-                <th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th>
+                <th>التاريخ</th><th>البيان</th><th>عليه</th><th>له</th>
                 {kind === 'all' && <th>الرصيد</th>}
               </tr>
             </thead>
@@ -324,7 +324,7 @@ function LedgerTab() {
                       <td className="num cre">{r.credit ? EGP(r.credit) : ''}</td>
                       {kind === 'all' && (
                         <td className="num" style={{ fontWeight: 700, color: r.balance <= 0 ? 'var(--credit)' : 'var(--debit)' }}>
-                          {EGP(Math.abs(r.balance))} {r.balance <= 0 ? 'دائن' : 'مدين'}
+                          {EGP(Math.abs(r.balance))} {r.balance <= 0 ? 'له' : 'عليه'}
                         </td>
                       )}
                     </tr>
@@ -606,7 +606,7 @@ export function CustomerPortal({ user }: { user: AuthUser }) {
               </div>
               {ledger && (
                 <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-                  {ledger.balance <= 0 ? 'دائن' : 'مدين'}
+                  {ledger.balance <= 0 ? 'له' : 'عليه'}
                 </div>
               )}
             </div>

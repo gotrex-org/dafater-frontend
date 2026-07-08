@@ -1,6 +1,6 @@
 'use client';
 
-import type { CSSProperties } from 'react';
+import type { CSSProperties, KeyboardEvent } from 'react';
 
 /** format a raw numeric string with thousand separators, keeping a typed decimal */
 export function formatMoney(raw: string | number | undefined): string {
@@ -19,11 +19,15 @@ export function MoneyInput({
   onChange,
   placeholder,
   style,
+  onKeyDown,
+  autoFocus,
 }: {
   value: string;
   onChange: (raw: string) => void;
   placeholder?: string;
   style?: CSSProperties;
+  onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
+  autoFocus?: boolean;
 }) {
   return (
     <input
@@ -32,7 +36,9 @@ export function MoneyInput({
       value={formatMoney(value)}
       placeholder={placeholder}
       style={style}
+      autoFocus={autoFocus}
       onChange={(e) => onChange(e.target.value.replace(/[^\d.]/g, ''))}
+      onKeyDown={onKeyDown}
     />
   );
 }
