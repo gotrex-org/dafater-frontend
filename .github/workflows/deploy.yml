@@ -20,12 +20,14 @@ jobs:
             cd /root/projects/dafater-frontend
             git fetch origin main
             git reset --hard origin/main
+            # docker-compose.yml (with this service's own build args) lives in the
+            # backend repo — keep that checkout current too so a frontend-only deploy
+            # never builds against a stale copy, regardless of when backend last deployed.
+            cd /root/projects/dafater-backend
+            git fetch origin main
+            git reset --hard origin/main
             cd /root/projects
-            # /root/projects/docker-compose.yml is a standalone file on this server —
-            # it isn't part of either git repo, so this build arg was still hardcoded
-            # to the domain and never picked up the same-origin fix. Correct it in
-            # place (idempotent: no-op once already fixed) before every build.
-            sed -i 's|NEXT_PUBLIC_API_URL: "https://abo-shama.com"|NEXT_PUBLIC_API_URL: ""|' docker-compose.yml
-            docker compose build --no-cache frontend
+            cp dafater-backend/docker-compose.yml docker-compose.yml
+            docker compose build frontend
             docker compose up -d --no-deps frontend
             docker image prune -f
