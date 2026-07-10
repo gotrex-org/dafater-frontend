@@ -21,7 +21,7 @@ export interface TreasuryMovement {
   cashOut2: number;
   invoiceId?: string | null;
   dealId?: string | null;
-  party?: { name: string } | null;
+  party?: { id?: string; name: string } | null;
   treasury?: { id: string; name: string; currency: string } | null;
   treasury2?: { id: string; name: string; currency: string } | null;
   // Running balance as of this row — only computed when filtered to a single treasury.

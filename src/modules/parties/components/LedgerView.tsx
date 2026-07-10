@@ -8,13 +8,22 @@ import { useAuth } from '@/lib/auth';
 import { InvoiceDetailById } from '../../invoices/components/InvoiceDetail';
 import { DealDetailById } from '../../deals/components/DealsView';
 import { usePostEntry, useUpdateTransaction, useDeleteTransaction } from '../../transactions/hooks';
-import { useParties, usePartyLedger } from '../hooks';
+import { useParties, useParty, usePartyLedger } from '../hooks';
 import { PartiesRegistry } from './PartiesRegistry';
+import { TrialBalance } from './TrialBalance';
 import type { Party, PartyRole, LedgerRow } from '../dtos';
+
+// Open a party's ledger statement directly by uid — used by deep-links from the
+// activity log and reports (RecordOpener) where only the party uid is known.
+export function LedgerDetailById({ uid, onBack }: { uid: string; onBack: () => void }) {
+  const { data, isLoading } = useParty(uid);
+  if (isLoading || !data) return <Spinner />;
+  return <LedgerDetail party={data} onBack={onBack} />;
+}
 
 type SortKey = 'name' | 'balance' | 'activity';
 type LedgerKind = 'all' | 'invoices' | 'collect' | 'commission' | 'withdraw';
-type MainTab = 'ledger' | 'registry';
+type MainTab = 'ledger' | 'mizan' | 'registry';
 
 // ─── Ledger tab ───────────────────────────────────────────────────────────────
 
@@ -409,6 +418,8 @@ export function LedgerView() {
   const { user } = useAuth();
   const isRestricted = !user?.admin && (user?.ledgerPartyIds?.length ?? 0) > 0;
   const [tab, setTab] = useState<MainTab>('ledger');
+  // Party whose statement is open from the ميزان tab (click a row → its ledger).
+  const [mizanParty, setMizanParty] = useState<string | null>(null);
 
   return (
     <>
@@ -417,12 +428,19 @@ export function LedgerView() {
         <nav className="tabs" style={{ marginBottom: 16 }}>
           <button className={tab === 'ledger' ? 'active' : ''} onClick={() => setTab('ledger')}
             style={{ background: 'none', border: 'none', cursor: 'pointer' }}>كشف الحساب</button>
+          <button className={tab === 'mizan' ? 'active' : ''} onClick={() => setTab('mizan')}
+            style={{ background: 'none', border: 'none', cursor: 'pointer' }}>ميزان الحسابات</button>
           <button className={tab === 'registry' ? 'active' : ''} onClick={() => setTab('registry')}
             style={{ background: 'none', border: 'none', cursor: 'pointer' }}>سجل العملاء والموردين</button>
         </nav>
       )}
 
       {(tab === 'ledger' || isRestricted) && <LedgerTab />}
+      {tab === 'mizan' && !isRestricted && (
+        mizanParty
+          ? <LedgerDetailById uid={mizanParty} onBack={() => setMizanParty(null)} />
+          : <TrialBalance onOpenParty={setMizanParty} />
+      )}
       {tab === 'registry' && !isRestricted && <PartiesRegistry />}
     </>
   );

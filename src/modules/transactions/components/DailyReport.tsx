@@ -6,19 +6,19 @@ import { useTableState } from '@/lib/useTableState';
 import { useAuth } from '@/lib/auth';
 import { PageTitle, DataTable, SearchInput, type Column } from '@/components/common';
 import { useInvoices } from '../../invoices/hooks';
-import { InvoiceDetailById } from '../../invoices/components/InvoiceDetail';
+import { RecordOpener } from '../../records/RecordOpener';
 import { useTransactions, useDeleteTransaction } from '../hooks';
 import { EditTransactionModal } from './EditTransactionModal';
 import type { Transaction } from '../dtos';
 
 function TxnDetail({
-  txn, onBack, onEdit, onDelete, onOpenInvoice, can,
+  txn, onBack, onEdit, onDelete, onOpen, can,
 }: {
   txn: Transaction;
   onBack: () => void;
   onEdit: (t: Transaction) => void;
   onDelete: (t: Transaction) => void;
-  onOpenInvoice: (uid: string) => void;
+  onOpen: (entity: string, uid: string) => void;
   can: (p: string) => boolean;
 }) {
   const rows: { label: string; value: React.ReactNode; cls?: string }[] = [
@@ -37,9 +37,13 @@ function TxnDetail({
       <div className="toolbar">
         <button className="btn btn-ghost btn-sm" onClick={onBack}>→ رجوع للتقرير</button>
         {txn.invoiceId && (
-          <button className="btn btn-ghost btn-sm" onClick={() => onOpenInvoice(txn.invoiceId!)}>
-            فتح الفاتورة ←
-          </button>
+          <button className="btn btn-primary btn-sm" onClick={() => onOpen('invoices', txn.invoiceId!)}>فتح الفاتورة ←</button>
+        )}
+        {txn.dealId && (
+          <button className="btn btn-primary btn-sm" onClick={() => onOpen('deals', txn.dealId!)}>فتح البيع الخارجي ←</button>
+        )}
+        {txn.party?.id && (
+          <button className="btn btn-ghost btn-sm" onClick={() => onOpen('parties', txn.party!.id)}>فتح كشف الطرف ←</button>
         )}
         {!txn.invoiceId && !txn.dealId && can('entry') && (
           <>
@@ -97,14 +101,14 @@ export function DailyReport() {
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
   const [search, setSearch] = useState('');
-  const [invoiceUid, setInvoiceUid] = useState<string | null>(null);
+  const [target, setTarget] = useState<{ entity: string; uid: string } | null>(null);
   const [selected, setSelected] = useState<Transaction | null>(null);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const { page, setPage, pageSize, setPageSize } = useTableState();
   const { data, isLoading } = useTransactions({ from: from || undefined, to: to || undefined, search: search || undefined, page, pageSize });
   const deleteTxn = useDeleteTransaction();
 
-  if (invoiceUid) return <InvoiceDetailById uid={invoiceUid} onBack={() => setInvoiceUid(null)} />;
+  if (target) return <RecordOpener entity={target.entity} uid={target.uid} onClose={() => setTarget(null)} />;
 
   const handleDelete = (txn: Transaction, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -121,7 +125,7 @@ export function DailyReport() {
           onBack={() => setSelected(null)}
           onEdit={(t) => setEditing(t)}
           onDelete={handleDelete}
-          onOpenInvoice={(uid) => { setSelected(null); setInvoiceUid(uid); }}
+          onOpen={(entity, uid) => { setSelected(null); setTarget({ entity, uid }); }}
           can={can}
         />
       </>

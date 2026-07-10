@@ -13,8 +13,18 @@ import { useDeleteTransaction, usePostEntry } from '../../transactions/hooks';
 import { ForexView } from '../../forex/components/ForexView';
 import { EditTransactionModal } from '../../transactions/components/EditTransactionModal';
 import { ExpenseCategoriesManager } from '../../expense-categories/components/ExpenseCategoriesManager';
+import { RecordOpener } from '../../records/RecordOpener';
 import { confirmCascadeDelete } from '@/lib/cascadeDelete';
 import type { TreasuryAccount, TreasuryMovement, ExpenseByCategory } from '../dtos';
+
+// The source record a cash movement traces back to, in priority order: the invoice
+// or deal that generated it, else the party whose ledger it belongs to.
+function movementSource(m: TreasuryMovement): { entity: string; uid: string } | null {
+  if (m.invoiceId) return { entity: 'invoices', uid: m.invoiceId };
+  if (m.dealId) return { entity: 'deals', uid: m.dealId };
+  if (m.party?.id) return { entity: 'parties', uid: m.party.id };
+  return null;
+}
 
 const cashIn = (m: TreasuryMovement) => (m.cashIn || 0) + (m.cashIn2 || 0);
 const cashOut = (m: TreasuryMovement) => (m.cashOut || 0) + (m.cashOut2 || 0);
@@ -30,6 +40,7 @@ export function TreasuryView() {
   const { data: moves, isLoading } = useTreasuryMovements({ page, pageSize, treasuryId: filterTreasuryId || undefined });
 
   const [editing, setEditing] = useState<TreasuryMovement | null>(null);
+  const [recordTarget, setRecordTarget] = useState<{ entity: string; uid: string } | null>(null);
   const deleteTransaction = useDeleteTransaction();
 
   // treasury management state
@@ -126,6 +137,8 @@ export function TreasuryView() {
       ) : null,
     },
   ];
+
+  if (recordTarget) return <RecordOpener entity={recordTarget.entity} uid={recordTarget.uid} onClose={() => setRecordTarget(null)} />;
 
   return (
     <>
@@ -316,6 +329,7 @@ export function TreasuryView() {
             columns={moveCols}
             rows={moves?.data ?? []}
             rowKey={(m) => m.id}
+            onRowClick={(m) => { const src = movementSource(m); if (src) setRecordTarget(src); }}
             loading={isLoading}
             emptyText="لا توجد حركات"
             meta={moves?.meta}

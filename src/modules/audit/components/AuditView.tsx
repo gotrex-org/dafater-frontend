@@ -5,6 +5,7 @@ import { useTableState } from '@/lib/useTableState';
 import { PageTitle, DataTable, type Column } from '@/components/common';
 import { useAuth } from '@/lib/auth';
 import { useUsers } from '../../users/hooks';
+import { RecordOpener, canOpenRecord } from '../../records/RecordOpener';
 import { useAudit, useUndoAudit } from '../hooks';
 import type { AuditLog } from '../dtos';
 
@@ -24,6 +25,12 @@ const FIELD_LABELS: Record<string, string> = {
   type: 'النوع', amount: 'المبلغ', paymentType: 'نوع الدفعة', received: 'المستلم',
   opening: 'الرصيد الافتتاحي', currency: 'العملة', role: 'النوع الأساسي',
   service: 'بند خدمة',
+  product: 'الصنف', warehouse: 'المخزن', party: 'الطرف', client: 'العميل', supplier: 'المورد',
+  treasury: 'الخزنة', treasury2: 'الخزنة الأخرى', category: 'البند', kind: 'النوع',
+  borrowerName: 'اسم المستلم', returnedQty: 'الكمية المرتجعة', cashReturnedQty: 'المسوّى نقدًا',
+  returnType: 'نوع الإرجاع', returnDate: 'تاريخ الإرجاع', direction: 'الاتجاه',
+  commissionAmount: 'قيمة العمولة', commissionTo: 'العمولة لصالح', nawlon: 'الناولون',
+  paidIn: 'محصّل', paidOut: 'مدفوع', expAmt: 'مبلغ إضافي',
 };
 
 const ENTITY: Record<string, string> = {
@@ -95,7 +102,7 @@ function SnapshotValue({ value, depth = 0 }: { value: any; depth?: number }) {
   return <span style={{ fontSize: 13 }}>{formatScalar(value)}</span>;
 }
 
-function AuditDetail({ log, onBack }: { log: AuditLog; onBack: () => void }) {
+function AuditDetail({ log, onBack, onOpen }: { log: AuditLog; onBack: () => void; onOpen: (entity: string, uid: string) => void }) {
   const { user } = useAuth();
   const undoAudit = useUndoAudit();
   const [confirm, setConfirm] = useState(false);
@@ -105,6 +112,10 @@ function AuditDetail({ log, onBack }: { log: AuditLog; onBack: () => void }) {
     (log.action === 'CREATE' && !!log.entityUid) ||
     (log.action === 'DELETE' && !!log.snapshot)
   );
+
+  // A deleted record no longer exists, so it can't be opened — only CREATE/UPDATE
+  // entries for entities that have a per-record view can deep-link to the original.
+  const canGo = log.action !== 'DELETE' && canOpenRecord(log.entity, log.entityUid);
 
   const handleUndo = () => {
     setUndoErr('');
@@ -120,6 +131,11 @@ function AuditDetail({ log, onBack }: { log: AuditLog; onBack: () => void }) {
     <>
       <div className="toolbar">
         <button className="btn btn-ghost btn-sm" onClick={onBack}>→ رجوع للسجل</button>
+        {canGo && (
+          <button className="btn btn-primary btn-sm" onClick={() => onOpen(log.entity, log.entityUid!)}>
+            فتح السجل الأصلي ←
+          </button>
+        )}
         {canUndo && (
           confirm ? (
             <>
@@ -209,13 +225,15 @@ export function AuditView() {
   const { page, setPage, pageSize, setPageSize } = useTableState();
   const [user, setUser] = useState('');
   const [selected, setSelected] = useState<AuditLog | null>(null);
+  const [target, setTarget] = useState<{ entity: string; uid: string } | null>(null);
   const [restoreErr, setRestoreErr] = useState('');
   const { user: authUser } = useAuth();
   const { data: users } = useUsers();
   const { data, isLoading } = useAudit({ page, pageSize, user: user || undefined });
   const undoAudit = useUndoAudit();
 
-  if (selected) return <AuditDetail log={selected} onBack={() => setSelected(null)} />;
+  if (target) return <RecordOpener entity={target.entity} uid={target.uid} onClose={() => setTarget(null)} />;
+  if (selected) return <AuditDetail log={selected} onBack={() => setSelected(null)} onOpen={(entity, uid) => setTarget({ entity, uid })} />;
 
   const handleRestore = (log: AuditLog, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -283,6 +301,10 @@ export function AuditView() {
         rows={data?.data ?? []}
         rowKey={(r) => r.id}
         onRowClick={setSelected}
+        // Colour the whole row per user (a clearly-visible wash of that user's
+        // colour), so each user's activity is instantly distinguishable at a glance —
+        // not just the coloured name.
+        rowStyle={(r) => ({ background: colorFor(r.userName) + '38' })}
         loading={isLoading}
         emptyText="لا يوجد نشاط بعد"
         meta={data?.meta}
