@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { CustomerPortal } from '@/modules/portal/CustomerPortal';
 import { UnsavedProvider, useUnsaved } from '@/lib/unsaved';
+import { InvoiceDraftsProvider } from '@/lib/invoiceDrafts';
 
 function NavLink({ href, label, active }: { href: string; label: string; active: boolean }) {
   const { isDirty, setDirty } = useUnsaved();
@@ -70,13 +71,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <UnsavedProvider>
-      {header}
-      <nav className="tabs">
-        {NAV.filter((n) => can(n.view)).map((n) => (
-          <NavLink key={n.href} href={n.href} label={n.label} active={pathname.startsWith(n.href)} />
-        ))}
-      </nav>
-      <main className="page">{children}</main>
+      <InvoiceDraftsProvider>
+        {header}
+        <nav className="tabs">
+          {NAV.filter((n) => can(n.view)).map((n) => (
+            <NavLink key={n.href} href={n.href} label={n.label} active={pathname.startsWith(n.href)} />
+          ))}
+        </nav>
+        <main className="page">{children}</main>
+      </InvoiceDraftsProvider>
     </UnsavedProvider>
   );
 }

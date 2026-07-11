@@ -15,13 +15,14 @@ import { useForexAgents, useEgpInAny } from '../../forex/hooks';
 import { usePendingDriverTrips, useAddPayment } from '../../driver-trips/hooks';
 import type { EntryType } from '../dtos';
 
-type TabType = EntryType | 'driverPayment';
+type TabType = EntryType | 'driverPayment' | 'balanceTransfer';
 
 const TABS: { t: TabType; label: string; perm: string }[] = [
   { t: 'collect', label: 'تحصيل من عميل', perm: 'entry.collect' },
   { t: 'paySupplier', label: 'دفع لمورد', perm: 'entry.pay' },
   { t: 'expense', label: 'مصروف', perm: 'entry.expense' },
   { t: 'transfer', label: 'تحويل بين الخزائن', perm: 'entry.transfer' },
+  { t: 'balanceTransfer', label: 'تحويل بين الأطراف', perm: 'entry.partyTransfer' },
   { t: 'adjust', label: 'تسوية حساب', perm: 'entry.adjust' },
   { t: 'unknownCollect', label: 'تحصيل مجهول', perm: 'entry.unknown' },
   { t: 'partyTransfer', label: 'التحويل إلى وسيط', perm: 'entry.partyTransfer' },
@@ -257,6 +258,8 @@ export function EntryForm() {
 
 
   const parties = type === 'collect' ? clients?.data ?? [] : suppliers?.data ?? [];
+  // Every party (client + supplier + agent) — for the ledger-only party-to-party transfer.
+  const allParties = [...(clients?.data ?? []), ...(suppliers?.data ?? []), ...(agents?.data ?? [])];
   const treasuryCur = (treasury?.data.find((t) => t.id === treasuryId) as any)?.currency;
   const treasury2Cur = (treasury?.data.find((t) => t.id === treasuryId2) as any)?.currency;
   const selParty = type === 'collect' ? clients?.data.find((c) => c.id === partyId) : type === 'paySupplier' ? suppliers?.data.find((s) => s.id === partyId) : undefined;
@@ -284,6 +287,23 @@ export function EntryForm() {
         { agentUid: forexAgentId, dto: { date, egpAmount: Number(amount), treasuryId: treasuryId || undefined, note: note || undefined } },
         {
           onSuccess: () => { setMsg('تم التحويل إلى الوكيل ✓'); reset(); },
+          onError: (e: any) => setError(e.message),
+        },
+      );
+      return;
+    }
+
+    // Ledger-only transfer between any two parties (client↔supplier↔client) — moves the
+    // balance from one party to another without touching a treasury.
+    if (type === 'balanceTransfer') {
+      if (!partyId) return setError('اختر الطرف المُحوِّل (من)');
+      if (!partyId2) return setError('اختر الطرف المستلم (إلى)');
+      if (partyId === partyId2) return setError('لا يمكن التحويل لنفس الطرف');
+      if (!amount || Number(amount) <= 0) return setError('اكتب المبلغ');
+      postEntry.mutate(
+        { type: 'partyTransfer', date, amount: Number(amount), partyId, partyId2, note: note || undefined },
+        {
+          onSuccess: () => { setMsg('تم التحويل بين الأطراف ✓'); reset(); },
           onError: (e: any) => setError(e.message),
         },
       );
@@ -351,6 +371,17 @@ export function EntryForm() {
                 </Field>
               )}
 
+              {type === 'balanceTransfer' && (
+                <>
+                  <Field label="من طرف (المُحوِّل)">
+                    <PartyCombobox parties={allParties} value={partyId} onChange={setPartyId} role="CLIENT" />
+                  </Field>
+                  <Field label="إلى طرف (المستلم)">
+                    <PartyCombobox parties={allParties} value={partyId2} onChange={setPartyId2} role="CLIENT" />
+                  </Field>
+                </>
+              )}
+
               {type === 'expense' && (
                 <Field label="العميل (اختياري)">
                   <Combobox options={clients?.data ?? []} value={expensePartyId} onChange={setExpensePartyId} placeholder="اختياري — لتسجيله على حساب عميل" />
@@ -366,7 +397,7 @@ export function EntryForm() {
                 </Field>
               )}
 
-              {type !== 'adjust' && (
+              {type !== 'adjust' && type !== 'balanceTransfer' && (
                 <Field label={type === 'transfer' ? 'من حساب' : type === 'partyTransfer' ? 'من خزنة' : 'حساب الخزنة'}>
                   <Combobox options={treasury?.data ?? []} value={treasuryId} onChange={setTreasuryId} placeholder={type === 'partyTransfer' ? 'اختياري…' : undefined} />
                 </Field>

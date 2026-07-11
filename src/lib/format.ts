@@ -4,8 +4,11 @@ export const EGP = (n: number | undefined | null) =>
 export const USD = (n: number | undefined | null) =>
   `$ ${(Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+// Currency-aware amount: a "$" symbol for dollars, a "ج.م" suffix for EGP — so any
+// amount reads with its currency marker (never the written word "دولار"). Dense internal
+// tables that don't need the marker keep using the raw EGP()/USD() helpers directly.
 export const money = (n: number | undefined | null, currency?: 'EGP' | 'USD' | null) =>
-  currency === 'USD' ? USD(n) : EGP(n);
+  currency === 'USD' ? USD(n) : `${EGP(n)} ج.م`;
 
 export const QTY = (n: number | undefined | null) =>
   (Number(n) || 0).toLocaleString('en-US', { maximumFractionDigits: 3 });

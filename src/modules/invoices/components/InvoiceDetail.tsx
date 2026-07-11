@@ -5,6 +5,7 @@ import { money, EGP, fmtDate } from '@/lib/format';
 import { downloadElementAsPdf } from '@/lib/pdf';
 import { PageTitle, Spinner, Field, MoneyInput } from '@/components/common';
 import { useAuth } from '@/lib/auth';
+import { useInvoiceDrafts } from '@/lib/invoiceDrafts';
 import { useParty } from '../../parties/hooks';
 import { useInvoice, useDeleteInvoice, useUpdateInvoiceCommission } from '../hooks';
 import { confirmCascadeDelete } from '@/lib/cascadeDelete';
@@ -14,6 +15,7 @@ import { CommissionPicker } from './CommissionPicker';
 
 export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: () => void }) {
   const { can } = useAuth();
+  const { minimize } = useInvoiceDrafts();
   const sheetRef = useRef<HTMLDivElement>(null);
   const total = invoice.items.reduce((s, it) => s + it.qty * it.price, 0);
   const kindLabel = invoice.kind === 'SALE' ? 'بيع' : 'شراء';
@@ -45,7 +47,7 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
     );
   };
 
-  if (editing) return <InvoiceEditor kind={invoice.kind} invoice={invoice} onClose={() => setEditing(false)} onUpdated={onBack} />;
+  if (editing) return <InvoiceEditor kind={invoice.kind} invoice={invoice} onClose={() => setEditing(false)} onUpdated={onBack} onMinimize={(dft) => { minimize(dft); setEditing(false); }} />;
 
   const handleDelete = () => {
     if (!window.confirm(`حذف فاتورة ${kindLabel} رقم ${invoice.no}؟ هذا الإجراء لا يمكن التراجع عنه.`)) return;

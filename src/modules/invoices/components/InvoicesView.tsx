@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { EGP, fmtDate } from '@/lib/format';
 import { useTableState } from '@/lib/useTableState';
 import { useAuth } from '@/lib/auth';
+import { useInvoiceDrafts } from '@/lib/invoiceDrafts';
 import { PageTitle, DataTable, SegmentedControl, SearchInput, type Column } from '@/components/common';
 import { useInvoices } from '../hooks';
 import type { Invoice, InvoiceKind } from '../dtos';
@@ -14,6 +15,7 @@ const invoiceTotal = (inv: Invoice) => inv.items.reduce((s, it) => s + it.qty * 
 
 export function InvoicesView() {
   const { can } = useAuth();
+  const { minimize } = useInvoiceDrafts();
   const [kind, setKind] = useState<InvoiceKind>('SALE');
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<Invoice | null>(null);
@@ -24,7 +26,13 @@ export function InvoicesView() {
   const { page, setPage, pageSize, setPageSize } = useTableState();
   const { data, isLoading } = useInvoices({ kind, page, pageSize, search: search || undefined, from: from || undefined, to: to || undefined });
 
-  if (editing) return <InvoiceEditor kind={kind} onClose={() => setEditing(false)} />;
+  if (editing) return (
+    <InvoiceEditor
+      kind={kind}
+      onClose={() => setEditing(false)}
+      onMinimize={(dft) => { minimize(dft); setEditing(false); }}
+    />
+  );
   if (selected) return <InvoiceDetail invoice={selected} onBack={() => setSelected(null)} />;
 
   const columns: Column<Invoice>[] = [

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { money, EGP, todayISO, QTY } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import { useNavigationGuard } from '@/lib/useNavigationGuard';
@@ -18,10 +18,13 @@ import { ProductCombobox } from '../../products/components/ProductCombobox';
 import { PartyCombobox } from './PartyCombobox';
 import { CommissionPicker } from './CommissionPicker';
 import type { Invoice, InvoiceKind } from '../dtos';
+import type { InvoiceDraft } from '../draftTypes';
 
 interface Line { _key: number; productId: string; qty: string; price: string; }
 let _nextKey = 0;
 const blankLine = (): Line => ({ _key: _nextKey++, productId: '', qty: '', price: '' });
+let _draftSeq = 0;
+const newDraftId = () => `draft_${++_draftSeq}_${Date.now()}`;
 
 interface Props {
   kind: InvoiceKind;
@@ -29,11 +32,18 @@ interface Props {
   /** when editing an existing invoice */
   invoice?: Invoice;
   onUpdated?: () => void;
+  /** hydrate the whole form from a previously minimized draft */
+  initialDraft?: InvoiceDraft;
+  /** when provided, a "تصغير" button collapses the editor into the drafts dock */
+  onMinimize?: (draft: InvoiceDraft) => void;
 }
 
-export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
+export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft, onMinimize }: Props) {
+  const d = initialDraft?.state;
   const { can } = useAuth();
-  const isEdit = !!invoice;
+  const editInvoiceId = invoice?.id ?? initialDraft?.invoiceId;
+  const isEdit = !!editInvoiceId;
+  const draftIdRef = useRef(initialDraft?.id ?? newDraftId());
   const role = kind === 'SALE' ? 'CLIENT' : 'SUPPLIER';
   const { data: parties } = useAllParties(role);
   const { data: products } = useAllProducts();
@@ -57,10 +67,10 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
     );
   };
 
-  const [no, setNo] = useState(invoice?.no ?? '');
-  const [date, setDate] = useState(invoice?.date?.slice(0, 10) ?? todayISO());
-  const [partyId, setPartyId] = useState(invoice?.party?.id ?? '');
-  const [directSale, setDirectSale] = useState(false);
+  const [no, setNo] = useState(d?.no ?? invoice?.no ?? '');
+  const [date, setDate] = useState(d?.date ?? invoice?.date?.slice(0, 10) ?? todayISO());
+  const [partyId, setPartyId] = useState(d?.partyId ?? invoice?.party?.id ?? '');
+  const [directSale, setDirectSale] = useState(d?.directSale ?? false);
   const [directSaleLoading, setDirectSaleLoading] = useState(false);
 
   // "بيع مباشر" — skip picking a customer by silently using a shared system
@@ -77,28 +87,32 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
     }
   };
 
-  // Auto-fill invoice number when party is selected (create mode only)
+  // Auto-fill invoice number when party is selected (create mode only). Never clobber a
+  // number the user already typed or that came back with a restored draft.
   useEffect(() => {
     if (!partyId || isEdit) return;
-    invoicesApi.nextNo(partyId).then(({ no: n }) => setNo(n)).catch(() => {});
+    invoicesApi.nextNo(partyId).then(({ no: n }) => setNo((cur) => cur || n)).catch(() => {});
   }, [partyId, isEdit]);
-  const [warehouseId, setWarehouseId] = useState(invoice?.warehouse?.id ?? '');
+  const [warehouseId, setWarehouseId] = useState(d?.warehouseId ?? invoice?.warehouse?.id ?? '');
   const { data: stock } = useWarehouseStock(warehouseId || undefined);
   const stockByProduct = new Map((stock ?? []).map((r) => [r.productId, r]));
   const { data: lastPrices } = useLastPrices(kind);
   const lastPriceByProduct = new Map((lastPrices ?? []).map((r) => [r.productId, r]));
-  const [treasuryId, setTreasuryId] = useState('');
-  const [paid, setPaid] = useState(invoice ? String(invoice.paid || '') : '');
-  const [note, setNote] = useState(invoice?.note ?? '');
-  const [exchangeRate, setExchangeRate] = useState(invoice?.exchangeRate ? String(invoice.exchangeRate) : '');
-  const [commissionAmount, setCommissionAmount] = useState('');
-  const [commissionPartyId, setCommissionPartyId] = useState('');
+  const [treasuryId, setTreasuryId] = useState(d?.treasuryId ?? '');
+  const [paid, setPaid] = useState(d?.paid ?? (invoice ? String(invoice.paid || '') : ''));
+  const [note, setNote] = useState(d?.note ?? invoice?.note ?? '');
+  const [exchangeRate, setExchangeRate] = useState(d?.exchangeRate ?? (invoice?.exchangeRate ? String(invoice.exchangeRate) : ''));
+  const [commissionAmount, setCommissionAmount] = useState(d?.commissionAmount ?? '');
+  const [commissionPartyId, setCommissionPartyId] = useState(d?.commissionPartyId ?? '');
   const [lines, setLines] = useState<Line[]>(
-    invoice?.items.length
-      ? invoice.items.map((it) => ({ _key: _nextKey++, productId: it.productId, qty: String(it.qty), price: String(it.price) }))
-      : [blankLine()],
+    d?.lines?.length
+      ? d.lines.map((l) => ({ _key: _nextKey++, productId: l.productId, qty: l.qty, price: l.price }))
+      : invoice?.items.length
+        ? invoice.items.map((it) => ({ _key: _nextKey++, productId: it.productId, qty: String(it.qty), price: String(it.price) }))
+        : [blankLine()],
   );
-  const [prefilled, setPrefilled] = useState(isEdit);
+  // A restored draft already carries its lines — don't re-inject pinned defaults over them.
+  const [prefilled, setPrefilled] = useState(isEdit || !!initialDraft);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState<Invoice | null>(null);
   const [makeManifest, setMakeManifest] = useState(false);
@@ -117,6 +131,27 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
     if (isDirty && !window.confirm('في بيانات لم تُحفظ — هل تريد المغادرة بدون حفظ؟')) return;
     onClose();
   };
+
+  // Snapshot the whole form into a serializable draft so it can be minimized and
+  // restored later (even after navigating to another page).
+  const buildDraft = (): InvoiceDraft => {
+    const party = parties?.data.find((p) => p.id === partyId);
+    const kindLabel = kind === 'SALE' ? 'بيع' : 'شراء';
+    const who = party ? ` — ${party.name}` : directSale ? ' — بيع مباشر' : '';
+    return {
+      id: draftIdRef.current,
+      kind,
+      invoiceId: editInvoiceId,
+      title: `فاتورة ${kindLabel}${no ? ` رقم ${no}` : ''}${who}`,
+      updatedAt: Date.now(),
+      state: {
+        no, date, partyId, directSale, warehouseId, treasuryId, paid, note,
+        exchangeRate, commissionAmount, commissionPartyId,
+        lines: lines.map((l) => ({ productId: l.productId, qty: l.qty, price: l.price })),
+      },
+    };
+  };
+  const handleMinimize = () => onMinimize?.(buildDraft());
 
   const selectedParty = parties?.data.find((p) => p.id === partyId);
   const isUSD = selectedParty?.currency === 'USD';
@@ -144,7 +179,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
     if (isEdit) {
       updateInvoice.mutate(
         {
-          id: invoice!.id,
+          id: editInvoiceId!,
           dto: {
             date, partyId, warehouseId, items,
             paid: Number(paid) || 0,
@@ -209,8 +244,13 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
 
   return (
     <>
-      <button className="btn btn-ghost btn-sm" onClick={handleClose}>→ رجوع لقائمة الفواتير</button>
-      <PageTitle title={isEdit ? `تعديل ${kind === 'SALE' ? 'فاتورة بيع' : 'فاتورة شراء'} رقم ${invoice?.no}` : kind === 'SALE' ? 'فاتورة بيع جديدة' : 'فاتورة شراء جديدة'} />
+      <div className="toolbar" style={{ marginBottom: 0 }}>
+        <button className="btn btn-ghost btn-sm" onClick={handleClose}>→ رجوع لقائمة الفواتير</button>
+        {onMinimize && (
+          <button className="btn btn-ghost btn-sm" title="تصغير الفاتورة — تفضل مفتوحة وتقدر تكمّلها بعدين" onClick={handleMinimize}>🗕 تصغير</button>
+        )}
+      </div>
+      <PageTitle title={isEdit ? `تعديل ${kind === 'SALE' ? 'فاتورة بيع' : 'فاتورة شراء'} رقم ${invoice?.no ?? no}` : kind === 'SALE' ? 'فاتورة بيع جديدة' : 'فاتورة شراء جديدة'} />
       <div className="card" onKeyDown={fieldNavKeyDown}>
         <div className="form-grid">
           {!isEdit && <Field label="رقم الفاتورة"><input value={no} onChange={(e) => setNo(e.target.value)} placeholder={partyId ? '…' : 'اختر العميل أولاً'} style={no ? { fontWeight: 700 } : {}} /></Field>}
@@ -339,6 +379,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
           <button className="btn btn-primary" onClick={save} disabled={isPending}>
             {isPending ? '...' : isEdit ? 'حفظ التعديلات' : 'حفظ الفاتورة'}
           </button>
+          {onMinimize && <button className="btn btn-ghost" onClick={handleMinimize}>🗕 تصغير</button>}
           <button className="btn btn-ghost" onClick={handleClose}>إلغاء</button>
         </div>
       </div>
