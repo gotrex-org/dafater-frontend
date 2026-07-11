@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { CustomerPortal } from '@/modules/portal/CustomerPortal';
 import { UnsavedProvider, useUnsaved } from '@/lib/unsaved';
-import { InvoiceDraftsProvider } from '@/lib/invoiceDrafts';
+import { WindowsProvider } from '@/lib/windows';
 
 function NavLink({ href, label, active }: { href: string; label: string; active: boolean }) {
   const { isDirty, setDirty } = useUnsaved();
@@ -71,7 +71,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <UnsavedProvider>
-      <InvoiceDraftsProvider>
+      <WindowsProvider>
         {header}
         <nav className="tabs">
           {NAV.filter((n) => can(n.view)).map((n) => (
@@ -79,7 +79,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
         <main className="page">{children}</main>
-      </InvoiceDraftsProvider>
+      </WindowsProvider>
     </UnsavedProvider>
   );
 }

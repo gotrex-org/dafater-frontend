@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { fmtDate } from '@/lib/format';
 import { useTableState } from '@/lib/useTableState';
 import { useAuth } from '@/lib/auth';
+import { useWindows } from '@/lib/windows';
 import { PageTitle, DataTable, SearchInput, type Column } from '@/components/common';
-import { useWarnOnLeave } from '@/lib/unsaved';
 import { useManifests } from '../hooks';
 import type { Manifest } from '../dtos';
 import { ManifestEditor } from './ManifestEditor';
@@ -13,7 +13,7 @@ import { ManifestPrint } from './ManifestPrint';
 
 export function ManifestsView() {
   const { can } = useAuth();
-  const [mode, setMode] = useState<'list' | 'create'>('list');
+  const { open } = useWindows();
   const [viewId, setViewId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [from, setFrom] = useState('');
@@ -21,16 +21,12 @@ export function ManifestsView() {
   const { page, setPage, pageSize, setPageSize } = useTableState();
   const { data, isLoading } = useManifests({ page, pageSize, search: search || undefined, from: from || undefined, to: to || undefined });
 
-  useWarnOnLeave(mode === 'create');
+  const openNew = () => open({
+    title: 'كشف عربية جديد',
+    render: (close) => <ManifestEditor onClose={close} onCreated={(m) => { close(); setViewId(m.id); }} />,
+  });
 
   if (viewId) return <ManifestPrint id={viewId} onClose={() => setViewId(null)} />;
-  if (mode === 'create')
-    return (
-      <ManifestEditor
-        onClose={() => setMode('list')}
-        onCreated={(m) => { setMode('list'); setViewId(m.id); }}
-      />
-    );
 
   const manifestStatus = (m: Manifest): 'arrived' | 'pending' | 'none' => {
     const trips = m.driverTrips ?? [];
@@ -66,7 +62,7 @@ export function ManifestsView() {
     <>
       <PageTitle title="كشوفات العربيات" subtitle="كشف استلام/تحميل لكل عربية — اضغط على أي كشف لعرضه وطباعته" />
       <div className="toolbar">
-        {can('manifests.create') && <button className="btn btn-primary btn-sm sp" onClick={() => setMode('create')}>+ كشف جديد</button>}
+        {can('manifests.create') && <button className="btn btn-primary btn-sm sp" onClick={openNew}>+ كشف جديد</button>}
       </div>
       <div className="toolbar" style={{ marginTop: 6, flexWrap: 'wrap' }}>
         <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="بحث بالعميل أو السائق أو العربية…" />

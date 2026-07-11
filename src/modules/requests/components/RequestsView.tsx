@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { fmtDate } from '@/lib/format';
 import { useTableState } from '@/lib/useTableState';
 import { useAuth } from '@/lib/auth';
+import { useWindows } from '@/lib/windows';
 import { PageTitle, DataTable, SegmentedControl, Combobox, SearchInput, type Column } from '@/components/common';
 import { useAllParties } from '../../parties/hooks';
 import { useRequests, useMarkRequestDone } from '../hooks';
@@ -23,9 +24,9 @@ const SOURCE_OPTS = [
 
 export function RequestsView() {
   const { can } = useAuth();
+  const { open } = useWindows();
   const { data: clients } = useAllParties('CLIENT');
   const [source, setSource] = useState<'clients' | 'portal'>('clients');
-  const [mode, setMode] = useState<'list' | 'create'>('list');
   const [tab, setTab] = useState<'active' | 'done'>('active');
   const [clientId, setClientId] = useState('');
   const [search, setSearch] = useState('');
@@ -48,9 +49,13 @@ export function RequestsView() {
   const markReqDone = useMarkRequestDone();
   const markOrdDone = useMarkOrderDone();
 
+  const openNew = () => open({
+    title: 'طلبية جديدة',
+    render: (close) => <RequestEditor onClose={close} />,
+  });
+
   if (requestDetail) return <RequestDetail request={requestDetail} onClose={() => setRequestDetail(null)} />;
   if (orderDetail) return <OrderDetail order={orderDetail} onClose={() => setOrderDetail(null)} />;
-  if (mode === 'create') return <RequestEditor onClose={() => setMode('list')} />;
 
   const reqColumns: Column<ClientRequest>[] = [
     { header: 'التاريخ', cell: (r) => fmtDate(r.date) },
@@ -107,7 +112,7 @@ export function RequestsView() {
           : <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="بحث بالاسم أو الطلبية…" />
         }
         {source === 'clients' && can('requests.create') && (
-          <button className="btn btn-primary btn-sm sp" onClick={() => setMode('create')}>+ طلبية جديدة</button>
+          <button className="btn btn-primary btn-sm sp" onClick={openNew}>+ طلبية جديدة</button>
         )}
       </div>
 

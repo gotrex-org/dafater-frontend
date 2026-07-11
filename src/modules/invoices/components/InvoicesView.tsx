@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { EGP, fmtDate } from '@/lib/format';
 import { useTableState } from '@/lib/useTableState';
 import { useAuth } from '@/lib/auth';
-import { useInvoiceDrafts } from '@/lib/invoiceDrafts';
+import { useWindows } from '@/lib/windows';
 import { PageTitle, DataTable, SegmentedControl, SearchInput, type Column } from '@/components/common';
 import { useInvoices } from '../hooks';
 import type { Invoice, InvoiceKind } from '../dtos';
@@ -15,9 +15,8 @@ const invoiceTotal = (inv: Invoice) => inv.items.reduce((s, it) => s + it.qty * 
 
 export function InvoicesView() {
   const { can } = useAuth();
-  const { minimize } = useInvoiceDrafts();
+  const { open } = useWindows();
   const [kind, setKind] = useState<InvoiceKind>('SALE');
-  const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<Invoice | null>(null);
   const [search, setSearch] = useState('');
   const [from, setFrom] = useState('');
@@ -26,13 +25,11 @@ export function InvoicesView() {
   const { page, setPage, pageSize, setPageSize } = useTableState();
   const { data, isLoading } = useInvoices({ kind, page, pageSize, search: search || undefined, from: from || undefined, to: to || undefined });
 
-  if (editing) return (
-    <InvoiceEditor
-      kind={kind}
-      onClose={() => setEditing(false)}
-      onMinimize={(dft) => { minimize(dft); setEditing(false); }}
-    />
-  );
+  const openNew = () => open({
+    title: kind === 'SALE' ? 'فاتورة بيع جديدة' : 'فاتورة شراء جديدة',
+    render: (close) => <InvoiceEditor kind={kind} onClose={close} />,
+  });
+
   if (selected) return <InvoiceDetail invoice={selected} onBack={() => setSelected(null)} />;
 
   const columns: Column<Invoice>[] = [
@@ -56,7 +53,7 @@ export function InvoicesView() {
             { value: 'PURCHASE', label: 'فواتير شراء' },
           ]}
         />
-        {canCreate && <button className="btn btn-primary btn-sm sp" onClick={() => setEditing(true)}>+ فاتورة جديدة</button>}
+        {canCreate && <button className="btn btn-primary btn-sm sp" onClick={openNew}>+ فاتورة جديدة</button>}
       </div>
       <div className="toolbar" style={{ marginTop: 6, flexWrap: 'wrap' }}>
         <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="بحث باسم العميل أو رقم الفاتورة…" />

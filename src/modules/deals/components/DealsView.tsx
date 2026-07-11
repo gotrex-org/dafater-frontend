@@ -5,6 +5,7 @@ import { EGP, fmtDate } from '@/lib/format';
 import { downloadElementAsPdf } from '@/lib/pdf';
 import { useTableState } from '@/lib/useTableState';
 import { useAuth } from '@/lib/auth';
+import { useWindows } from '@/lib/windows';
 import { PageTitle, DataTable, SearchInput, Spinner, Field, MoneyInput, type Column } from '@/components/common';
 import { CommissionPicker } from '../../invoices/components/CommissionPicker';
 import { useDeals, useDeal, useDeleteDeal, useUpdateDealCommission } from '../hooks';
@@ -127,8 +128,7 @@ function DealDetail({ deal, onBack, onEdit, onDelete }: {
 
 export function DealsView() {
   const { can } = useAuth();
-  const [editing, setEditing] = useState(false);
-  const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
+  const { open } = useWindows();
   const [selected, setSelected] = useState<Deal | null>(null);
   const [search, setSearch] = useState('');
   const [from, setFrom] = useState('');
@@ -142,13 +142,21 @@ export function DealsView() {
     deleteDeal.mutate(deal.id, { onSuccess: () => setSelected(null) });
   };
 
-  if (editingDeal) return <DealEditor initialDeal={editingDeal} onClose={() => { setEditingDeal(null); setSelected(null); }} />;
-  if (editing) return <DealEditor onClose={() => setEditing(false)} />;
+  const openNew = () => open({
+    title: 'عملية بيع خارجي جديدة',
+    render: (close) => <DealEditor onClose={close} />,
+  });
+  const openEdit = (deal: Deal) => open({
+    id: `deal:${deal.id}`,
+    title: `تعديل عملية رقم ${deal.no}`,
+    render: (close) => <DealEditor initialDeal={deal} onClose={() => { close(); setSelected(null); }} />,
+  });
+
   if (selected) return (
     <DealDetail
       deal={selected}
       onBack={() => setSelected(null)}
-      onEdit={can('deals.edit') ? () => setEditingDeal(selected) : undefined}
+      onEdit={can('deals.edit') ? () => openEdit(selected) : undefined}
       onDelete={can('deals.delete') ? () => handleDelete(selected) : undefined}
     />
   );
@@ -165,7 +173,7 @@ export function DealsView() {
     <>
       <PageTitle title="البيع الخارجي" subtitle="شراء من المورد وبيع للعميل في نفس الوقت — بدون أثر على المخزن" />
       <div className="toolbar">
-        {can('deals.create') && <button className="btn btn-primary btn-sm sp" onClick={() => setEditing(true)}>+ عملية جديدة</button>}
+        {can('deals.create') && <button className="btn btn-primary btn-sm sp" onClick={openNew}>+ عملية جديدة</button>}
       </div>
       <div className="toolbar" style={{ marginTop: 6, flexWrap: 'wrap' }}>
         <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="بحث باسم العميل أو المورد…" />

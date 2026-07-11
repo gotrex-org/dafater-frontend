@@ -5,7 +5,7 @@ import { money, EGP, fmtDate } from '@/lib/format';
 import { downloadElementAsPdf } from '@/lib/pdf';
 import { PageTitle, Spinner, Field, MoneyInput } from '@/components/common';
 import { useAuth } from '@/lib/auth';
-import { useInvoiceDrafts } from '@/lib/invoiceDrafts';
+import { useWindows } from '@/lib/windows';
 import { useParty } from '../../parties/hooks';
 import { useInvoice, useDeleteInvoice, useUpdateInvoiceCommission } from '../hooks';
 import { confirmCascadeDelete } from '@/lib/cascadeDelete';
@@ -15,14 +15,13 @@ import { CommissionPicker } from './CommissionPicker';
 
 export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: () => void }) {
   const { can } = useAuth();
-  const { minimize } = useInvoiceDrafts();
+  const { open } = useWindows();
   const sheetRef = useRef<HTMLDivElement>(null);
   const total = invoice.items.reduce((s, it) => s + it.qty * it.price, 0);
   const kindLabel = invoice.kind === 'SALE' ? 'بيع' : 'شراء';
   const cur = invoice.currency ?? invoice.party?.currency ?? 'EGP';
 
   const [showPrev, setShowPrev] = useState(false);
-  const [editing, setEditing] = useState(false);
   const [showCommission, setShowCommission] = useState(false);
   const [commAmount, setCommAmount] = useState('');
   const [commPartyId, setCommPartyId] = useState('');
@@ -47,7 +46,11 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
     );
   };
 
-  if (editing) return <InvoiceEditor kind={invoice.kind} invoice={invoice} onClose={() => setEditing(false)} onUpdated={onBack} onMinimize={(dft) => { minimize(dft); setEditing(false); }} />;
+  const openEdit = () => open({
+    id: `invoice:${invoice.id}`,
+    title: `تعديل فاتورة ${kindLabel} رقم ${invoice.no}`,
+    render: (close) => <InvoiceEditor kind={invoice.kind} invoice={invoice} onClose={close} onUpdated={() => { close(); onBack(); }} />,
+  });
 
   const handleDelete = () => {
     if (!window.confirm(`حذف فاتورة ${kindLabel} رقم ${invoice.no}؟ هذا الإجراء لا يمكن التراجع عنه.`)) return;
@@ -60,7 +63,7 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
         <button className="btn btn-ghost btn-sm" onClick={onBack}>→ رجوع</button>
         <button className="btn btn-ghost btn-sm" onClick={() => setShowPrev((v) => !v)}>{showPrev ? 'إخفاء الرصيد السابق' : 'إظهار الرصيد السابق'}</button>
         {can('invoices.edit') && (
-          <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>تعديل</button>
+          <button className="btn btn-ghost btn-sm" onClick={openEdit}>تعديل</button>
         )}
         {can('invoices.commission') && (
           <button className="btn btn-ghost btn-sm" onClick={() => setShowCommission((v) => !v)}>commission</button>

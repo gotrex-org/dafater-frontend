@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect } from 'react';
+import { WindowedContext } from './windowed';
 
 interface UnsavedCtx {
   isDirty: boolean;
@@ -31,8 +32,10 @@ export function useUnsaved() {
 
 export function useWarnOnLeave(isDirty: boolean) {
   const { setDirty } = useUnsaved();
+  // A windowed editor survives navigation on purpose — don't flag the app as dirty.
+  const windowed = useContext(WindowedContext);
   useEffect(() => {
-    setDirty(isDirty);
+    setDirty(isDirty && !windowed);
     return () => setDirty(false);
-  }, [isDirty, setDirty]);
+  }, [isDirty, windowed, setDirty]);
 }

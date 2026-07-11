@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useContext, useEffect } from 'react';
+import { WindowedContext } from './windowed';
 
 const MSG = 'في بيانات لم تُحفظ — هل تريد المغادرة بدون حفظ؟';
 
@@ -8,8 +9,10 @@ const MSG = 'في بيانات لم تُحفظ — هل تريد المغادر�
  * Covers: Next.js <Link> clicks in the nav, browser refresh/close.
  */
 export function useNavigationGuard(isDirty: boolean) {
+  // Inside a minimizable window the guard is intentionally disabled (see windowed.ts).
+  const windowed = useContext(WindowedContext);
   useEffect(() => {
-    if (!isDirty) return;
+    if (!isDirty || windowed) return;
 
     // Browser close / page refresh
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -36,5 +39,5 @@ export function useNavigationGuard(isDirty: boolean) {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('click', handleClick, true);
     };
-  }, [isDirty]);
+  }, [isDirty, windowed]);
 }
