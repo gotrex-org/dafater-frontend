@@ -1,47 +1,67 @@
 'use client';
 
 import { useEffect } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { CustomerPortal } from '@/modules/portal/CustomerPortal';
-import { UnsavedProvider, useUnsaved } from '@/lib/unsaved';
-import { WindowsProvider } from '@/lib/windows';
+import { UnsavedProvider } from '@/lib/unsaved';
+import { WindowsProvider, useWindows } from '@/lib/windows';
+import { SECTIONS, sectionByHref, type SectionDef } from '@/lib/sections';
 
-function NavLink({ href, label, active }: { href: string; label: string; active: boolean }) {
-  const { isDirty, setDirty } = useUnsaved();
+// The staff app is a "desktop": each section is a window. The top bar opens/focuses windows
+// instead of swapping the page, so you can leave a half-filled screen, open another section,
+// and come back to it exactly as you left it. Content is rendered by WindowsProvider (mounted
+// at the root and kept alive), so route children are intentionally not rendered here.
+function Desktop({ userName, onLogout }: { userName: string; onLogout: () => void }) {
+  const { can } = useAuth();
+  const { open, foregroundId } = useWindows();
+  const pathname = usePathname();
   const router = useRouter();
-  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    if (!isDirty) return;
-    e.preventDefault();
-    if (window.confirm('هناك بيانات غير محفوظة، هل تريد المغادرة؟')) {
-      setDirty(false);
-      router.push(href);
-    }
-  };
-  return <Link href={href} className={active ? 'active' : ''} onClick={handleClick}>{label}</Link>;
+
+  const openSection = (s: SectionDef) =>
+    open({ id: s.view, title: s.label, size: 'lg', render: () => <s.Component /> });
+
+  // Any navigation (nav click, dashboard tile, login redirect, direct URL) maps to opening
+  // that section's window. open() is idempotent — it focuses an already-open window.
+  useEffect(() => {
+    const s = sectionByHref(pathname);
+    if (s) openSection(s);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  const navSections = SECTIONS.filter((s) => s.nav && can(s.view));
+
+  return (
+    <>
+      <header className="appbar">
+        <span className="logo">دفا<b>تر</b></span>
+        <div className="userbox">
+          <span>أهلاً بك <b>{userName}</b></span>
+          <button className="logout" onClick={onLogout}>خروج</button>
+        </div>
+      </header>
+      <nav className="tabs">
+        {navSections.map((s) => (
+          <button
+            key={s.view}
+            className={foregroundId === s.view ? 'active' : ''}
+            style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+            onClick={() => { openSection(s); router.push(s.href); }}
+          >
+            {s.label}
+          </button>
+        ))}
+      </nav>
+      <main className="page desktop-bg">
+        <div className="desktop-hint">اختر قسمًا من الأعلى — كل قسم يفتح كنافذة تقدر تصغّرها وترجع لها.</div>
+      </main>
+    </>
+  );
 }
 
-const NAV: { href: string; label: string; view: string }[] = [
-  { href: '/dashboard', label: 'لوحة التحكم', view: 'dash' },
-  { href: '/entry', label: 'الإدخال اليومي', view: 'entry' },
-  { href: '/invoices', label: 'الفواتير', view: 'invoices' },
-  { href: '/deals', label: 'البيع الخارجي', view: 'deals' },
-  { href: '/manifests', label: 'كشوفات العربيات', view: 'manifests' },
-  { href: '/driver-trips', label: 'كشف السائقين', view: 'driver-trips' },
-  { href: '/requests', label: 'الطلبيات', view: 'requests' },
-  { href: '/ledger', label: 'كشف الحساب', view: 'ledger' },
-  { href: '/inventory', label: 'المخازن', view: 'inventory' },
-  { href: '/treasury', label: 'الخزنة', view: 'treasury' },
-  { href: '/settings', label: 'الإعدادات', view: 'settings' },
-  { href: '/audit', label: 'سجل النشاط', view: 'audit' },
-  { href: '/today', label: 'تقرير اليوم', view: 'today' },
-];
-
-export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading, logout, can } = useAuth();
+export default function AppLayout() {
+  const { user, loading, logout } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
@@ -49,21 +69,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (loading || !user) return <div className="empty">جاري التحميل…</div>;
 
-  const header = (
-    <header className="appbar">
-      <span className="logo">دفا<b>تر</b></span>
-      <div className="userbox">
-        <span>أهلاً بك <b>{user.name}</b></span>
-        <button className="logout" onClick={() => { logout(); router.replace('/login'); }}>خروج</button>
-      </div>
-    </header>
-  );
-
-  // Customer accounts get a dedicated portal with no staff nav
+  // Customer accounts get a dedicated portal with no staff desktop
   if (user.role === 'CUSTOMER') {
     return (
       <>
-        {header}
+        <header className="appbar">
+          <span className="logo">دفا<b>تر</b></span>
+          <div className="userbox">
+            <span>أهلاً بك <b>{user.name}</b></span>
+            <button className="logout" onClick={() => { logout(); router.replace('/login'); }}>خروج</button>
+          </div>
+        </header>
         <main className="page"><CustomerPortal user={user} /></main>
       </>
     );
@@ -72,13 +88,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <UnsavedProvider>
       <WindowsProvider>
-        {header}
-        <nav className="tabs">
-          {NAV.filter((n) => can(n.view)).map((n) => (
-            <NavLink key={n.href} href={n.href} label={n.label} active={pathname.startsWith(n.href)} />
-          ))}
-        </nav>
-        <main className="page">{children}</main>
+        <Desktop userName={user.name} onLogout={() => { logout(); router.replace('/login'); }} />
       </WindowsProvider>
     </UnsavedProvider>
   );
