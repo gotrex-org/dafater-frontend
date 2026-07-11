@@ -36,7 +36,7 @@ const ENTITY: Record<string, string> = {
   deals: 'بيع خارجي', adjustments: 'تسوية مخزن', treasury: 'خزينة', transactions: 'حركة',
   warehouses: 'مخزن', 'expense-categories': 'بند مصروف', users: 'مستخدم', orders: 'طلبية عميل',
   config: 'إعدادات', 'driver-trips': 'رحلة سائق', drivers: 'سائق', loans: 'سلفة',
-  'dollar-agents': 'وكيل دولار',
+  'dollar-agents': 'وكيل دولار', returns: 'مرتجع',
 };
 const ACTION: Record<string, string> = { CREATE: 'إضافة', UPDATE: 'تعديل', DELETE: 'حذف' };
 const ACTION_CLASS: Record<string, string> = { CREATE: 'cre', UPDATE: '', DELETE: 'deb' };

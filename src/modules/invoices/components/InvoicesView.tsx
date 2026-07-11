@@ -10,12 +10,14 @@ import { useInvoices } from '../hooks';
 import type { Invoice, InvoiceKind } from '../dtos';
 import { InvoiceEditor } from './InvoiceEditor';
 import { InvoiceDetail } from './InvoiceDetail';
+import { ReturnsView } from '../../returns/components/ReturnsView';
 
 const invoiceTotal = (inv: Invoice) => inv.items.reduce((s, it) => s + it.qty * it.price, 0);
 
 export function InvoicesView() {
   const { can } = useAuth();
   const { open } = useWindows();
+  const [section, setSection] = useState<'invoices' | 'returns'>('invoices');
   const [kind, setKind] = useState<InvoiceKind>('SALE');
   const [selected, setSelected] = useState<Invoice | null>(null);
   const [search, setSearch] = useState('');
@@ -30,7 +32,27 @@ export function InvoicesView() {
     render: (close) => <InvoiceEditor kind={kind} onClose={close} />,
   });
 
-  if (selected) return <InvoiceDetail invoice={selected} onBack={() => setSelected(null)} />;
+  if (section === 'invoices' && selected) return <InvoiceDetail invoice={selected} onBack={() => setSelected(null)} />;
+
+  const sectionSwitch = (
+    <div className="toolbar">
+      <SegmentedControl
+        value={section}
+        onChange={(v) => setSection(v as 'invoices' | 'returns')}
+        options={[{ value: 'invoices', label: 'الفواتير' }, { value: 'returns', label: 'المرتجعات' }]}
+      />
+    </div>
+  );
+
+  if (section === 'returns') {
+    return (
+      <>
+        <PageTitle title="الفواتير والمرتجعات" />
+        {sectionSwitch}
+        <ReturnsView />
+      </>
+    );
+  }
 
   const columns: Column<Invoice>[] = [
     { header: 'رقم', cell: (inv) => inv.no },
@@ -43,7 +65,8 @@ export function InvoicesView() {
 
   return (
     <>
-      <PageTitle title="الفواتير" subtitle="البيع ينقّص المخزن ويسجّل على العميل · الشراء يزوّد المخزن ويسجّل للمورد" />
+      <PageTitle title="الفواتير والمرتجعات" subtitle="البيع ينقّص المخزن ويسجّل على العميل · الشراء يزوّد المخزن ويسجّل للمورد" />
+      {sectionSwitch}
       <div className="toolbar">
         <SegmentedControl
           value={kind}
