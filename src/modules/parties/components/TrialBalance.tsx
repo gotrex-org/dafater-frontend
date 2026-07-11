@@ -143,8 +143,8 @@ export function TrialBalance({ onOpenParty }: { onOpenParty: (uid: string) => vo
           </table>
         </div>
 
-        <div className="page-title num" style={{ marginTop: 8, textAlign: 'left' }}>
-          الصافي بالمصري: {EGP(Math.abs(net))} ج.م {net >= 0 ? 'عليهم' : 'لهم'}
+        <div className="num" style={{ marginTop: 8, textAlign: 'left', fontSize: 15, fontWeight: 700 }}>
+          الإجمالي بالمصري: {EGP(Math.abs(net))} ج.م {net >= 0 ? 'عليهم' : 'لهم'}
         </div>
       </div>
     </>

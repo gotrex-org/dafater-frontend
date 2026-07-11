@@ -321,7 +321,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                           ) : fmtDate(r.date)}
                         </td>
                         <td>{r.type}</td>
-                        <td style={{ color: 'var(--accent-d)', fontWeight: 600 }}>
+                        <td style={{ color: 'var(--ink)', fontWeight: 400 }}>
                           {data.linkedParty && r.partyRole && (
                             <span className="pill" style={{ fontSize: 10, marginInlineEnd: 4, opacity: 0.75 }}>
                               {r.partyRole === 'SUPPLIER' ? 'مورد' : 'عميل'}
