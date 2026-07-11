@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTableState } from '@/lib/useTableState';
+import { money } from '@/lib/format';
 import { PageTitle, DataTable, type Column } from '@/components/common';
 import { useAuth } from '@/lib/auth';
 import { useUsers } from '../../users/hooks';
@@ -55,8 +56,15 @@ const UNDO_LABEL: Record<string, { btn: string; confirm: string }> = {
 
 // Raw internal ids (numeric PK, and un-nameable FK scalars like `partyId`) are noise here —
 // the actual related record (e.g. `party: {name}`) is already included in the snapshot
-// wherever it matters, so hiding the bare *Id columns doesn't lose information.
-const SNAPSHOT_SKIP_KEYS = new Set(['id', 'createdAt', 'updatedAt']);
+// wherever it matters, so hiding the bare *Id columns doesn't lose information. We also
+// drop plumbing arrays (the auto-generated ledger movements attached to an invoice, a
+// party's whole transaction history, …) and internal bookkeeping fields, so the detail
+// shows the business facts and nothing else.
+const SNAPSHOT_SKIP_KEYS = new Set([
+  'id', 'uid', 'createdAt', 'updatedAt', 'createdById', 'updatedById',
+  'transactions', 'transactionsAlt', 'payments', 'returns', 'txs', 'requests',
+  'groupId', 'tokenVersion', 'pinHash', 'pin', 'commissionPartyId',
+]);
 const isSkippableKey = (key: string, value: unknown) =>
   SNAPSHOT_SKIP_KEYS.has(key) || (/Id$/.test(key) && (value === null || typeof value !== 'object'));
 
@@ -97,6 +105,39 @@ function SnapshotValue({ value, depth = 0 }: { value: any; depth?: number }) {
     );
   }
   return <span style={{ fontSize: 13 }}>{formatScalar(value)}</span>;
+}
+
+// Clean line-item view for an invoice/deal snapshot — just the goods (الكمية/الصنف/
+// السعر/الإجمالي) plus the money line, instead of dumping every internal field.
+function InvoiceItemsDetail({ snap }: { snap: any }) {
+  const items: any[] = Array.isArray(snap?.items) ? snap.items : [];
+  const cur: 'USD' | 'EGP' = snap?.currency === 'USD' ? 'USD' : 'EGP';
+  const total = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.price) || 0), 0);
+  const paid = Number(snap?.paid) || 0;
+  return (
+    <div style={{ marginTop: 16, borderTop: '1px solid var(--line-soft)', paddingTop: 14 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-soft)', marginBottom: 10 }}>تفاصيل الفاتورة</div>
+      <div className="tbl-wrap">
+        <table>
+          <thead><tr><th style={{ width: 80 }}>الكمية</th><th>الصنف</th><th style={{ width: 110 }}>السعر</th><th style={{ width: 120 }}>الإجمالي</th></tr></thead>
+          <tbody>
+            {items.map((it, i) => (
+              <tr key={i}>
+                <td className="num">{it.qty}</td>
+                <td>{it.product?.name ?? '—'}</td>
+                <td className="num">{money(Number(it.price) || 0, cur)}</td>
+                <td className="num">{money((Number(it.qty) || 0) * (Number(it.price) || 0), cur)}</td>
+              </tr>
+            ))}
+            {items.length === 0 && <tr><td colSpan={4} className="empty">لا توجد أصناف</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <div className="num" style={{ marginTop: 8, textAlign: 'left', fontWeight: 700 }}>
+        الإجمالي: {money(total, cur)}{paid > 0 ? ` · المدفوع: ${money(paid, cur)}` : ''}
+      </div>
+    </div>
+  );
 }
 
 function AuditDetail({ log, onBack, onOpen }: { log: AuditLog; onBack: () => void; onOpen: (entity: string, uid: string) => void }) {
@@ -183,12 +224,16 @@ function AuditDetail({ log, onBack, onOpen }: { log: AuditLog; onBack: () => voi
         </div>
 
         {log.snapshot && (
-          <div style={{ marginTop: 16, borderTop: '1px solid var(--line-soft)', paddingTop: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-soft)', marginBottom: 10 }}>
-              {log.action === 'DELETE' ? 'بيانات العنصر المحذوف' : 'بيانات العنصر'}
-            </div>
-            <SnapshotValue value={log.snapshot} />
-          </div>
+          (log.entity === 'invoices' || log.entity === 'deals')
+            ? <InvoiceItemsDetail snap={log.snapshot} />
+            : (
+              <div style={{ marginTop: 16, borderTop: '1px solid var(--line-soft)', paddingTop: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-soft)', marginBottom: 10 }}>
+                  {log.action === 'DELETE' ? 'بيانات العنصر المحذوف' : 'بيانات العنصر'}
+                </div>
+                <SnapshotValue value={log.snapshot} />
+              </div>
+            )
         )}
 
         {log.action === 'UPDATE' && log.diff && Object.keys(log.diff).length > 0 && (
