@@ -337,7 +337,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                       </tr>
                       {open && (
                         <tr>
-                          <td colSpan={6} style={{ background: '#eef4fa', borderInlineStart: '3px solid var(--blue, #2c5a86)', padding: '8px 16px' }}>
+                          <td colSpan={6} style={{ background: '#f3ecda', borderInlineStart: '3px solid var(--gold, #b98a2e)', padding: '8px 16px' }}>
                             <table style={{ width: '100%', color: 'var(--ink)' }}>
                               <thead><tr><th>الكمية</th><th>الصنف</th><th>السعر</th><th>الإجمالي</th></tr></thead>
                               <tbody>
