@@ -18,6 +18,7 @@ export interface Invoice {
   no: string;
   date: string;
   currency?: 'EGP' | 'USD';
+  exchangeRate?: number | null;
   partyId: string;
   warehouseId: string;
   paid: number;
@@ -43,6 +44,7 @@ export interface CreateInvoiceDto {
   paid?: number;
   treasuryId?: string;
   note?: string;
+  exchangeRate?: number;
   commissionAmount?: number;
   commissionPartyId?: string;
 }
@@ -55,6 +57,7 @@ export interface UpdateInvoiceDto {
   paid?: number;
   treasuryId?: string;
   note?: string;
+  exchangeRate?: number;
   commissionAmount?: number;
   commissionPartyId?: string;
 }

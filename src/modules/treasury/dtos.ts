@@ -24,6 +24,7 @@ export interface TreasuryMovement {
   party?: { id?: string; name: string } | null;
   treasury?: { id: string; name: string; currency: string } | null;
   treasury2?: { id: string; name: string; currency: string } | null;
+  createdBy?: { name: string } | null; // the user who recorded this movement
   // Running balance as of this row — only computed when filtered to a single treasury.
   balance?: number;
 }

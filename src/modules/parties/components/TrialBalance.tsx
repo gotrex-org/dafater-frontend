@@ -1,14 +1,24 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { money, fmtDate, todayISO } from '@/lib/format';
+import { EGP, USD, fmtDate, todayISO } from '@/lib/format';
 import { downloadElementAsPdf } from '@/lib/pdf';
 import { Spinner, SearchInput } from '@/components/common';
 import { useAuth } from '@/lib/auth';
+import type { Party } from '../dtos';
 import { useParties } from '../hooks';
 
 const ROLE_LABEL: Record<string, string> = { CLIENT: 'عميل', SUPPLIER: 'مورد', AGENT: 'صاحب عمولة' };
-const CUR_LABEL: Record<string, string> = { EGP: 'جنيه', USD: 'دولار' };
+
+// Convert a party's balance to EGP. EGP parties pass through; USD parties use their
+// weighted-average rate — returns { egp: null } when a USD party has no rate yet (can't
+// be converted, so it's shown in $ only and left out of the EGP totals).
+function toEgp(p: Party): { raw: number; isUSD: boolean; rate: number; egp: number | null } {
+  const raw = p.balance ?? 0;
+  const isUSD = p.currency === 'USD';
+  const rate = p.avgExchangeRate ?? 0;
+  return { raw, isUSD, rate, egp: isUSD ? (rate > 0 ? raw * rate : null) : raw };
+}
 
 // ميزان الحسابات — a trial-balance report listing every party (clients, suppliers,
 // commission agents) with its net balance split into عليه (debit) / له (credit),
@@ -45,20 +55,19 @@ export function TrialBalance({ onOpenParty }: { onOpenParty: (uid: string) => vo
       .sort((a, b) => Math.abs(b.balance ?? 0) - Math.abs(a.balance ?? 0));
   }, [data, search, showZeros, isRestricted, restrictedIds]);
 
-  // Totals are kept per-currency — EGP and USD balances can't be summed together.
+  // Everything is unified in EGP — USD balances converted at each party's average rate.
+  // Unconvertible USD parties (no rate yet) are excluded from the totals.
   const totals = useMemo(() => {
-    const byCur: Record<string, { debit: number; credit: number }> = {};
+    let debit = 0, credit = 0;
     for (const p of rows) {
-      const cur = p.currency ?? 'EGP';
-      const b = p.balance ?? 0;
-      if (!byCur[cur]) byCur[cur] = { debit: 0, credit: 0 };
-      if (b > 0) byCur[cur].debit += b;
-      else if (b < 0) byCur[cur].credit += -b;
+      const { egp } = toEgp(p);
+      if (egp == null) continue;
+      if (egp > 0) debit += egp; else if (egp < 0) credit += -egp;
     }
-    return byCur;
+    return { debit, credit };
   }, [rows]);
 
-  const multiCur = Object.keys(totals).length > 1;
+  const net = totals.debit - totals.credit;
 
   if (isLoading) return <Spinner />;
 
@@ -91,48 +100,52 @@ export function TrialBalance({ onOpenParty }: { onOpenParty: (uid: string) => vo
               <tr>
                 <th>الطرف</th>
                 <th style={{ width: 90 }}>النوع</th>
-                <th style={{ width: 130 }}>عليه</th>
-                <th style={{ width: 130 }}>له</th>
+                <th style={{ width: 170 }}>عليه (بالمصري)</th>
+                <th style={{ width: 170 }}>له (بالمصري)</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((p) => {
-                const b = p.balance ?? 0;
                 const partner = p.linkedParty ?? p.linkedFrom;
+                const { raw, isUSD, rate, egp } = toEgp(p);
+                // For a USD party show "$X ≈ Y ج.م" (or "$X — بدون سعر صرف" if no rate);
+                // EGP parties just show the EGP figure.
+                const amount = (side: 'deb' | 'cre') => {
+                  const onSide = side === 'deb' ? raw > 0 : raw < 0;
+                  if (!onSide) return '';
+                  const usdAbs = Math.abs(raw);
+                  if (!isUSD) return EGP(usdAbs);
+                  return egp == null
+                    ? `${USD(usdAbs)} — بدون سعر صرف`
+                    : `${USD(usdAbs)} ≈ ${EGP(Math.abs(egp))} ج.م`;
+                };
                 return (
                   <tr key={p.id} onClick={() => onOpenParty(p.id)} style={{ cursor: 'pointer' }}>
                     <td>
                       <b>{p.name}</b>
-                      {p.currency === 'USD' && <span className="pill" style={{ marginInlineStart: 6 }}>دولار</span>}
+                      {isUSD && <span className="pill" style={{ marginInlineStart: 6 }}>دولار{rate > 0 ? ` @ ${EGP(rate)}` : ''}</span>}
                       {partner && <span className="pill" style={{ marginInlineStart: 6, opacity: 0.75, fontSize: 10 }}>مدمج مع {partner.name}</span>}
                     </td>
                     <td className="muted">{ROLE_LABEL[p.role] ?? p.role}</td>
-                    <td className="num deb">{b > 0 ? money(b, p.currency) : ''}</td>
-                    <td className="num cre">{b < 0 ? money(-b, p.currency) : ''}</td>
+                    <td className="num deb">{amount('deb')}</td>
+                    <td className="num cre">{amount('cre')}</td>
                   </tr>
                 );
               })}
               {rows.length === 0 && <tr><td colSpan={4} className="empty">لا توجد أرصدة</td></tr>}
 
-              {Object.entries(totals).map(([cur, t]) => (
-                <tr key={cur} className="mf-total">
-                  <td colSpan={2}><b>الإجمالي{multiCur ? ` (${CUR_LABEL[cur] ?? cur})` : ''}</b></td>
-                  <td className="num deb"><b>{money(t.debit, cur as 'EGP' | 'USD')}</b></td>
-                  <td className="num cre"><b>{money(t.credit, cur as 'EGP' | 'USD')}</b></td>
-                </tr>
-              ))}
+              <tr className="mf-total">
+                <td colSpan={2}><b>الإجمالي بالمصري</b></td>
+                <td className="num deb"><b>{EGP(totals.debit)}</b></td>
+                <td className="num cre"><b>{EGP(totals.credit)}</b></td>
+              </tr>
             </tbody>
           </table>
         </div>
 
-        {Object.entries(totals).map(([cur, t]) => {
-          const net = t.debit - t.credit;
-          return (
-            <div key={cur} className="page-title num" style={{ marginTop: 8, textAlign: 'left' }}>
-              الصافي{multiCur ? ` (${CUR_LABEL[cur] ?? cur})` : ''}: {money(Math.abs(net), cur as 'EGP' | 'USD')} {net >= 0 ? 'عليهم' : 'لهم'}
-            </div>
-          );
-        })}
+        <div className="page-title num" style={{ marginTop: 8, textAlign: 'left' }}>
+          الصافي بالمصري: {EGP(Math.abs(net))} ج.م {net >= 0 ? 'عليهم' : 'لهم'}
+        </div>
       </div>
     </>
   );

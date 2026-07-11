@@ -330,7 +330,7 @@ function LedgerTab() {
                     </tr>
                     {open && (
                       <tr>
-                        <td colSpan={kind === 'all' ? 5 : 4} style={{ background: '#f0ddd0', borderInlineStart: '3px solid #b06a45', padding: '8px 16px' }}>
+                        <td colSpan={kind === 'all' ? 5 : 4} style={{ background: '#eef4fa', borderInlineStart: '3px solid var(--blue, #2c5a86)', padding: '8px 16px' }}>
                           <table style={{ width: '100%', color: 'var(--ink)' }}>
                             <thead><tr><th>الكمية</th><th>الصنف</th><th>السعر</th><th>الإجمالي</th></tr></thead>
                             <tbody>

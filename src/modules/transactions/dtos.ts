@@ -38,6 +38,7 @@ export interface Transaction {
   treasury?: { id: string; name: string } | null;
   invoiceId?: string | null; // serialized to the invoice's public uid when linked
   dealId?: string | null;
+  createdBy?: { name: string } | null; // the user who recorded this movement
 }
 
 export interface UpdateTransactionDto {

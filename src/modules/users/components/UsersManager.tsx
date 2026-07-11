@@ -208,15 +208,22 @@ function UserRow({ user, canDelete }: { user: User; canDelete: boolean }) {
     );
   };
 
+  // The primary (owner) account can only be edited by the primary user themselves —
+  // no other user (even an admin) can change its details, password, or delete it.
+  const locked = !!user.isPrimary && !me?.isPrimary;
+
   return (
     <div style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <b style={{ flex: 1 }}>
           {user.name}
+          {user.isPrimary && <span className="pill" style={{ background: 'var(--accent-soft)', color: 'var(--accent-d)' }}>المستخدم الأساسي</span>}
           {user.role === 'CUSTOMER' ? <span className="pill" style={{ background: 'var(--credit-bg)', color: 'var(--credit)' }}>عميل</span> : user.admin && <span className="pill">مدير</span>}
           {user.party && <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}> — {user.party.name}</span>}
         </b>
-        <button className="btn btn-ghost btn-sm" onClick={() => setOpen((o) => !o)}>{open ? 'إغلاق' : 'تعديل'}</button>
+        {locked
+          ? <span className="muted" style={{ fontSize: 12 }}>محمي — لا يمكن تعديله</span>
+          : <button className="btn btn-ghost btn-sm" onClick={() => setOpen((o) => !o)}>{open ? 'إغلاق' : 'تعديل'}</button>}
       </div>
       {open && (
         <div style={{ marginTop: 10, display: 'grid', gap: 10 }}>

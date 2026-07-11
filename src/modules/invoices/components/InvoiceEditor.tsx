@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { money, todayISO, QTY } from '@/lib/format';
+import { money, EGP, todayISO, QTY } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import { useNavigationGuard } from '@/lib/useNavigationGuard';
 import { fieldNavKeyDown } from '@/lib/field-nav';
@@ -90,6 +90,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
   const [treasuryId, setTreasuryId] = useState('');
   const [paid, setPaid] = useState(invoice ? String(invoice.paid || '') : '');
   const [note, setNote] = useState(invoice?.note ?? '');
+  const [exchangeRate, setExchangeRate] = useState(invoice?.exchangeRate ? String(invoice.exchangeRate) : '');
   const [commissionAmount, setCommissionAmount] = useState('');
   const [commissionPartyId, setCommissionPartyId] = useState('');
   const [lines, setLines] = useState<Line[]>(
@@ -122,6 +123,8 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
   const cur = isUSD ? 'USD' : 'EGP';
 
   const total = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.price) || 0), 0);
+  const rate = Number(exchangeRate) || 0;
+  const totalEgp = isUSD && rate > 0 ? total * rate : 0; // EGP equivalent of a USD invoice
   const setLine = (i: number, patch: Partial<Line>) =>
     setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
 
@@ -134,6 +137,9 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
     if (!warehouseId) return setError('اختر المخزن');
     if (items.length === 0) return setError('أضف صنفًا واحدًا على الأقل');
     if (Number(paid) > 0 && !treasuryId) return setError('اخترت مبلغ مدفوع — لازم تختار الخزنة اللي المبلغ خارج/داخل منها');
+    if (isUSD && !(rate > 0)) return setError('فاتورة دولارية — اكتب سعر صرف الدولار اليوم');
+
+    const usdRate = isUSD && rate > 0 ? { exchangeRate: rate } : {};
 
     if (isEdit) {
       updateInvoice.mutate(
@@ -144,6 +150,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
             paid: Number(paid) || 0,
             treasuryId: treasuryId || undefined,
             note: note || undefined,
+            ...usdRate,
             ...(kind === 'PURCHASE' && Number(commissionAmount) > 0 && commissionPartyId
               ? { commissionAmount: Number(commissionAmount), commissionPartyId }
               : {}),
@@ -159,6 +166,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
         {
           kind, no: no.trim() || undefined, date, partyId, warehouseId,
           items, paid: Number(paid) || 0, treasuryId: treasuryId || undefined, note: note || undefined,
+          ...usdRate,
           ...(kind === 'PURCHASE' && Number(commissionAmount) > 0
             ? { commissionAmount: Number(commissionAmount) }
             : {}),
@@ -227,9 +235,21 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated }: Props) {
         </div>
 
         {isUSD && (
-          <div style={{ padding: '6px 16px', background: 'var(--debit-bg)', borderRadius: 8, margin: '0 16px 8px', fontWeight: 700, fontSize: 13, color: 'var(--debit)' }}>
-            $ فاتورة دولارية — جميع الأسعار بالدولار
-          </div>
+          <>
+            <div style={{ padding: '6px 16px', background: 'var(--debit-bg)', borderRadius: 8, margin: '0 16px 8px', fontWeight: 700, fontSize: 13, color: 'var(--debit)' }}>
+              $ فاتورة دولارية — جميع الأسعار بالدولار
+            </div>
+            <div className="form-grid">
+              <Field label="سعر صرف الدولار اليوم (ج.م لكل $)">
+                <MoneyInput value={exchangeRate} onChange={setExchangeRate} placeholder="مثلاً 50" />
+              </Field>
+              {rate > 0 && (
+                <Field label="الإجمالي بالمصري بعد التحويل">
+                  <div className="num" style={{ fontWeight: 800, padding: '10px 0' }}>{money(total, 'USD')} = {EGP(totalEgp)} ج.م</div>
+                </Field>
+              )}
+            </div>
+          </>
         )}
         <div className="tbl-wrap combo-table invoice-items">
           <table>

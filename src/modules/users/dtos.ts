@@ -3,6 +3,7 @@ export interface User {
   username?: string | null;
   name: string;
   admin: boolean;
+  isPrimary?: boolean;
   views: string[];
   ledgerPartyIds: string[];
   treasuryIds: string[];

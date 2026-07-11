@@ -18,6 +18,7 @@ export interface AuthUser {
   id: string;
   name: string;
   admin: boolean;
+  isPrimary?: boolean;
   views: string[];
   ledgerPartyIds: string[];   // empty = all; otherwise restricted to these party UIDs
   treasuryIds: string[];      // empty = all; otherwise restricted to these treasury UIDs

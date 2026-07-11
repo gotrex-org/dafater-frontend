@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { money, fmtDate } from '@/lib/format';
+import { money, EGP, fmtDate } from '@/lib/format';
 import { downloadElementAsPdf } from '@/lib/pdf';
 import { PageTitle, Spinner, Field, MoneyInput } from '@/components/common';
 import { useAuth } from '@/lib/auth';
@@ -130,6 +130,11 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
         )}
 
         <div className="page-title num" style={{ marginTop: 12, textAlign: 'left' }}>إجمالي الفاتورة: {money(total, cur)}</div>
+        {cur === 'USD' && !!invoice.exchangeRate && (
+          <div className="num" style={{ textAlign: 'left', fontWeight: 700, color: 'var(--debit)' }}>
+            بالمصري (سعر {EGP(invoice.exchangeRate)}): {EGP(total * invoice.exchangeRate)} ج.م
+          </div>
+        )}
 
         <div className="mf-grow" />
         <div style={{ borderTop: '1px solid var(--line)', marginTop: 8 }} />

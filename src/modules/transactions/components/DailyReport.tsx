@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth';
 import { PageTitle, DataTable, SearchInput, type Column } from '@/components/common';
 import { useInvoices } from '../../invoices/hooks';
 import { RecordOpener } from '../../records/RecordOpener';
+import { colorFor, rowTint } from '@/lib/userColor';
 import { useTransactions, useDeleteTransaction } from '../hooks';
 import { EditTransactionModal } from './EditTransactionModal';
 import type { Transaction } from '../dtos';
@@ -134,6 +135,7 @@ export function DailyReport() {
 
   const cols: Column<Transaction>[] = [
     { header: 'النوع', cell: (r) => r.type },
+    { header: 'المستخدم', cell: (r) => r.createdBy?.name ? <b style={{ color: colorFor(r.createdBy.name) }}>{r.createdBy.name}</b> : <span className="muted">—</span> },
     { header: 'الطرف', cell: (r) => r.party?.name ?? r.treasury?.name ?? '—', className: 'muted' },
     { header: 'البيان', cell: (r) => r.note ?? '', className: 'muted' },
     { header: 'عليه', cell: (r) => (r.debit ? EGP(r.debit) : ''), className: 'num deb' },
@@ -168,6 +170,7 @@ export function DailyReport() {
         columns={cols}
         rows={data?.data ?? []}
         rowKey={(r) => r.id}
+        rowStyle={(r) => ({ background: rowTint(r.createdBy?.name) })}
         onRowClick={setSelected}
         loading={isLoading}
         emptyText="لا توجد حركات في هذه الفترة"

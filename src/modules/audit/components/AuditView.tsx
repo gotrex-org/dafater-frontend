@@ -7,11 +7,8 @@ import { useAuth } from '@/lib/auth';
 import { useUsers } from '../../users/hooks';
 import { RecordOpener, canOpenRecord } from '../../records/RecordOpener';
 import { useAudit, useUndoAudit } from '../hooks';
+import { colorFor, rowTint } from '@/lib/userColor';
 import type { AuditLog } from '../dtos';
-
-const COLORS = ['#0f6e5c', '#b23a2e', '#2c5a86', '#b98a2e', '#7a3e9d', '#0b7285', '#a83232'];
-const colorFor = (name: string) =>
-  COLORS[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
 
 const FIELD_LABELS: Record<string, string> = {
   date: 'التاريخ', paid: 'المدفوع', note: 'البيان / ملاحظة',
@@ -301,10 +298,9 @@ export function AuditView() {
         rows={data?.data ?? []}
         rowKey={(r) => r.id}
         onRowClick={setSelected}
-        // Colour the whole row per user (a clearly-visible wash of that user's
-        // colour), so each user's activity is instantly distinguishable at a glance —
-        // not just the coloured name.
-        rowStyle={(r) => ({ background: colorFor(r.userName) + '38' })}
+        // Colour the whole row per user (a soft, light wash of their colour) so each
+        // user's activity is instantly distinguishable at a glance.
+        rowStyle={(r) => ({ background: rowTint(r.userName) })}
         loading={isLoading}
         emptyText="لا يوجد نشاط بعد"
         meta={data?.meta}

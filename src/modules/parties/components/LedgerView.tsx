@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { money, EGP, fmtDate, todayISO } from '@/lib/format';
 import { downloadElementAsPdf } from '@/lib/pdf';
+import { replaceAmountInNote } from '@/lib/noteAmount';
 import { PageTitle, DataTable, SegmentedControl, Spinner, Combobox, Field, MoneyInput, type Column } from '@/components/common';
 import { useAuth } from '@/lib/auth';
 import { InvoiceDetailById } from '../../invoices/components/InvoiceDetail';
@@ -116,6 +117,19 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const [editAmount, setEditAmount] = useState('');
   const [editNote, setEditNote] = useState('');
   const [editErr, setEditErr] = useState('');
+  // keep the amount inside البيان in sync while editing (unless the note is hand-edited)
+  const noteTouched = useRef(false);
+  const syncedAmt = useRef(0);
+  const onEditAmountChange = (v: string) => {
+    setEditAmount(v);
+    if (noteTouched.current) return;
+    const newAmt = Number(v) || 0;
+    setEditNote((prev) => {
+      const next = replaceAmountInNote(prev, syncedAmt.current, newAmt);
+      if (next !== prev) syncedAmt.current = newAmt;
+      return next;
+    });
+  };
   const updateTxn = useUpdateTransaction();
   const deleteTxn = useDeleteTransaction();
   const [invoiceUid, setInvoiceUid] = useState<string | null>(null);
@@ -149,6 +163,11 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
     const db = kind === 'invoices' ? (b.manifestDate ?? b.date) : b.date;
     return new Date(db).getTime() - new Date(da).getTime();
   });
+
+  // rows with an expandable item breakdown, and a single show-all / hide-all toggle
+  const detailRowIds = visibleRows.filter((r) => r.invoiceItems?.length).map((r) => r.id);
+  const allExpanded = detailRowIds.length > 0 && detailRowIds.every((id) => expanded.has(id));
+  const toggleAllDetails = () => setExpanded(allExpanded ? new Set() : new Set(detailRowIds));
 
   return (
     <>
@@ -227,6 +246,11 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
         ).map(([k, label]) => (
           <button key={k} className={`btn btn-sm ${kind === k ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setKind(k)}>{label}</button>
         ))}
+        {detailRowIds.length > 0 && (
+          <button className="btn btn-ghost btn-sm sp" onClick={toggleAllDetails}>
+            {allExpanded ? '▾ إخفاء كل التفاصيل' : '▸ إظهار كل التفاصيل'}
+          </button>
+        )}
       </div>
 
       {isLoading || !data ? <Spinner /> : (
@@ -275,6 +299,8 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                           setEditAmount(String(r.debit || r.credit));
                           setEditNote(r.note ?? '');
                           setEditErr('');
+                          noteTouched.current = false;
+                          syncedAmt.current = Number(r.debit || r.credit) || 0;
                         }}
                       >
                         <td>
@@ -302,7 +328,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                       </tr>
                       {open && (
                         <tr>
-                          <td colSpan={6} style={{ background: '#f0ddd0', borderInlineStart: '3px solid #b06a45', padding: '8px 16px' }}>
+                          <td colSpan={6} style={{ background: '#eef4fa', borderInlineStart: '3px solid var(--blue, #2c5a86)', padding: '8px 16px' }}>
                             <table style={{ width: '100%', color: 'var(--ink)' }}>
                               <thead><tr><th>الكمية</th><th>الصنف</th><th>السعر</th><th>الإجمالي</th></tr></thead>
                               <tbody>
@@ -375,10 +401,10 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                     <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
                   </Field>
                   <Field label="المبلغ">
-                    <MoneyInput value={editAmount} onChange={setEditAmount} />
+                    <MoneyInput value={editAmount} onChange={onEditAmountChange} />
                   </Field>
                   <Field label="البيان" full>
-                    <input value={editNote} onChange={(e) => setEditNote(e.target.value)} placeholder="البيان…" />
+                    <input value={editNote} onChange={(e) => { noteTouched.current = true; setEditNote(e.target.value); }} placeholder="البيان…" />
                   </Field>
                 </div>
                 {editErr && <div className="err-text" style={{ marginTop: 8 }}>{editErr}</div>}
@@ -428,15 +454,18 @@ export function LedgerView() {
         <nav className="tabs" style={{ marginBottom: 16 }}>
           <button className={tab === 'ledger' ? 'active' : ''} onClick={() => setTab('ledger')}
             style={{ background: 'none', border: 'none', cursor: 'pointer' }}>كشف الحساب</button>
-          <button className={tab === 'mizan' ? 'active' : ''} onClick={() => setTab('mizan')}
-            style={{ background: 'none', border: 'none', cursor: 'pointer' }}>ميزان الحسابات</button>
+          {/* ميزان الحسابات — visible only to the primary (owner) account */}
+          {user?.isPrimary && (
+            <button className={tab === 'mizan' ? 'active' : ''} onClick={() => setTab('mizan')}
+              style={{ background: 'none', border: 'none', cursor: 'pointer' }}>ميزان الحسابات</button>
+          )}
           <button className={tab === 'registry' ? 'active' : ''} onClick={() => setTab('registry')}
             style={{ background: 'none', border: 'none', cursor: 'pointer' }}>سجل العملاء والموردين</button>
         </nav>
       )}
 
       {(tab === 'ledger' || isRestricted) && <LedgerTab />}
-      {tab === 'mizan' && !isRestricted && (
+      {tab === 'mizan' && !isRestricted && user?.isPrimary && (
         mizanParty
           ? <LedgerDetailById uid={mizanParty} onBack={() => setMizanParty(null)} />
           : <TrialBalance onOpenParty={setMizanParty} />

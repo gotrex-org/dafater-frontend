@@ -19,6 +19,7 @@ export interface Party {
   hidden: boolean;
   balance?: number;
   lastActivity?: string | null;
+  avgExchangeRate?: number; // weighted-avg EGP-per-USD for a USD party (0 if none)
   linkedParty?: LinkedPartyRef | null;
   linkedFrom?: LinkedPartyRef | null;
 }

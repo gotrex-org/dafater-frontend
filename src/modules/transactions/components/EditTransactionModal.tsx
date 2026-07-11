@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Field, MoneyInput } from '@/components/common';
+import { replaceAmountInNote } from '@/lib/noteAmount';
 import { useUpdateTransaction } from '../hooks';
 
 export interface EditableTransaction {
@@ -25,6 +26,21 @@ export function EditTransactionModal({ txn, onClose }: { txn: EditableTransactio
   const [amount, setAmount] = useState(String(primaryAmt));
   const [note, setNote] = useState(txn.note ?? '');
   const [error, setError] = useState('');
+  // Keep the amount embedded in the البيان in sync as the amount is edited — unless the
+  // user manually edits the البيان, in which case we stop touching their text.
+  const noteTouched = useRef(false);
+  const syncedAmt = useRef(primaryAmt);
+
+  const onAmountChange = (v: string) => {
+    setAmount(v);
+    if (noteTouched.current) return;
+    const newAmt = Number(v) || 0;
+    setNote((prev) => {
+      const next = replaceAmountInNote(prev, syncedAmt.current, newAmt);
+      if (next !== prev) syncedAmt.current = newAmt;
+      return next;
+    });
+  };
 
   const save = () => {
     setError('');
@@ -46,10 +62,10 @@ export function EditTransactionModal({ txn, onClose }: { txn: EditableTransactio
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
           <Field label="المبلغ">
-            <MoneyInput value={amount} onChange={setAmount} placeholder="0.00" />
+            <MoneyInput value={amount} onChange={onAmountChange} placeholder="0.00" />
           </Field>
           <Field label="البيان">
-            <input value={note} onChange={(e) => setNote(e.target.value)} />
+            <input value={note} onChange={(e) => { noteTouched.current = true; setNote(e.target.value); }} />
           </Field>
           {error && <div className="err-text">{error}</div>}
         </div>
