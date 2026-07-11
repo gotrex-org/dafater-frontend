@@ -26,6 +26,15 @@ type SortKey = 'name' | 'balance' | 'activity';
 type LedgerKind = 'all' | 'invoices' | 'collect' | 'commission' | 'withdraw';
 type MainTab = 'ledger' | 'mizan' | 'registry';
 
+// USD accounts show the dollar figure as-is; the EGP equivalent (at the party's
+// weighted-average rate) is shown in parentheses beside it. EGP accounts show plainly.
+function amtWithEgp(amount: number | undefined | null, currency?: string | null, rate?: number) {
+  if (currency === 'USD' && rate && rate > 0) {
+    return `${money(amount, 'USD')} (${EGP((Number(amount) || 0) * rate)} ج.م)`;
+  }
+  return money(amount, currency as 'EGP' | 'USD' | null | undefined);
+}
+
 // ─── Ledger tab ───────────────────────────────────────────────────────────────
 
 function LedgerTab() {
@@ -63,7 +72,7 @@ function LedgerTab() {
   const columns: Column<Party>[] = [
     { header: 'الاسم', cell: (p) => <span><b>{p.name}</b> {p.currency === 'USD' && <span className="pill">دولار</span>}</span> },
     { header: 'الهاتف', cell: (p) => p.phone || '—', className: 'muted' },
-    { header: 'الرصيد', cell: (p) => <span className={(p.balance ?? 0) >= 0 ? 'deb' : 'cre'}>{money(p.balance, p.currency)}</span>, className: 'num' },
+    { header: 'الرصيد', cell: (p) => <span className={(p.balance ?? 0) >= 0 ? 'deb' : 'cre'}>{amtWithEgp(p.balance, p.currency, p.avgExchangeRate)}</span>, className: 'num' },
   ];
 
   return (
@@ -265,7 +274,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
             )}
           </div>
           <div className="muted" style={{ margin: '8px 4px' }}>
-            رصيد افتتاحي: <span className="num">{money(data.opening, cur)}</span>
+            رصيد افتتاحي: <span className="num">{amtWithEgp(data.opening, cur, party.avgExchangeRate)}</span>
             {(from || to) && <span> · الفترة: {from ? fmtDate(from) : '…'} ← {to ? fmtDate(to) : '…'}</span>}
           </div>
           <div className="tbl-wrap mf-grow">
@@ -312,7 +321,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                           ) : fmtDate(r.date)}
                         </td>
                         <td>{r.type}</td>
-                        <td className="muted">
+                        <td style={{ color: 'var(--accent-d)', fontWeight: 600 }}>
                           {data.linkedParty && r.partyRole && (
                             <span className="pill" style={{ fontSize: 10, marginInlineEnd: 4, opacity: 0.75 }}>
                               {r.partyRole === 'SUPPLIER' ? 'مورد' : 'عميل'}
@@ -347,7 +356,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
               </tbody>
             </table>
           </div>
-          <div className="page-title num" style={{ marginTop: 14, textAlign: 'left' }}>الرصيد الجاري: {money(data.balance, cur)}</div>
+          <div className="page-title num" style={{ marginTop: 14, textAlign: 'left' }}>الرصيد الجاري: {amtWithEgp(data.balance, cur, party.avgExchangeRate)}</div>
         </div>
       )}
 

@@ -70,6 +70,7 @@ export function InventoryView() {
   const createWarehouse = useCreateWarehouse();
   const [whId, setWhId] = useState('');
   const [q, setQ] = useState('');
+  const [sort, setSort] = useState<'name' | 'qtyDesc' | 'qtyAsc' | 'valueDesc' | 'costDesc'>('name');
   const [addingWh, setAddingWh] = useState(false);
   const [whName, setWhName] = useState('');
   const [whErr, setWhErr] = useState('');
@@ -86,15 +87,23 @@ export function InventoryView() {
   const [pageSize, setPageSize] = useState(20);
 
   useEffect(() => { if (warehouses?.data[0] && !whId) setWhId(warehouses.data[0].id); }, [warehouses, whId]);
-  useEffect(() => { setPage(1); }, [q, whId, pageSize]);
+  useEffect(() => { setPage(1); }, [q, whId, pageSize, sort]);
 
   const { data: rows = [], isLoading } = useWarehouseStock(whId);
 
   const filtered = useMemo(() =>
     rows
       .filter((r) => r.name.includes(q) && (q.trim() ? true : r.qty !== 0))
-      .sort((a, b) => a.name.localeCompare(b.name, 'ar')),
-  [rows, q]);
+      .sort((a, b) => {
+        switch (sort) {
+          case 'qtyDesc':   return b.qty - a.qty;
+          case 'qtyAsc':    return a.qty - b.qty;
+          case 'valueDesc': return b.value - a.value;
+          case 'costDesc':  return (b.cost || 0) - (a.cost || 0);
+          default:          return a.name.localeCompare(b.name, 'ar');
+        }
+      }),
+  [rows, q, sort]);
   const totalValue = filtered.reduce((s, r) => s + r.value, 0);
 
   const total = filtered.length;
@@ -150,6 +159,13 @@ export function InventoryView() {
             <div style={{ minWidth: 220 }}>
               <Combobox options={rows.map((r) => ({ id: r.productId, name: r.name }))} value="" onChange={(id) => { const r = rows.find((x) => x.productId === id); if (r) setProd(r); }} placeholder="اكتب واختر صنف…" />
             </div>
+            <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} style={{ padding: '10px 12px', border: '1.5px solid var(--line)', borderRadius: 10 }} title="ترتيب العرض">
+              <option value="name">ترتيب: أبجدي</option>
+              <option value="qtyDesc">ترتيب: الأكثر رصيدًا</option>
+              <option value="qtyAsc">ترتيب: الأقل رصيدًا</option>
+              <option value="valueDesc">ترتيب: الأعلى قيمة</option>
+              <option value="costDesc">ترتيب: الأعلى سعرًا</option>
+            </select>
             {canAddWarehouse && !addingWh && (
               <button className="btn btn-ghost btn-sm" onClick={() => setAddingWh(true)}>+ مخزن جديد</button>
             )}

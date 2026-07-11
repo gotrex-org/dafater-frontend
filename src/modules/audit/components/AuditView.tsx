@@ -74,6 +74,11 @@ function formatScalar(v: unknown): string {
   if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
     try { return new Date(v).toLocaleDateString('ar-EG'); } catch { return v; }
   }
+  // Never let an object/array reach a React child as [object Object] or throw — render
+  // it as compact JSON. Primitives fall through to String().
+  if (typeof v === 'object') {
+    try { return JSON.stringify(v); } catch { return '—'; }
+  }
   return String(v);
 }
 
@@ -248,10 +253,10 @@ function AuditDetail({ log, onBack, onOpen }: { log: AuditLog; onBack: () => voi
                     {FIELD_LABELS[field] ?? field}
                   </span>
                   <span style={{ color: 'var(--debit)', textDecoration: 'line-through', fontSize: 13 }}>
-                    {entry.from != null ? String(entry.from) : '(فارغ)'}
+                    {formatScalar(entry.from)}
                   </span>
                   <span style={{ color: 'var(--credit)', fontWeight: 700, fontSize: 13 }}>
-                    ← {entry.to != null ? String(entry.to) : '(فارغ)'}
+                    ← {formatScalar(entry.to)}
                   </span>
                 </div>
               ))}
