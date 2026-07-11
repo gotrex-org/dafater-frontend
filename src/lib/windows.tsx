@@ -97,7 +97,7 @@ export function WindowsProvider({ children }: { children: ReactNode }) {
             <div className="win-chrome">
               <span className="win-title">{w.title}</span>
               <span style={{ display: 'flex', gap: 6 }}>
-                <button className="btn btn-ghost btn-sm" title="تصغير" onClick={() => setEditorFg(null)}>🗕 تصغير</button>
+                <button className="btn btn-ghost btn-sm" title="تصغير" onClick={() => setEditorFg(null)}>−</button>
                 <button className="btn btn-ghost btn-sm" title="إغلاق النافذة" onClick={() => close(w.id)}>✕</button>
               </span>
             </div>
@@ -146,7 +146,7 @@ export function SectionOutlet() {
       {sections.map((s) => (
         <div key={s.id} style={{ display: s.id === activeSectionId ? 'block' : 'none' }}>
           <div className="toolbar" style={{ justifyContent: 'flex-end', marginBottom: 4 }}>
-            <button className="btn btn-ghost btn-sm" title="تصغير القسم — يفضل مفتوح في الشريط السفلي" onClick={() => minimizeSection(s.id)}>🗕 تصغير</button>
+            <button className="btn btn-ghost btn-sm" title="تصغير القسم — يفضل مفتوح في الشريط السفلي" onClick={() => minimizeSection(s.id)}>−</button>
           </div>
           <WindowedContext.Provider value={true}>{s.node}</WindowedContext.Provider>
         </div>
