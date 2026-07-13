@@ -20,9 +20,9 @@ import { CommissionPicker } from './CommissionPicker';
 import type { Invoice, InvoiceKind } from '../dtos';
 import type { InvoiceDraft } from '../draftTypes';
 
-interface Line { _key: number; productId: string; qty: string; price: string; }
+interface Line { _key: number; productId: string; qty: string; price: string; freight: string; commission: string; }
 let _nextKey = 0;
-const blankLine = (): Line => ({ _key: _nextKey++, productId: '', qty: '', price: '' });
+const blankLine = (): Line => ({ _key: _nextKey++, productId: '', qty: '', price: '', freight: '', commission: '' });
 let _draftSeq = 0;
 const newDraftId = () => `draft_${++_draftSeq}_${Date.now()}`;
 
@@ -108,9 +108,9 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   const [commissionPartyId, setCommissionPartyId] = useState(d?.commissionPartyId ?? '');
   const [lines, setLines] = useState<Line[]>(
     d?.lines?.length
-      ? d.lines.map((l) => ({ _key: _nextKey++, productId: l.productId, qty: l.qty, price: l.price }))
+      ? d.lines.map((l) => ({ _key: _nextKey++, productId: l.productId, qty: l.qty, price: l.price, freight: '', commission: '' }))
       : invoice?.items.length
-        ? invoice.items.map((it) => ({ _key: _nextKey++, productId: it.productId, qty: String(it.qty), price: String(it.price) }))
+        ? invoice.items.map((it) => ({ _key: _nextKey++, productId: it.productId, qty: String(it.qty), price: String(it.price), freight: it.freight ? String(it.freight) : '', commission: it.commission ? String(it.commission) : '' }))
         : [blankLine()],
   );
   // A restored draft already carries its lines — don't re-inject pinned defaults over them.
@@ -123,7 +123,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   useEffect(() => {
     if (prefilled || !products) return;
     const pinned = products.data.filter((p) => (kind === 'SALE' ? p.pinSale : p.pinPurchase));
-    if (pinned.length) setLines([...pinned.map((p) => ({ _key: _nextKey++, productId: p.id, qty: '', price: '' })), blankLine()]);
+    if (pinned.length) setLines([...pinned.map((p) => ({ _key: _nextKey++, productId: p.id, qty: '', price: '', freight: '', commission: '' })), blankLine()]);
     setPrefilled(true);
   }, [products, prefilled, kind]);
 
@@ -171,7 +171,10 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
     setError('');
     const items = lines
       .filter((l) => l.productId && Number(l.qty) > 0)
-      .map((l) => ({ productId: l.productId, qty: Number(l.qty), price: Number(l.price) || 0 }));
+      .map((l) => ({
+        productId: l.productId, qty: Number(l.qty), price: Number(l.price) || 0,
+        ...(kind === 'PURCHASE' ? { freight: Number(l.freight) || 0, commission: Number(l.commission) || 0 } : {}),
+      }));
     if (!partyId) return setError('اختر الطرف');
     if (!warehouseId) return setError('اختر المخزن');
     if (items.length === 0) return setError('أضف صنفًا واحدًا على الأقل');
@@ -311,7 +314,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
         )}
         <div className="tbl-wrap combo-table invoice-items">
           <table>
-            <thead><tr><th>الكمية</th><th>الصنف</th><th>السعر {isUSD ? '($)' : '(ج.م)'}</th><th>الإجمالي</th><th></th></tr></thead>
+            <thead><tr><th>الكمية</th><th>الصنف</th><th>السعر {isUSD ? '($)' : '(ج.م)'}</th>{kind === 'PURCHASE' && <><th>ناولون</th><th>عمولة</th><th>صافي السعر</th></>}<th>الإجمالي</th><th></th></tr></thead>
             <tbody>
               {lines.map((l, i) => {
                 const prod = l.productId ? products?.data.find((p) => p.id === l.productId) : undefined;
@@ -348,6 +351,17 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
                         </div>
                       )}
                     </td>
+                    {kind === 'PURCHASE' && (
+                      <>
+                        <td><MoneyInput value={l.freight} onChange={(v) => setLine(i, { freight: v })} placeholder="0" style={{ width: 80 }} /></td>
+                        <td><MoneyInput value={l.commission} onChange={(v) => setLine(i, { commission: v })} placeholder="0" style={{ width: 80 }} /></td>
+                        <td className="num" title="صافي سعر الوحدة عليك = السعر + (الناولون + العمولة) ÷ الكمية">
+                          {Number(l.qty) > 0
+                            ? money(Number(l.price) + (Number(l.freight) + Number(l.commission)) / Number(l.qty), cur)
+                            : money(Number(l.price), cur)}
+                        </td>
+                      </>
+                    )}
                     <td className="num">{money(Number(l.qty) * Number(l.price), cur)}</td>
                     <td style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                       {prod && (

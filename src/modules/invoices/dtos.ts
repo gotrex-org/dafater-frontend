@@ -9,6 +9,8 @@ export interface InvoiceItem {
   productId: string;
   qty: number;
   price: number;
+  freight?: number;
+  commission?: number;
   product?: Product;
 }
 
@@ -34,6 +36,8 @@ export interface CreateInvoiceItemDto {
   productId: string;
   qty: number;
   price: number;
+  freight?: number;
+  commission?: number;
 }
 
 export interface CreateInvoiceDto {
