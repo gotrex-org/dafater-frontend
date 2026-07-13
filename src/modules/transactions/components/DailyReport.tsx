@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { todayISO, EGP, fmtDate } from '@/lib/format';
 import { useTableState } from '@/lib/useTableState';
 import { useAuth } from '@/lib/auth';
-import { PageTitle, DataTable, SearchInput, type Column } from '@/components/common';
+import { PageTitle, DataTable, SearchInput, SegmentedControl, type Column } from '@/components/common';
+import { ReportsView } from '../../reports/components/ReportsView';
 import { useInvoices } from '../../invoices/hooks';
 import { RecordOpener } from '../../records/RecordOpener';
 import { colorFor, rowTint } from '@/lib/userColor';
@@ -97,7 +98,9 @@ function InventorySummary({ from, to }: { from: string; to: string }) {
 }
 
 export function DailyReport() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
+  const isPrimary = !!user?.isPrimary;
+  const [tab, setTab] = useState<'today' | 'reports'>('today');
   const today = todayISO();
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
@@ -110,6 +113,27 @@ export function DailyReport() {
   const deleteTxn = useDeleteTransaction();
 
   if (target) return <RecordOpener entity={target.entity} uid={target.uid} onClose={() => setTarget(null)} />;
+
+  // Owner-only reports tab, tucked inside تقرير اليوم to keep the top nav short.
+  const tabBar = isPrimary ? (
+    <div className="toolbar" style={{ marginBottom: 4 }}>
+      <SegmentedControl
+        value={tab}
+        onChange={(v) => setTab(v as 'today' | 'reports')}
+        options={[{ value: 'today', label: 'حركات اليوم' }, { value: 'reports', label: 'التقارير' }]}
+      />
+    </div>
+  ) : null;
+
+  if (isPrimary && tab === 'reports') {
+    return (
+      <>
+        <PageTitle title="تقرير اليوم" />
+        {tabBar}
+        <ReportsView embedded />
+      </>
+    );
+  }
 
   const handleDelete = (txn: Transaction, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -157,6 +181,7 @@ export function DailyReport() {
     <>
       {editing && <EditTransactionModal txn={editing} onClose={() => setEditing(null)} />}
       <PageTitle title="تقرير الحركات" subtitle="الحركات في الفترة المحددة — يمكن البحث أو تحديد نطاق تاريخ" />
+      {tabBar}
       <div className="toolbar" style={{ flexWrap: 'wrap' }}>
         <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="بحث بالنوع أو البيان أو الطرف…" />
         <span className="muted" style={{ fontSize: 12 }}>من</span>

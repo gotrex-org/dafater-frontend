@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { CustomerPortal } from '@/modules/portal/CustomerPortal';
@@ -8,6 +8,7 @@ import { UnsavedProvider } from '@/lib/unsaved';
 import { WindowsProvider, SectionOutlet, useWindows } from '@/lib/windows';
 import { SECTIONS, sectionByHref, type SectionDef } from '@/lib/sections';
 import { useReminderDueCount } from '@/modules/reminders/hooks';
+import { RemindersView } from '@/modules/reminders/components/RemindersView';
 
 // Sections render as normal full pages inside <SectionOutlet/>, but each is a mounted
 // window with a "🗕 تصغير" button — minimizing sends it to the bottom dock with its state
@@ -18,6 +19,7 @@ function Desktop({ userName, isPrimary, onLogout }: { userName: string; isPrimar
   const pathname = usePathname();
   const router = useRouter();
   const { data: due } = useReminderDueCount(isPrimary);
+  const [remindersOpen, setRemindersOpen] = useState(false);
 
   const openSection = (s: SectionDef) =>
     activateSection({ id: s.view, title: s.label, href: s.href, node: <s.Component /> });
@@ -31,7 +33,6 @@ function Desktop({ userName, isPrimary, onLogout }: { userName: string; isPrimar
   }, [pathname]);
 
   const navSections = SECTIONS.filter((s) => s.nav && (s.primaryOnly ? isPrimary : can(s.view)));
-  const remindersSection = SECTIONS.find((s) => s.view === 'reminders');
   const dueCount = due?.count ?? 0;
 
   return (
@@ -39,6 +40,15 @@ function Desktop({ userName, isPrimary, onLogout }: { userName: string; isPrimar
       <header className="appbar">
         <span className="logo">دفا<b>تر</b></span>
         <div className="userbox">
+          {isPrimary && (
+            <button
+              className="rem-bell"
+              title={dueCount > 0 ? `${dueCount} تذكير قريب/مستحق` : 'مفيش تذكيرات قريبة'}
+              onClick={() => setRemindersOpen(true)}
+            >
+              <span className="rem-bell-dot" data-due={dueCount > 0}>{dueCount > 0 ? dueCount : '!'}</span>
+            </button>
+          )}
           <span>أهلاً بك <b>{userName}</b></span>
           <button className="logout" onClick={onLogout}>خروج</button>
         </div>
@@ -55,15 +65,16 @@ function Desktop({ userName, isPrimary, onLogout }: { userName: string; isPrimar
           </button>
         ))}
       </nav>
-      {isPrimary && dueCount > 0 && remindersSection && (
-        <div
-          onClick={() => { openSection(remindersSection); router.push(remindersSection.href); }}
-          style={{ cursor: 'pointer', background: 'var(--debit)', color: '#fff', padding: '8px 16px', fontWeight: 700, fontSize: 14, textAlign: 'center' }}
-        >
-          🔔 عندك {dueCount} تذكير مستحق — اضغط للعرض
+      <main className="page"><SectionOutlet /></main>
+
+      {remindersOpen && (
+        <div className="modal-overlay" onClick={() => setRemindersOpen(false)}>
+          <div className="modal" style={{ maxWidth: 720, width: '94%', maxHeight: '86vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head"><b>التذكيرات</b><button className="btn btn-ghost btn-sm" onClick={() => setRemindersOpen(false)}>×</button></div>
+            <div className="modal-body"><RemindersView embedded /></div>
+          </div>
         </div>
       )}
-      <main className="page"><SectionOutlet /></main>
     </>
   );
 }

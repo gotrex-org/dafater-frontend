@@ -6,8 +6,6 @@ import { useAuth } from '@/lib/auth';
 import { PageTitle, StatsGrid, StatCard, Spinner } from '@/components/common';
 import { useDashboard } from '../hooks';
 import { useReportSummary, useTopProducts, useInactiveClients } from '../../reports/hooks';
-import { useReminders } from '../../reminders/hooks';
-import { REMINDER_KIND_LABEL } from '../../reminders/dtos';
 
 // A statistics-style panel: a titled card holding stacked rows.
 function Panel({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
@@ -64,30 +62,6 @@ function ReportsPanel({ go }: { go: () => void }) {
   );
 }
 
-// ── Reminders panel (only for the owner) ──
-function RemindersPanel({ go }: { go: () => void }) {
-  const { data: reminders, isLoading } = useReminders();
-  const due = (reminders ?? []).filter((r) => r.due);
-  return (
-    <Panel title="التذكيرات" action={<LinkBtn onClick={go}>عرض الكل ←</LinkBtn>}>
-      {isLoading ? <Spinner /> : due.length === 0 ? (
-        <div className="muted" style={{ fontSize: 13, padding: '4px 2px' }}>مفيش تذكيرات مستحقة 👍</div>
-      ) : (
-        due.map((r) => (
-          <StatRow
-            key={r.id}
-            label={r.title}
-            sub={`${REMINDER_KIND_LABEL[r.kind]} · ${(r.daysUntil ?? 0) > 0 ? `باقي ${r.daysUntil} يوم` : r.daysUntil === 0 ? 'اليوم' : `متأخّر ${-(r.daysUntil ?? 0)} يوم`}`}
-            value={r.amount > 0 ? `${EGP(r.amount)} ج.م` : ''}
-            tone={(r.daysUntil ?? 0) > 0 ? 'var(--gold)' : 'var(--debit)'}
-            onClick={go}
-          />
-        ))
-      )}
-    </Panel>
-  );
-}
-
 export function DashboardView() {
   const { user, can } = useAuth();
   const router = useRouter();
@@ -97,7 +71,6 @@ export function DashboardView() {
   if (error) return <div className="empty">خطأ: {(error as Error).message}</div>;
   if (isLoading || !data) return <Spinner />;
 
-  const canReports = can('reports');
   const isPrimary = !!user?.isPrimary;
 
   return (
@@ -129,8 +102,7 @@ export function DashboardView() {
           ))}
         </Panel>
 
-        {canReports && <ReportsPanel go={() => router.push('/reports')} />}
-        {isPrimary && <RemindersPanel go={() => router.push('/reminders')} />}
+        {isPrimary && <ReportsPanel go={() => router.push('/today')} />}
       </div>
     </>
   );

@@ -16,8 +16,6 @@ import { AuditView } from '@/modules/audit/components/AuditView';
 import { DailyReport } from '@/modules/transactions/components/DailyReport';
 import { ForexView } from '@/modules/forex/components/ForexView';
 import { OrdersView } from '@/modules/orders/components/OrdersView';
-import { ReportsView } from '@/modules/reports/components/ReportsView';
-import { RemindersView } from '@/modules/reminders/components/RemindersView';
 
 // Every app section. `nav` marks the ones shown in the top bar (in this order); `view` is
 // the permission key. `primaryOnly` restricts to the owner account. Sections stay mounted
@@ -45,8 +43,6 @@ export const SECTIONS: SectionDef[] = [
   { view: 'settings',     href: '/settings',     label: 'الإعدادات',         Component: SettingsView,   nav: true },
   { view: 'audit',        href: '/audit',        label: 'سجل النشاط',        Component: AuditView,      nav: true },
   { view: 'today',        href: '/today',        label: 'تقرير اليوم',       Component: DailyReport,    nav: true },
-  { view: 'reports',      href: '/reports',      label: 'التقارير',          Component: ReportsView,    nav: true },
-  { view: 'reminders',    href: '/reminders',    label: 'التذكيرات',         Component: RemindersView,  nav: true, primaryOnly: true },
   { view: 'forex',        href: '/forex',        label: 'الدولار',           Component: ForexView },
   { view: 'orders',       href: '/orders',       label: 'الطلبيات',          Component: OrdersView },
 ];

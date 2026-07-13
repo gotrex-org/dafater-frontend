@@ -19,7 +19,7 @@ const dueText = (d: number | null | undefined) =>
 
 const emptyForm = (): CreateReminderDto => ({ title: '', kind: 'INSTALLMENT', amount: undefined, recurrence: 'MONTHLY', dayOfMonth: 1, date: undefined, note: '' });
 
-export function RemindersView() {
+export function RemindersView({ embedded = false }: { embedded?: boolean }) {
   const { data: reminders, isLoading } = useReminders();
   const createR = useCreateReminder();
   const updateR = useUpdateReminder();
@@ -64,7 +64,7 @@ export function RemindersView() {
 
   return (
     <>
-      <PageTitle title="التذكيرات" subtitle="أقساط ومصاريف شهرية، نقدية تتحصّل أو تتدفع، مواعيد، وأي حاجة شخصية — خاصة بيك أنت بس" />
+      {!embedded && <PageTitle title="التذكيرات" subtitle="أقساط ومصاريف شهرية، نقدية تتحصّل أو تتدفع، مواعيد، وأي حاجة شخصية — خاصة بيك أنت بس" />}
 
       <div className="toolbar">
         <button className="btn btn-primary btn-sm sp" onClick={openNew}>+ تذكير جديد</button>

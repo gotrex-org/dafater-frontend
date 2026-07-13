@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { EGP, QTY, fmtDate } from '@/lib/format';
 import { PageTitle, Spinner, StatsGrid, StatCard } from '@/components/common';
-import { useReportSummary, useTopProducts, useTopClients, useTopSuppliers, useBusiest, useInactiveClients } from '../hooks';
+import { useReportSummary, useTopProducts, useTopClients, useTopSuppliers, useBusiest, useInactiveClients, useProfitLoss } from '../hooks';
+import { FinancePanel } from '../../finance/components/FinancePanel';
 
 // A thin proportional bar for quick visual comparison inside a table cell.
 function Bar({ value, max, color = 'var(--accent)' }: { value: number; max: number; color?: string }) {
@@ -20,7 +21,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-export function ReportsView() {
+export function ReportsView({ embedded = false }: { embedded?: boolean }) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [inactiveDays, setInactiveDays] = useState(45);
@@ -32,6 +33,7 @@ export function ReportsView() {
   const suppliers = useTopSuppliers(r);
   const busiest = useBusiest(r);
   const inactive = useInactiveClients(inactiveDays);
+  const pl = useProfitLoss(r);
 
   const maxQty = Math.max(1, ...(products.data ?? []).map((p) => p.qty));
   const maxClient = Math.max(1, ...(clients.data ?? []).map((c) => c.total));
@@ -41,7 +43,7 @@ export function ReportsView() {
 
   return (
     <>
-      <PageTitle title="التقارير" subtitle="أكتر صنف وأكتر عميل وأكتر وقت شغل — وملخّص كامل لنشاطك" />
+      {!embedded && <PageTitle title="التقارير" subtitle="أكتر صنف وأكتر عميل وأكتر وقت شغل — وملخّص كامل لنشاطك" />}
 
       <div className="toolbar" style={{ flexWrap: 'wrap' }}>
         <span className="muted" style={{ fontSize: 12 }}>من</span>
@@ -64,6 +66,24 @@ export function ReportsView() {
           <StatCard label="مرتجعات الشراء" value={`${EGP(summary.data.purchaseReturns)} ج.م`} />
         </StatsGrid>
       )}
+
+      {/* Profit & loss */}
+      <Section title="📈 ربح وخسارة">
+        {pl.isLoading || !pl.data ? <Spinner /> : (
+          <StatsGrid columns={5}>
+            <StatCard variant="gold" label="الإيرادات (صافي المبيعات)" value={`${EGP(pl.data.revenue)} ج.م`} />
+            <StatCard label="التكلفة (صافي المشتريات)" value={`${EGP(pl.data.cost)} ج.م`} />
+            <StatCard label="مجمل الربح" value={`${EGP(pl.data.grossProfit)} ج.م`} />
+            <StatCard variant="debit" label="المصاريف التشغيلية" value={`${EGP(pl.data.expenses)} ج.م`} />
+            <StatCard variant={pl.data.netProfit >= 0 ? 'accent' : 'debit'} label="صافي الربح" value={`${EGP(pl.data.netProfit)} ج.م`} />
+          </StatsGrid>
+        )}
+      </Section>
+
+      {/* Owner-private personal finance */}
+      <Section title="💼 حساباتي الشخصية — مصاريف ودفعات شهرية (خاص بيك أنت بس)">
+        <FinancePanel from={from || undefined} to={to || undefined} />
+      </Section>
 
       {/* Top products */}
       <Section title="🏆 أكتر صنف شغّال (بيعًا)">
