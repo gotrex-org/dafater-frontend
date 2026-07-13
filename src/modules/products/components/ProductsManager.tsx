@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useTableState } from '@/lib/useTableState';
+import { useState } from 'react';
 import { EGP } from '@/lib/format';
 import { SearchInput, MoneyInput } from '@/components/common';
 import { useAuth } from '@/lib/auth';
@@ -65,7 +64,6 @@ function ProductRow({ product, canManage }: { product: Product; canManage: boole
 export function ProductsManager() {
   const { user, can } = useAuth();
   const [search, setSearch] = useState('');
-  const { page, setPage, pageSize } = useTableState();
   const { data, isLoading } = useProducts({ all: true });
   const createProduct = useCreateProduct();
   const [adding, setAdding] = useState(false);
@@ -86,16 +84,10 @@ export function ProductsManager() {
     );
   };
 
-  useEffect(() => { setPage(1); }, [search]);
-
   const all: Product[] = data?.data ?? [];
   const filtered = all
     .filter((p) => !search.trim() || p.name.includes(search.trim()))
     .sort((a, b) => a.name.localeCompare(b.name, 'ar'));
-
-  const total = filtered.length;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <>
@@ -125,17 +117,10 @@ export function ProductsManager() {
 
       <div>
         {isLoading && <div className="empty">جاري التحميل…</div>}
-        {!isLoading && pageRows.length === 0 && <div className="empty">لا يوجد</div>}
-        {pageRows.map((p) => <ProductRow key={p.id} product={p} canManage={canManage} />)}
+        {!isLoading && filtered.length === 0 && <div className="empty">لا يوجد</div>}
+        {!isLoading && filtered.length > 0 && <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>{filtered.length} صنف</div>}
+        {filtered.map((p) => <ProductRow key={p.id} product={p} canManage={canManage} />)}
       </div>
-
-      {total > pageSize && (
-        <div className="toolbar" style={{ justifyContent: 'center', marginTop: 12 }}>
-          <button className="btn btn-ghost btn-sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>السابق</button>
-          <span className="muted" style={{ fontSize: 13 }}>{page} / {totalPages}</span>
-          <button className="btn btn-ghost btn-sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>التالي</button>
-        </div>
-      )}
     </>
   );
 }
