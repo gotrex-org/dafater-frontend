@@ -56,7 +56,7 @@ export function InvoicesView() {
   }
 
   const columns: Column<Invoice>[] = [
-    { header: 'رقم', cell: (inv) => inv.no },
+    { header: 'رقم', cell: (inv) => <span>{inv.no} {inv.fake && <span className="pill" style={{ background: 'var(--debit)', color: '#fff', fontSize: 10 }}>وهمية</span>}</span> },
     { header: 'التاريخ', cell: (inv) => fmtDate(inv.date) },
     { header: kind === 'SALE' ? 'العميل' : 'المورد', cell: (inv) => inv.party?.name },
     { header: 'المخزن', cell: (inv) => inv.warehouse?.name, className: 'muted' },

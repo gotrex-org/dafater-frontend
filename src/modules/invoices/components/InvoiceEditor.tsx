@@ -101,6 +101,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   const [treasuryId, setTreasuryId] = useState(d?.treasuryId ?? '');
   const [paid, setPaid] = useState(d?.paid ?? (invoice ? String(invoice.paid || '') : ''));
   const [discount, setDiscount] = useState(invoice?.discount ? String(invoice.discount) : '');
+  const [fake, setFake] = useState(invoice?.fake ?? false);
   const [note, setNote] = useState(d?.note ?? invoice?.note ?? '');
   const [exchangeRate, setExchangeRate] = useState(d?.exchangeRate ?? (invoice?.exchangeRate ? String(invoice.exchangeRate) : ''));
   const [commissionAmount, setCommissionAmount] = useState(d?.commissionAmount ?? '');
@@ -174,8 +175,8 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
     if (!partyId) return setError('اختر الطرف');
     if (!warehouseId) return setError('اختر المخزن');
     if (items.length === 0) return setError('أضف صنفًا واحدًا على الأقل');
-    if (Number(paid) > 0 && !treasuryId) return setError('اخترت مبلغ مدفوع — لازم تختار الخزنة اللي المبلغ خارج/داخل منها');
-    if (isUSD && !(rate > 0)) return setError('فاتورة دولارية — اكتب سعر صرف الدولار اليوم');
+    if (!fake && Number(paid) > 0 && !treasuryId) return setError('اخترت مبلغ مدفوع — لازم تختار الخزنة اللي المبلغ خارج/داخل منها');
+    if (!fake && isUSD && !(rate > 0)) return setError('فاتورة دولارية — اكتب سعر صرف الدولار اليوم');
 
     const usdRate = isUSD && rate > 0 ? { exchangeRate: rate } : {};
 
@@ -185,9 +186,10 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
           id: editInvoiceId!,
           dto: {
             date, partyId, warehouseId, items,
-            paid: Number(paid) || 0,
-            discount: disc || undefined,
-            treasuryId: treasuryId || undefined,
+            paid: fake ? 0 : Number(paid) || 0,
+            discount: fake ? undefined : disc || undefined,
+            fake,
+            treasuryId: fake ? undefined : treasuryId || undefined,
             note: note || undefined,
             ...usdRate,
             ...(kind === 'PURCHASE' && Number(commissionAmount) > 0 && commissionPartyId
@@ -203,8 +205,8 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
     } else {
       createInvoice.mutate(
         {
-          kind, no: no.trim() || undefined, date, partyId, warehouseId,
-          items, paid: Number(paid) || 0, discount: disc || undefined, treasuryId: treasuryId || undefined, note: note || undefined,
+          kind, no: no.trim() || undefined, date, partyId, warehouseId, fake,
+          items, paid: fake ? 0 : Number(paid) || 0, discount: fake ? undefined : disc || undefined, treasuryId: fake ? undefined : treasuryId || undefined, note: note || undefined,
           ...usdRate,
           ...(kind === 'PURCHASE' && Number(commissionAmount) > 0
             ? { commissionAmount: Number(commissionAmount) }
@@ -276,7 +278,19 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
             <Combobox options={warehouses?.data ?? []} value={warehouseId} onChange={setWarehouseId} />
           </Field>
           <Field label="البيان (اختياري)" full><input value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+          <Field label="نوع الفاتورة" full>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 700, cursor: 'pointer', color: fake ? 'var(--debit)' : undefined }}>
+              <input type="checkbox" checked={fake} onChange={(e) => setFake(e.target.checked)} />
+              فاتورة وهمية (مستند فقط — مش هتتسجّل في الحسابات ولا الخزنة ولا المخزن)
+            </label>
+          </Field>
         </div>
+
+        {fake && (
+          <div style={{ padding: '6px 16px', background: 'var(--debit-bg, #fdecea)', borderRadius: 8, margin: '0 16px 8px', fontWeight: 700, fontSize: 13, color: 'var(--debit)' }}>
+            ⚠️ فاتورة وهمية — بتتطبع كمستند بس، ومش بتأثّر على رصيد الطرف ولا الخزنة ولا المخزن ولا التقارير.
+          </div>
+        )}
 
         {isUSD && (
           <>
@@ -361,6 +375,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
           <button className="btn btn-ghost btn-sm" onClick={() => setLines((ls) => [...ls, blankLine()])}>+ إضافة صنف</button>
         </div>
 
+        {!fake && (
         <div className="form-grid">
           <Field label={`خصم على الفاتورة${isUSD ? ' ($)' : ' (ج.م)'}`}><MoneyInput value={discount} onChange={setDiscount} placeholder="0.00" /></Field>
           <Field label="المدفوع نقدًا الآن"><MoneyInput value={paid} onChange={setPaid} placeholder="0.00" /></Field>
@@ -368,8 +383,9 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
             <Combobox options={treasury?.data ?? []} value={treasuryId} onChange={setTreasuryId} />
           </Field>
         </div>
+        )}
 
-        {kind === 'PURCHASE' && can('invoices.commission') && (
+        {!fake && kind === 'PURCHASE' && can('invoices.commission') && (
           <div className="form-grid" style={{ borderTop: '1px solid var(--line-soft)' }}>
             <Field label="مبلغ commission"><MoneyInput value={commissionAmount} onChange={setCommissionAmount} placeholder="0.00" /></Field>
             <Field label="commission لصالح (تُضاف لرصيده)">

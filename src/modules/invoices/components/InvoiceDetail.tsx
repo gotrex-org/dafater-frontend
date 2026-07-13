@@ -63,6 +63,7 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
     <>
       <div className="toolbar no-print" style={{ flexWrap: 'wrap' }}>
         <button className="btn btn-ghost btn-sm" onClick={onBack}>→ رجوع</button>
+        {invoice.fake && <span className="pill" style={{ background: 'var(--debit)', color: '#fff' }}>⚠️ فاتورة وهمية — مش مسجّلة في الحسابات</span>}
         <button className="btn btn-ghost btn-sm" onClick={() => setShowPrev((v) => !v)}>{showPrev ? 'إخفاء الرصيد السابق' : 'إظهار الرصيد السابق'}</button>
         {can('invoices.edit') && (
           <button className="btn btn-ghost btn-sm" onClick={openEdit}>تعديل</button>
