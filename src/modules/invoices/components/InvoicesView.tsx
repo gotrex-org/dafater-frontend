@@ -11,13 +11,14 @@ import type { Invoice, InvoiceKind } from '../dtos';
 import { InvoiceEditor } from './InvoiceEditor';
 import { InvoiceDetail } from './InvoiceDetail';
 import { ReturnsView } from '../../returns/components/ReturnsView';
+import { DiscountsView } from '../../discounts/components/DiscountsView';
 
 const invoiceTotal = (inv: Invoice) => inv.items.reduce((s, it) => s + it.qty * it.price, 0);
 
 export function InvoicesView() {
   const { can } = useAuth();
   const { open } = useWindows();
-  const [section, setSection] = useState<'invoices' | 'returns'>('invoices');
+  const [section, setSection] = useState<'invoices' | 'returns' | 'discounts'>('invoices');
   const [kind, setKind] = useState<InvoiceKind>('SALE');
   const [selected, setSelected] = useState<Invoice | null>(null);
   const [search, setSearch] = useState('');
@@ -38,18 +39,18 @@ export function InvoicesView() {
     <div className="toolbar">
       <SegmentedControl
         value={section}
-        onChange={(v) => setSection(v as 'invoices' | 'returns')}
-        options={[{ value: 'invoices', label: 'الفواتير' }, { value: 'returns', label: 'المرتجعات' }]}
+        onChange={(v) => setSection(v as 'invoices' | 'returns' | 'discounts')}
+        options={[{ value: 'invoices', label: 'الفواتير' }, { value: 'returns', label: 'المرتجعات' }, { value: 'discounts', label: 'الخصومات' }]}
       />
     </div>
   );
 
-  if (section === 'returns') {
+  if (section === 'returns' || section === 'discounts') {
     return (
       <>
-        <PageTitle title="الفواتير والمرتجعات" />
+        <PageTitle title="الفواتير والمرتجعات والخصومات" />
         {sectionSwitch}
-        <ReturnsView />
+        {section === 'returns' ? <ReturnsView /> : <DiscountsView />}
       </>
     );
   }
