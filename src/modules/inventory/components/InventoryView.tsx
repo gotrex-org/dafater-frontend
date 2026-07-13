@@ -12,6 +12,7 @@ import { useUpdateProduct } from '../../products/hooks';
 import { ProductMovements } from './ProductMovements';
 import { LoansView } from '../../loans/components/LoansView';
 import { StockAdjustment } from '../../adjustments/components/StockAdjustment';
+import { StockTransfer } from '../../adjustments/components/StockTransfer';
 import { WarehouseStockPrint } from './WarehouseStockPrint';
 
 function CostCell({ row, canEdit }: { row: StockRow; canEdit: boolean }) {
@@ -62,7 +63,7 @@ export function InventoryView() {
   const { user, can } = useAuth();
   const canLoans = can('inventory.loans');
   const canEditPrice = !!user?.admin || can('settings');
-  const [view, setView] = useState<'stock' | 'loans' | 'adjust'>('stock');
+  const [view, setView] = useState<'stock' | 'loans' | 'adjust' | 'transfer'>('stock');
   const [prod, setProd] = useState<StockRow | null>(null);
   const [printing, setPrinting] = useState(false);
   const { data: warehouses } = useAllWarehouses();
@@ -136,8 +137,11 @@ export function InventoryView() {
             <button className={`btn btn-sm ${view === 'loans' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setView('loans')}>البضاعة المعارة</button>
           )}
           <button className={`btn btn-sm ${view === 'adjust' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setView('adjust')}>تسوية المخزن</button>
+          <button className={`btn btn-sm ${view === 'transfer' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setView('transfer')}>تحويل بين المخازن</button>
         </div>
       </div>
+
+      {view === 'transfer' && <div style={{ marginTop: 16 }}><StockTransfer defaultFrom={whId} /></div>}
 
       {view === 'adjust' && (
         <div style={{ marginTop: 16 }}>
@@ -152,7 +156,7 @@ export function InventoryView() {
         <div style={{ marginTop: 16 }}>
           <LoansView defaultWarehouseId={whId} />
         </div>
-      ) : view !== 'adjust' && (
+      ) : (view !== 'adjust' && view !== 'transfer') && (
         <>
           <div className="toolbar">
             <div style={{ minWidth: 200 }}><Combobox options={warehouses?.data ?? []} value={whId} onChange={setWhId} placeholder="المخزن" /></div>

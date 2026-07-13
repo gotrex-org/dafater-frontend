@@ -15,3 +15,12 @@ export interface CreateAdjustmentDto {
   qty: number;
   note?: string;
 }
+
+export interface TransferStockItem { productId: string; qty: number; }
+export interface TransferStockDto {
+  date: string;
+  fromWarehouseId: string;
+  toWarehouseId: string;
+  items: TransferStockItem[];
+  note?: string;
+}

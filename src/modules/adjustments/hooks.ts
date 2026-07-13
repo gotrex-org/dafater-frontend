@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { adjustmentsApi } from './api';
 import { warehouseKeys } from '../warehouses/hooks';
-import type { CreateAdjustmentDto } from './dtos';
+import type { CreateAdjustmentDto, TransferStockDto } from './dtos';
 
 const KEY = (whId?: string) => ['adjustments', whId ?? ''];
 
@@ -20,6 +20,18 @@ export function useCreateAdjustment() {
     onSuccess: (_, dto) => {
       qc.invalidateQueries({ queryKey: KEY(dto.warehouseId) });
       qc.invalidateQueries({ queryKey: warehouseKeys.stock(dto.warehouseId) });
+    },
+  });
+}
+
+export function useTransferStock() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (dto: TransferStockDto) => adjustmentsApi.transfer(dto),
+    onSuccess: () => {
+      // both warehouses' stock changed
+      qc.invalidateQueries({ queryKey: warehouseKeys.all });
+      qc.invalidateQueries({ queryKey: ['adjustments'] });
     },
   });
 }
