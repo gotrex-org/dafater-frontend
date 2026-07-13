@@ -136,10 +136,11 @@ export function DashboardView() {
         {editing && (
           <button
             className="btn btn-ghost btn-sm"
-            style={{ position: 'absolute', top: 6, insetInlineEnd: 6, zIndex: 3, background: '#fff' }}
+            style={{ position: 'absolute', top: 6, insetInlineEnd: 6, zIndex: 3, background: '#fff', fontWeight: 800, minWidth: 26 }}
+            title={hidden.has(k) ? 'إظهار' : 'إخفاء'}
             onClick={(e) => { e.stopPropagation(); toggleHide(k); }}
           >
-            {hidden.has(k) ? '👁 إظهار' : '🙈 إخفاء'}
+            {hidden.has(k) ? '+' : '−'}
           </button>
         )}
         {node}
