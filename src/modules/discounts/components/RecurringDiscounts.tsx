@@ -25,24 +25,29 @@ export function RecurringDiscounts() {
   const [partyId, setPartyId] = useState('');
   const [recurrence, setRecurrence] = useState<DiscountRecurrence>('MONTHLY');
   const [startDate, setStartDate] = useState(todayISO());
-  const [mode, setMode] = useState<'amount' | 'percent'>('amount');
+  const [mode, setMode] = useState<'amount' | 'percent' | 'cartons'>('amount');
   const [amount, setAmount] = useState('');
   const [percent, setPercent] = useState('');
+  const [cartons, setCartons] = useState('');
+  const [cartonPrice, setCartonPrice] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
 
-  const reset = () => { setPartyId(''); setAmount(''); setPercent(''); setNote(''); setError(''); setAdding(false); };
+  const reset = () => { setPartyId(''); setAmount(''); setPercent(''); setCartons(''); setCartonPrice(''); setNote(''); setError(''); setAdding(false); };
 
   const save = () => {
     setError('');
     if (!partyId) return setError('اختر الشركة/الطرف');
     if (mode === 'amount' && !(Number(amount) > 0)) return setError('اكتب مبلغ الخصم');
     if (mode === 'percent' && !(Number(percent) > 0)) return setError('اكتب نسبة الخصم %');
+    if (mode === 'cartons' && !(Number(cartons) > 0 && Number(cartonPrice) > 0)) return setError('اكتب عدد الكراتين وسعر الكرتونة');
     createS.mutate(
       {
         partyId, recurrence, startDate,
         amount: mode === 'amount' ? Number(amount) : undefined,
         percent: mode === 'percent' ? Number(percent) : undefined,
+        cartons: mode === 'cartons' ? Number(cartons) : undefined,
+        cartonPrice: mode === 'cartons' ? Number(cartonPrice) : undefined,
         note: note.trim() || undefined,
       },
       { onSuccess: reset, onError: (e: any) => setError(e.message) },
@@ -67,14 +72,16 @@ export function RecurringDiscounts() {
             </Field>
             <Field label="أول ميعاد"><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></Field>
             <Field label="نوع الخصم">
-              <select value={mode} onChange={(e) => setMode(e.target.value as 'amount' | 'percent')} style={{ width: '100%' }}>
+              <select value={mode} onChange={(e) => setMode(e.target.value as 'amount' | 'percent' | 'cartons')} style={{ width: '100%' }}>
                 <option value="amount">مبلغ ثابت</option>
                 <option value="percent">نسبة % من المشتريات</option>
+                <option value="cartons">عدد كراتين</option>
               </select>
             </Field>
-            {mode === 'amount'
-              ? <Field label="مبلغ الخصم"><MoneyInput value={amount} onChange={setAmount} placeholder="0.00" /></Field>
-              : <Field label="النسبة %"><MoneyInput value={percent} onChange={setPercent} placeholder="مثلاً 5" /></Field>}
+            {mode === 'amount' && <Field label="مبلغ الخصم"><MoneyInput value={amount} onChange={setAmount} placeholder="0.00" /></Field>}
+            {mode === 'percent' && <Field label="النسبة %"><MoneyInput value={percent} onChange={setPercent} placeholder="مثلاً 5" /></Field>}
+            {mode === 'cartons' && <Field label="عدد الكراتين"><MoneyInput value={cartons} onChange={setCartons} placeholder="0" /></Field>}
+            {mode === 'cartons' && <Field label="سعر الكرتونة"><MoneyInput value={cartonPrice} onChange={setCartonPrice} placeholder="0.00" /></Field>}
             <Field label="البيان (اختياري)" full><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="خصم شهري…" /></Field>
           </div>
           <div className="muted" style={{ fontSize: 12 }}>النسبة بتتحسب على صافي مشترياتك من الطرف خلال الفترة السابقة للميعاد.</div>
@@ -95,7 +102,7 @@ export function RecurringDiscounts() {
                 <tr key={s.id}>
                   <td><b>{s.party?.name}</b> {s.party?.role === 'SUPPLIER' ? <span className="pill">مورد</span> : <span className="pill">عميل</span>}</td>
                   <td>{DISCOUNT_RECURRENCE_LABEL[s.recurrence]}</td>
-                  <td className="num">{s.percent > 0 ? `${s.percent}%` : EGP(s.amount)}</td>
+                  <td className="num">{s.cartons > 0 ? `${s.cartons} كرتونة × ${EGP(s.cartonPrice)}` : s.percent > 0 ? `${s.percent}%` : EGP(s.amount)}</td>
                   <td>{fmtDate(s.startDate)}</td>
                   <td className="muted">{s.lastApplied ? fmtDate(s.lastApplied) : '—'}</td>
                   <td>{can('invoices.delete') && <button className="btn btn-danger btn-sm" onClick={() => { if (window.confirm('حذف الخصم الدوري؟ (الخصومات اللي اتطبّقت قبل كده بتفضل)')) deleteS.mutate(s.id); }}>حذف</button>}</td>

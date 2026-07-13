@@ -11,7 +11,10 @@ export interface Discount {
 export interface CreateDiscountDto {
   date: string;
   partyId: string;
-  amount: number;
+  amount?: number;
+  percent?: number;
+  cartons?: number;
+  cartonPrice?: number;
   note?: string;
 }
 
@@ -21,6 +24,8 @@ export interface DiscountSchedule {
   id: string;
   amount: number;
   percent: number;
+  cartons: number;
+  cartonPrice: number;
   recurrence: DiscountRecurrence;
   startDate: string;
   note?: string | null;
@@ -33,6 +38,8 @@ export interface CreateDiscountScheduleDto {
   partyId: string;
   amount?: number;
   percent?: number;
+  cartons?: number;
+  cartonPrice?: number;
   recurrence: DiscountRecurrence;
   startDate: string;
   note?: string;

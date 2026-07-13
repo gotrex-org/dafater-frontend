@@ -28,7 +28,11 @@ export function DiscountsView() {
   const [adding, setAdding] = useState(false);
   const [date, setDate] = useState(todayISO());
   const [partyId, setPartyId] = useState('');
+  const [vtype, setVtype] = useState<'cash' | 'percent' | 'cartons'>('cash');
   const [amount, setAmount] = useState('');
+  const [percent, setPercent] = useState('');
+  const [cartons, setCartons] = useState('');
+  const [cartonPrice, setCartonPrice] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
 
@@ -39,16 +43,25 @@ export function DiscountsView() {
       : 'خصم لعميل — يقلّل اللي عليه (اللي مدين لك بيه)'
     : '';
 
-  const reset = () => { setPartyId(''); setAmount(''); setNote(''); setError(''); setAdding(false); };
+  const reset = () => { setPartyId(''); setAmount(''); setPercent(''); setCartons(''); setCartonPrice(''); setNote(''); setError(''); setAdding(false); };
 
   const save = () => {
     setError('');
     if (!partyId) return setError('اختر الطرف');
-    if (!(Number(amount) > 0)) return setError('اكتب مبلغ الخصم');
-    createD.mutate(
-      { date, partyId, amount: Number(amount), note: note.trim() || undefined },
-      { onSuccess: reset, onError: (e: any) => setError(e.message) },
-    );
+    let payload: any = { date, partyId, note: note.trim() || undefined };
+    if (vtype === 'cash') {
+      if (!(Number(amount) > 0)) return setError('اكتب مبلغ الخصم');
+      payload.amount = Number(amount);
+    } else if (vtype === 'percent') {
+      if (!(Number(percent) > 0)) return setError('اكتب نسبة الخصم %');
+      payload.percent = Number(percent);
+    } else {
+      if (!(Number(cartons) > 0)) return setError('اكتب عدد الكراتين');
+      if (!(Number(cartonPrice) > 0)) return setError('اكتب سعر الكرتونة');
+      payload.cartons = Number(cartons);
+      payload.cartonPrice = Number(cartonPrice);
+    }
+    createD.mutate(payload, { onSuccess: reset, onError: (e: any) => setError(e.message) });
   };
 
   const handleDelete = (d: Discount) => {
@@ -90,7 +103,17 @@ export function DiscountsView() {
           <div className="form-grid">
             <Field label="التاريخ"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
             <Field label="الطرف"><PartyCombobox parties={allParties} value={partyId} onChange={setPartyId} role="CLIENT" /></Field>
-            <Field label="مبلغ الخصم"><MoneyInput value={amount} onChange={setAmount} placeholder="0.00" /></Field>
+            <Field label="نوع الخصم">
+              <select value={vtype} onChange={(e) => setVtype(e.target.value as typeof vtype)} style={{ width: '100%' }}>
+                <option value="cash">نقدية (مبلغ)</option>
+                <option value="percent">نسبة % من مشتريات الشهر</option>
+                <option value="cartons">عدد كراتين</option>
+              </select>
+            </Field>
+            {vtype === 'cash' && <Field label="مبلغ الخصم"><MoneyInput value={amount} onChange={setAmount} placeholder="0.00" /></Field>}
+            {vtype === 'percent' && <Field label="النسبة %"><MoneyInput value={percent} onChange={setPercent} placeholder="مثلاً 5" /></Field>}
+            {vtype === 'cartons' && <Field label="عدد الكراتين"><MoneyInput value={cartons} onChange={setCartons} placeholder="0" /></Field>}
+            {vtype === 'cartons' && <Field label="سعر الكرتونة"><MoneyInput value={cartonPrice} onChange={setCartonPrice} placeholder="0.00" /></Field>}
             <Field label="البيان (اختياري)" full><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="خصم شهري…" /></Field>
           </div>
           {effectHint && <div className="muted" style={{ fontSize: 12 }}>{effectHint}</div>}
