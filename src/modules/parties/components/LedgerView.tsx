@@ -145,9 +145,6 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const [dealUid, setDealUid] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const sheetRef = useRef<HTMLDivElement>(null);
-  // On first open, jump to the bottom so the newest transaction is in view (older ones are above).
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const scrolledFor = useRef<string | null>(null);
   const [showSettle, setShowSettle] = useState(false);
   const [wDate, setWDate] = useState(() => todayISO());
   const [wAmount, setWAmount] = useState('');
@@ -156,13 +153,6 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const [wError, setWError] = useState('');
   const [wMsg, setWMsg] = useState('');
   const postEntry = usePostEntry();
-
-  useEffect(() => {
-    if (!data || scrolledFor.current === party.id) return;
-    scrolledFor.current = party.id;
-    const t = setTimeout(() => bottomRef.current?.scrollIntoView({ block: 'end', behavior: 'auto' }), 60);
-    return () => clearTimeout(t);
-  }, [data, party.id]);
 
   if (invoiceUid) return <InvoiceDetailById uid={invoiceUid} onBack={() => setInvoiceUid(null)} />;
   if (dealUid) return <DealDetailById uid={dealUid} onBack={() => setDealUid(null)} />;
@@ -176,11 +166,11 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
     if (kind === 'withdraw') return (r.debit ?? 0) > 0 && !r.invoiceUid && !r.dealUid;
     return true;
   });
-  // chronological: oldest at top, newest at the bottom (scroll up to see older)
+  // always newest → oldest
   const visibleRows = [...filteredRows].sort((a, b) => {
     const da = kind === 'invoices' ? (a.manifestDate ?? a.date) : a.date;
     const db = kind === 'invoices' ? (b.manifestDate ?? b.date) : b.date;
-    return new Date(da).getTime() - new Date(db).getTime();
+    return new Date(db).getTime() - new Date(da).getTime();
   });
 
   // rows with an expandable item breakdown, and a single show-all / hide-all toggle
@@ -367,7 +357,6 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
             </table>
           </div>
           <div className="page-title num" style={{ marginTop: 14, textAlign: 'left' }}>الرصيد الجاري: {amtWithEgp(data.balance, cur, party.avgExchangeRate)}</div>
-          <div ref={bottomRef} />
         </div>
       )}
 
