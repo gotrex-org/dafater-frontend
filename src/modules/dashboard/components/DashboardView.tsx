@@ -4,9 +4,53 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { EGP } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
-import { PageTitle, StatsGrid, StatCard, Spinner } from '@/components/common';
+import { PageTitle, StatsGrid, StatCard, Spinner, DataTable, CollapsibleSection, type Column } from '@/components/common';
 import { useDashboard } from '../hooks';
 import { useReportSummary, useTopProducts, useInactiveClients } from '../../reports/hooks';
+import type { TreasuryAccount } from '../../treasury/dtos';
+
+type WhRow = { id: string; name: string; value: number };
+type TopRow = { id: string; name: string; role: string; balance: number };
+
+// The classic dashboard shown to every non-owner user (unchanged from before).
+function ClassicDashboard({ data, user, go }: { data: any; user: any; go: (p: string, v: string) => () => void }) {
+  const treasuryCols: Column<TreasuryAccount>[] = [
+    { header: 'الحساب', cell: (t) => t.name },
+    { header: 'العملة', cell: (t) => t.currency },
+    { header: 'الرصيد', cell: (t) => EGP(t.balance), className: 'num' },
+  ];
+  const whCols: Column<WhRow>[] = [
+    { header: 'المخزن', cell: (w) => w.name },
+    { header: 'القيمة التقديرية', cell: (w) => EGP(w.value), className: 'num' },
+  ];
+  const topCols: Column<TopRow>[] = [
+    { header: 'الاسم', cell: (p) => p.name },
+    { header: 'النوع', cell: (p) => (p.role === 'CLIENT' ? 'عميل' : 'مورد') },
+    { header: 'الرصيد', cell: (p) => <span className={p.balance >= 0 ? 'deb' : 'cre'}>{EGP(p.balance)}</span>, className: 'num' },
+  ];
+  return (
+    <>
+      <PageTitle title="لوحة التحكم" />
+      <StatsGrid>
+        <div onClick={go('/treasury', 'treasury')}><StatCard variant="blue" label="النقدية (ج.م)" value={EGP(data.cashByCurrency.EGP || 0)} /></div>
+        <div onClick={go('/inventory', 'inventory')}><StatCard variant="gold" label="قيمة المخزون" value={EGP(data.inventoryValue)} /></div>
+        {user?.admin && <StatCard label="مستحق لنا (العملاء)" value={EGP(data.receivable)} />}
+        {user?.admin && <StatCard variant="debit" label="مستحق علينا (الموردين)" value={EGP(data.payable)} />}
+      </StatsGrid>
+      <CollapsibleSection title="الخزينة">
+        <DataTable columns={treasuryCols} rows={data.treasury} rowKey={(t: TreasuryAccount) => t.id} onRowClick={go('/treasury', 'treasury')} />
+      </CollapsibleSection>
+      <CollapsibleSection title="رصيد البضاعة في المخازن">
+        <DataTable columns={whCols} rows={data.warehouses} rowKey={(w: WhRow) => w.id} onRowClick={go('/inventory', 'inventory')} />
+      </CollapsibleSection>
+      {user?.admin && (
+        <CollapsibleSection title="أعلى الأرصدة" defaultOpen={false}>
+          <DataTable columns={topCols} rows={data.topBalances} rowKey={(p: TopRow) => p.id} onRowClick={go('/ledger', 'ledger')} />
+        </CollapsibleSection>
+      )}
+    </>
+  );
+}
 
 // A statistics-style panel: a titled card holding stacked rows.
 function Panel({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
@@ -105,6 +149,9 @@ export function DashboardView() {
 
   if (error) return <div className="empty">خطأ: {(error as Error).message}</div>;
   if (isLoading || !data) return <Spinner />;
+
+  // Only the owner gets the customized dashboard; everyone else keeps the classic one.
+  if (!isPrimary) return <ClassicDashboard data={data} user={user} go={go} />;
 
   return (
     <>

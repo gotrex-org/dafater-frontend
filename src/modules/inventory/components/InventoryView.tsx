@@ -112,7 +112,6 @@ export function InventoryView() {
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
   const meta: PageMeta = { total, page, pageSize, totalPages, hasNext: page < totalPages, hasPrev: page > 1 };
 
-  if (prod) return <ProductMovements productId={prod.productId} name={prod.name} onBack={() => setProd(null)} />;
   if (printing) {
     const whName = warehouses?.data.find((w) => w.id === whId)?.name ?? '';
     return <WarehouseStockPrint warehouseId={whId} warehouseName={whName} onClose={() => setPrinting(false)} />;
@@ -207,6 +206,16 @@ export function InventoryView() {
             />
           </div>
         </>
+      )}
+
+      {prod && (
+        <div className="modal-overlay" onClick={() => setProd(null)}>
+          <div className="modal" style={{ width: '94%', maxWidth: 920, maxHeight: '90vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: 16 }}>
+              <ProductMovements productId={prod.productId} name={prod.name} onBack={() => setProd(null)} />
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
