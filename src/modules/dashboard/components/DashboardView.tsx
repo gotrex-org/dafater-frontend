@@ -68,18 +68,17 @@ export function DashboardView() {
   const router = useRouter();
   const go = (path: string, view: string) => (can(view) ? () => router.push(path) : () => {});
 
-  const { data, isLoading, error } = useDashboard();
-  if (error) return <div className="empty">خطأ: {(error as Error).message}</div>;
-  if (isLoading || !data) return <Spinner />;
-
-  const isPrimary = !!user?.isPrimary;
-
   // Per-browser customization: hide dashboard cards the user doesn't want to see.
+  // NOTE: hooks must run before any early return (loading/error) — never move these down.
   const HIDE_KEY = 'dashHidden';
   const [hidden, setHidden] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem(HIDE_KEY) || '[]')); } catch { return new Set(); }
   });
   const [editing, setEditing] = useState(false);
+
+  const { data, isLoading, error } = useDashboard();
+
+  const isPrimary = !!user?.isPrimary;
   const toggleHide = (k: string) => setHidden((s) => {
     const n = new Set(s);
     n.has(k) ? n.delete(k) : n.add(k);
@@ -103,6 +102,9 @@ export function DashboardView() {
       </div>
     );
   };
+
+  if (error) return <div className="empty">خطأ: {(error as Error).message}</div>;
+  if (isLoading || !data) return <Spinner />;
 
   return (
     <>

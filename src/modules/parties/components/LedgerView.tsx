@@ -166,11 +166,11 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
     if (kind === 'withdraw') return (r.debit ?? 0) > 0 && !r.invoiceUid && !r.dealUid;
     return true;
   });
-  // always newest → oldest
+  // chronological: oldest at top, newest at the bottom (scroll up to see older)
   const visibleRows = [...filteredRows].sort((a, b) => {
     const da = kind === 'invoices' ? (a.manifestDate ?? a.date) : a.date;
     const db = kind === 'invoices' ? (b.manifestDate ?? b.date) : b.date;
-    return new Date(db).getTime() - new Date(da).getTime();
+    return new Date(da).getTime() - new Date(db).getTime();
   });
 
   // rows with an expandable item breakdown, and a single show-all / hide-all toggle

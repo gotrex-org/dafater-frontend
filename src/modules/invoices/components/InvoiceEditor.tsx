@@ -20,7 +20,7 @@ import { CommissionPicker } from './CommissionPicker';
 import type { Invoice, InvoiceKind } from '../dtos';
 import type { InvoiceDraft } from '../draftTypes';
 
-interface Line { _key: number; productId: string; qty: string; price: string; freight: string; commission: string; }
+interface Line { _key: number; productId: string; qty: string; price: string; freight: string; commission: string; bnd?: boolean; }
 let _nextKey = 0;
 const blankLine = (): Line => ({ _key: _nextKey++, productId: '', qty: '', price: '', freight: '', commission: '' });
 let _draftSeq = 0;
@@ -123,7 +123,8 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   useEffect(() => {
     if (prefilled || !products) return;
     const pinned = products.data.filter((p) => (kind === 'SALE' ? p.pinSale : p.pinPurchase));
-    if (pinned.length) setLines([...pinned.map((p) => ({ _key: _nextKey++, productId: p.id, qty: '', price: '', freight: '', commission: '' })), blankLine()]);
+    // Pinned defaults become extra "بنود" that sit AFTER the products (a blank product line first).
+    if (pinned.length) setLines([blankLine(), ...pinned.map((p) => ({ _key: _nextKey++, productId: p.id, qty: '', price: '', freight: '', commission: '', bnd: true }))]);
     setPrefilled(true);
   }, [products, prefilled, kind]);
 
@@ -322,7 +323,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
                 const lastPrice = prod ? lastPriceByProduct.get(l.productId) : undefined;
                 const pinned = prod ? (kind === 'SALE' ? !!prod.pinSale : !!prod.pinPurchase) : false;
                 return (
-                  <tr key={l._key}>
+                  <tr key={l._key} style={l.bnd ? { fontSize: 12.5, background: 'var(--line-soft)' } : undefined}>
                     <td><MoneyInput value={l.qty} onChange={(v) => setLine(i, { qty: v })} placeholder="0" style={{ width: 80 }} /></td>
                     <td style={{ minWidth: 320 }}>
                       <ProductCombobox
@@ -386,7 +387,12 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
           </table>
         </div>
         <div style={{ padding: '10px 16px' }}>
-          <button className="btn btn-ghost btn-sm" onClick={() => setLines((ls) => [...ls, blankLine()])}>+ إضافة صنف</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setLines((ls) => {
+            // insert new product lines ABOVE the pinned بنود so بنود stay at the bottom
+            const idx = ls.findIndex((l) => l.bnd);
+            const nl = blankLine();
+            return idx === -1 ? [...ls, nl] : [...ls.slice(0, idx), nl, ...ls.slice(idx)];
+          })}>+ إضافة صنف</button>
         </div>
 
         {!fake && (
