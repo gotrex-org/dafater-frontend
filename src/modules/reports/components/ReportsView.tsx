@@ -70,11 +70,12 @@ export function ReportsView({ embedded = false }: { embedded?: boolean }) {
       {/* Profit & loss */}
       <Section title="📈 ربح وخسارة">
         {pl.isLoading || !pl.data ? <Spinner /> : (
-          <StatsGrid columns={5}>
+          <StatsGrid columns={6}>
             <StatCard variant="gold" label="الإيرادات (صافي المبيعات)" value={`${EGP(pl.data.revenue)} ج.م`} />
-            <StatCard label="التكلفة (صافي المشتريات)" value={`${EGP(pl.data.cost)} ج.م`} />
+            <StatCard label="التكلفة (مشتريات + مصاريف بضاعة)" value={`${EGP(pl.data.cost)} ج.م`} />
+            <StatCard label="منها: مصاريف على البضاعة" value={`${EGP(pl.data.goodsExpenses)} ج.م`} />
             <StatCard label="مجمل الربح" value={`${EGP(pl.data.grossProfit)} ج.م`} />
-            <StatCard variant="debit" label="المصاريف التشغيلية" value={`${EGP(pl.data.expenses)} ج.م`} />
+            <StatCard variant="debit" label="المصاريف التشغيلية (مرتبات/إيجار)" value={`${EGP(pl.data.expenses)} ج.م`} />
             <StatCard variant={pl.data.netProfit >= 0 ? 'accent' : 'debit'} label="صافي الربح" value={`${EGP(pl.data.netProfit)} ج.م`} />
           </StatsGrid>
         )}

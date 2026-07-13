@@ -14,7 +14,7 @@ export interface ReportSummary {
   salesReturns: number; purchaseReturns: number; netSales: number; grossProfit: number;
 }
 export interface InactiveClient { id: string; name: string; lastActivity: string | null; daysSince: number | null; }
-export interface ProfitLoss { revenue: number; cost: number; grossProfit: number; expenses: number; netProfit: number; }
+export interface ProfitLoss { revenue: number; cost: number; goodsExpenses: number; grossProfit: number; expenses: number; netProfit: number; }
 
 const range = (from?: string, to?: string) => {
   const p = new URLSearchParams();
