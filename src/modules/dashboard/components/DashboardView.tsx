@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { EGP } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
@@ -73,36 +74,79 @@ export function DashboardView() {
 
   const isPrimary = !!user?.isPrimary;
 
+  // Per-browser customization: hide dashboard cards the user doesn't want to see.
+  const HIDE_KEY = 'dashHidden';
+  const [hidden, setHidden] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(HIDE_KEY) || '[]')); } catch { return new Set(); }
+  });
+  const [editing, setEditing] = useState(false);
+  const toggleHide = (k: string) => setHidden((s) => {
+    const n = new Set(s);
+    n.has(k) ? n.delete(k) : n.add(k);
+    try { localStorage.setItem(HIDE_KEY, JSON.stringify([...n])); } catch {}
+    return n;
+  });
+  const wrap = (k: string, node: React.ReactNode) => {
+    if (!editing && hidden.has(k)) return null;
+    return (
+      <div style={{ position: 'relative', opacity: editing && hidden.has(k) ? 0.45 : 1 }}>
+        {editing && (
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ position: 'absolute', top: 6, insetInlineEnd: 6, zIndex: 3, background: '#fff' }}
+            onClick={(e) => { e.stopPropagation(); toggleHide(k); }}
+          >
+            {hidden.has(k) ? '👁 إظهار' : '🙈 إخفاء'}
+          </button>
+        )}
+        {node}
+      </div>
+    );
+  };
+
   return (
     <>
       <PageTitle title="لوحة التحكم" />
 
+      <div className="toolbar">
+        <button className="btn btn-ghost btn-sm" onClick={() => setEditing((v) => !v)}>{editing ? '✓ تم' : '⚙ تخصيص العرض'}</button>
+        {editing && hidden.size > 0 && (
+          <button className="btn btn-ghost btn-sm" onClick={() => { setHidden(new Set()); try { localStorage.removeItem(HIDE_KEY); } catch {} }}>إظهار الكل</button>
+        )}
+      </div>
+
       <StatsGrid>
-        <div onClick={go('/treasury', 'treasury')} style={{ cursor: can('treasury') ? 'pointer' : 'default' }}>
-          <StatCard variant="blue" label="النقدية (ج.م)" value={EGP(data.cashByCurrency.EGP || 0)} />
-        </div>
-        <div onClick={go('/inventory', 'inventory')} style={{ cursor: can('inventory') ? 'pointer' : 'default' }}>
-          <StatCard variant="gold" label="قيمة المخزون" value={EGP(data.inventoryValue)} />
-        </div>
-        {user?.admin && <StatCard label="مستحق لنا (العملاء)" value={EGP(data.receivable)} />}
-        {user?.admin && <StatCard variant="debit" label="مستحق علينا (الموردين)" value={EGP(data.payable)} />}
+        {wrap('cash', (
+          <div onClick={go('/treasury', 'treasury')} style={{ cursor: can('treasury') ? 'pointer' : 'default' }}>
+            <StatCard variant="blue" label="النقدية (ج.م)" value={EGP(data.cashByCurrency.EGP || 0)} />
+          </div>
+        ))}
+        {wrap('inventory', (
+          <div onClick={go('/inventory', 'inventory')} style={{ cursor: can('inventory') ? 'pointer' : 'default' }}>
+            <StatCard variant="gold" label="قيمة المخزون" value={EGP(data.inventoryValue)} />
+          </div>
+        ))}
+        {user?.admin && wrap('receivable', <StatCard label="مستحق لنا (العملاء)" value={EGP(data.receivable)} />)}
+        {user?.admin && wrap('payable', <StatCard variant="debit" label="مستحق علينا (الموردين)" value={EGP(data.payable)} />)}
       </StatsGrid>
 
-      {/* Three statistics-style panels side by side: الخزن · التقارير · التذكيرات */}
+      {/* Statistics-style panels side by side: الخزن · التقارير */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: 16, marginTop: 16, alignItems: 'start' }}>
-        <Panel title="الخزن" action={can('treasury') ? <LinkBtn onClick={() => router.push('/treasury')}>عرض ←</LinkBtn> : undefined}>
-          {data.treasury.length === 0 ? <div className="muted" style={{ fontSize: 13 }}>لا توجد خزائن</div> : data.treasury.map((t) => (
-            <StatRow
-              key={t.id}
-              label={t.name}
-              value={`${EGP(t.balance)} ${t.currency === 'USD' ? '$' : 'ج.م'}`}
-              tone={(t.balance ?? 0) >= 0 ? undefined : 'var(--debit)'}
-              onClick={can('treasury') ? () => router.push('/treasury') : undefined}
-            />
-          ))}
-        </Panel>
+        {wrap('treasuries', (
+          <Panel title="الخزن" action={can('treasury') ? <LinkBtn onClick={() => router.push('/treasury')}>عرض ←</LinkBtn> : undefined}>
+            {data.treasury.length === 0 ? <div className="muted" style={{ fontSize: 13 }}>لا توجد خزائن</div> : data.treasury.map((t) => (
+              <StatRow
+                key={t.id}
+                label={t.name}
+                value={`${EGP(t.balance)} ${t.currency === 'USD' ? '$' : 'ج.م'}`}
+                tone={(t.balance ?? 0) >= 0 ? undefined : 'var(--debit)'}
+                onClick={can('treasury') ? () => router.push('/treasury') : undefined}
+              />
+            ))}
+          </Panel>
+        ))}
 
-        {isPrimary && <ReportsPanel go={() => router.push('/today')} />}
+        {isPrimary && wrap('reports', <ReportsPanel go={() => router.push('/today')} />)}
       </div>
     </>
   );

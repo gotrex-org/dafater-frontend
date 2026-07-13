@@ -5,14 +5,16 @@ import { EGP, fmtDate, todayISO } from '@/lib/format';
 import { useTableState } from '@/lib/useTableState';
 import { useAuth } from '@/lib/auth';
 import { confirmCascadeDelete } from '@/lib/cascadeDelete';
-import { PageTitle, DataTable, SearchInput, Field, MoneyInput, type Column } from '@/components/common';
+import { PageTitle, DataTable, SearchInput, SegmentedControl, Field, MoneyInput, type Column } from '@/components/common';
 import { useAllParties } from '../../parties/hooks';
 import { PartyCombobox } from '../../invoices/components/PartyCombobox';
 import { useDiscounts, useCreateDiscount, useDeleteDiscount } from '../hooks';
+import { RecurringDiscounts } from './RecurringDiscounts';
 import type { Discount } from '../dtos';
 
 export function DiscountsView() {
   const { can } = useAuth();
+  const [tab, setTab] = useState<'once' | 'recurring'>('once');
   const { data: clients } = useAllParties('CLIENT');
   const { data: suppliers } = useAllParties('SUPPLIER');
   const allParties = [...(clients?.data ?? []), ...(suppliers?.data ?? [])];
@@ -68,6 +70,16 @@ export function DiscountsView() {
   return (
     <>
       <div className="toolbar">
+        <SegmentedControl
+          value={tab}
+          onChange={(v) => setTab(v as 'once' | 'recurring')}
+          options={[{ value: 'once', label: 'خصومات حالية' }, { value: 'recurring', label: 'خصومات دورية' }]}
+        />
+      </div>
+
+      {tab === 'recurring' ? <RecurringDiscounts /> : (
+      <>
+      <div className="toolbar">
         {can('invoices') && <button className="btn btn-primary btn-sm sp" onClick={() => setAdding((v) => !v)}>{adding ? '× إلغاء' : '+ خصم جديد'}</button>}
       </div>
 
@@ -104,6 +116,8 @@ export function DiscountsView() {
         pageSize={pageSize}
         onPageSize={setPageSize}
       />
+      </>
+      )}
     </>
   );
 }
