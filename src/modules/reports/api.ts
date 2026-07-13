@@ -13,6 +13,7 @@ export interface ReportSummary {
   sales: number; purchases: number; salesCount: number; purchasesCount: number;
   salesReturns: number; purchaseReturns: number; netSales: number; grossProfit: number;
 }
+export interface InactiveClient { id: string; name: string; lastActivity: string | null; daysSince: number | null; }
 
 const range = (from?: string, to?: string) => {
   const p = new URLSearchParams();
@@ -28,4 +29,5 @@ export const reportsApi = {
   topClients: (from?: string, to?: string) => api.get<TopParty[]>(`/reports/top-clients${range(from, to)}`),
   topSuppliers: (from?: string, to?: string) => api.get<TopParty[]>(`/reports/top-suppliers${range(from, to)}`),
   busiest: (from?: string, to?: string) => api.get<Busiest>(`/reports/busiest${range(from, to)}`),
+  inactiveClients: (days?: number) => api.get<InactiveClient[]>(`/reports/inactive-clients${days ? `?days=${days}` : ''}`),
 };

@@ -19,3 +19,6 @@ export const useTopSuppliers = ({ from, to }: R) =>
 
 export const useBusiest = ({ from, to }: R) =>
   useQuery({ queryKey: ['reports', 'busiest', from, to], queryFn: () => reportsApi.busiest(from, to) });
+
+export const useInactiveClients = (days: number) =>
+  useQuery({ queryKey: ['reports', 'inactive-clients', days], queryFn: () => reportsApi.inactiveClients(days) });

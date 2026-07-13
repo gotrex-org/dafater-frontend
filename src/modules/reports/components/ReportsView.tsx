@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { EGP, QTY } from '@/lib/format';
+import { EGP, QTY, fmtDate } from '@/lib/format';
 import { PageTitle, Spinner, StatsGrid, StatCard } from '@/components/common';
-import { useReportSummary, useTopProducts, useTopClients, useTopSuppliers, useBusiest } from '../hooks';
+import { useReportSummary, useTopProducts, useTopClients, useTopSuppliers, useBusiest, useInactiveClients } from '../hooks';
 
 // A thin proportional bar for quick visual comparison inside a table cell.
 function Bar({ value, max, color = 'var(--accent)' }: { value: number; max: number; color?: string }) {
@@ -23,6 +23,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export function ReportsView() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [inactiveDays, setInactiveDays] = useState(45);
   const r = { from: from || undefined, to: to || undefined };
 
   const summary = useReportSummary(r);
@@ -30,6 +31,7 @@ export function ReportsView() {
   const clients = useTopClients(r);
   const suppliers = useTopSuppliers(r);
   const busiest = useBusiest(r);
+  const inactive = useInactiveClients(inactiveDays);
 
   const maxQty = Math.max(1, ...(products.data ?? []).map((p) => p.qty));
   const maxClient = Math.max(1, ...(clients.data ?? []).map((c) => c.total));
@@ -104,6 +106,32 @@ export function ReportsView() {
               <tbody>
                 {suppliers.data.map((s, i) => (
                   <tr key={s.id}><td className="muted">{i + 1}</td><td><b>{s.name}</b></td><td className="num">{s.count}</td><td><Bar value={s.total} max={maxSupplier} color="var(--debit)" /></td><td className="num">{EGP(s.total)}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+
+      {/* Inactive clients */}
+      <Section title="😴 عملاء بقالهم فترة ما اشتغلوش">
+        <div className="toolbar" style={{ marginBottom: 8 }}>
+          <span className="muted" style={{ fontSize: 13 }}>مامعملوش حركة من أكتر من</span>
+          <select value={inactiveDays} onChange={(e) => setInactiveDays(Number(e.target.value))} style={{ padding: '7px 10px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 13 }}>
+            <option value={30}>30 يوم</option>
+            <option value={45}>45 يوم</option>
+            <option value={60}>60 يوم</option>
+            <option value={90}>90 يوم</option>
+            <option value={180}>180 يوم</option>
+          </select>
+        </div>
+        {inactive.isLoading ? <Spinner /> : !inactive.data?.length ? <div className="empty">كل العملاء نشطين 👍</div> : (
+          <div className="tbl-wrap">
+            <table>
+              <thead><tr><th style={{ width: 32 }}>#</th><th>العميل</th><th style={{ width: 140 }}>آخر حركة</th><th style={{ width: 120 }}>من كام يوم</th></tr></thead>
+              <tbody>
+                {inactive.data.map((c, i) => (
+                  <tr key={c.id}><td className="muted">{i + 1}</td><td><b>{c.name}</b></td><td>{c.lastActivity ? fmtDate(c.lastActivity) : '—'}</td><td className="num deb">{c.daysSince} يوم</td></tr>
                 ))}
               </tbody>
             </table>
