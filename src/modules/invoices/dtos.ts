@@ -22,6 +22,7 @@ export interface Invoice {
   partyId: string;
   warehouseId: string;
   paid: number;
+  discount?: number;
   note?: string | null;
   party?: Party;
   warehouse?: Warehouse;
@@ -42,6 +43,7 @@ export interface CreateInvoiceDto {
   warehouseId: string;
   items: CreateInvoiceItemDto[];
   paid?: number;
+  discount?: number;
   treasuryId?: string;
   note?: string;
   exchangeRate?: number;
@@ -55,6 +57,7 @@ export interface UpdateInvoiceDto {
   warehouseId: string;
   items: CreateInvoiceItemDto[];
   paid?: number;
+  discount?: number;
   treasuryId?: string;
   note?: string;
   exchangeRate?: number;

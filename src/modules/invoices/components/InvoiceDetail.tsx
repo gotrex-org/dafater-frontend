@@ -18,6 +18,8 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
   const { open } = useWindows();
   const sheetRef = useRef<HTMLDivElement>(null);
   const total = invoice.items.reduce((s, it) => s + it.qty * it.price, 0);
+  const discount = invoice.discount || 0;
+  const netTotal = total - discount; // الصافي بعد الخصم
   const kindLabel = invoice.kind === 'SALE' ? 'بيع' : 'شراء';
   const cur = invoice.currency ?? invoice.party?.currency ?? 'EGP';
 
@@ -30,7 +32,7 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
   const deleteInvoice = useDeleteInvoice();
   const updateCommission = useUpdateInvoiceCommission();
 
-  const net = invoice.kind === 'SALE' ? total - invoice.paid : -(total - invoice.paid);
+  const net = invoice.kind === 'SALE' ? netTotal - invoice.paid : -(netTotal - invoice.paid);
   const current = party?.balance ?? 0;
   const prev = current - net;
 
@@ -134,7 +136,12 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
           </div>
         )}
 
-        <div className="page-title num" style={{ marginTop: 12, textAlign: 'left' }}>إجمالي الفاتورة: {money(total, cur)}</div>
+        {discount > 0 && (
+          <div className="num" style={{ textAlign: 'left', fontWeight: 700 }}>
+            الإجمالي: {money(total, cur)} · خصم: {money(discount, cur)}
+          </div>
+        )}
+        <div className="page-title num" style={{ marginTop: discount > 0 ? 2 : 12, textAlign: 'left' }}>{discount > 0 ? 'صافي الفاتورة' : 'إجمالي الفاتورة'}: {money(netTotal, cur)}</div>
         {cur === 'USD' && !!invoice.exchangeRate && (
           <div className="num" style={{ textAlign: 'left', fontWeight: 700, color: 'var(--debit)' }}>
             بالمصري (سعر {EGP(invoice.exchangeRate)}): {EGP(total * invoice.exchangeRate)} ج.م

@@ -100,6 +100,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   const lastPriceByProduct = new Map((lastPrices ?? []).map((r) => [r.productId, r]));
   const [treasuryId, setTreasuryId] = useState(d?.treasuryId ?? '');
   const [paid, setPaid] = useState(d?.paid ?? (invoice ? String(invoice.paid || '') : ''));
+  const [discount, setDiscount] = useState(invoice?.discount ? String(invoice.discount) : '');
   const [note, setNote] = useState(d?.note ?? invoice?.note ?? '');
   const [exchangeRate, setExchangeRate] = useState(d?.exchangeRate ?? (invoice?.exchangeRate ? String(invoice.exchangeRate) : ''));
   const [commissionAmount, setCommissionAmount] = useState(d?.commissionAmount ?? '');
@@ -158,6 +159,8 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   const cur = isUSD ? 'USD' : 'EGP';
 
   const total = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.price) || 0), 0);
+  const disc = Math.min(Number(discount) || 0, total); // الخصم لا يتجاوز الإجمالي
+  const netTotal = total - disc;
   const rate = Number(exchangeRate) || 0;
   const totalEgp = isUSD && rate > 0 ? total * rate : 0; // EGP equivalent of a USD invoice
   const setLine = (i: number, patch: Partial<Line>) =>
@@ -183,6 +186,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
           dto: {
             date, partyId, warehouseId, items,
             paid: Number(paid) || 0,
+            discount: disc || undefined,
             treasuryId: treasuryId || undefined,
             note: note || undefined,
             ...usdRate,
@@ -200,7 +204,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
       createInvoice.mutate(
         {
           kind, no: no.trim() || undefined, date, partyId, warehouseId,
-          items, paid: Number(paid) || 0, treasuryId: treasuryId || undefined, note: note || undefined,
+          items, paid: Number(paid) || 0, discount: disc || undefined, treasuryId: treasuryId || undefined, note: note || undefined,
           ...usdRate,
           ...(kind === 'PURCHASE' && Number(commissionAmount) > 0
             ? { commissionAmount: Number(commissionAmount) }
@@ -358,6 +362,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
         </div>
 
         <div className="form-grid">
+          <Field label={`خصم على الفاتورة${isUSD ? ' ($)' : ' (ج.م)'}`}><MoneyInput value={discount} onChange={setDiscount} placeholder="0.00" /></Field>
           <Field label="المدفوع نقدًا الآن"><MoneyInput value={paid} onChange={setPaid} placeholder="0.00" /></Field>
           <Field label="حساب الخزنة">
             <Combobox options={treasury?.data ?? []} value={treasuryId} onChange={setTreasuryId} />
@@ -373,7 +378,9 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
           </div>
         )}
 
-        <div className="page-title num" style={{ padding: '0 16px' }}>الإجمالي: {money(total, cur)}</div>
+        <div className="page-title num" style={{ padding: '0 16px' }}>
+          {disc > 0 ? <>الإجمالي: {money(total, cur)} · خصم: {money(disc, cur)} · <b>الصافي: {money(netTotal, cur)}</b></> : <>الإجمالي: {money(total, cur)}</>}
+        </div>
         <div className="err-text" style={{ padding: '0 16px' }}>{error}</div>
         <div className="toolbar" style={{ padding: 16 }}>
           <button className="btn btn-primary" onClick={save} disabled={isPending}>
