@@ -7,15 +7,17 @@ import { CustomerPortal } from '@/modules/portal/CustomerPortal';
 import { UnsavedProvider } from '@/lib/unsaved';
 import { WindowsProvider, SectionOutlet, useWindows } from '@/lib/windows';
 import { SECTIONS, sectionByHref, type SectionDef } from '@/lib/sections';
+import { useReminderDueCount } from '@/modules/reminders/hooks';
 
 // Sections render as normal full pages inside <SectionOutlet/>, but each is a mounted
 // window with a "🗕 تصغير" button — minimizing sends it to the bottom dock with its state
 // intact. Route children aren't rendered here; the outlet renders the active section.
-function Desktop({ userName, onLogout }: { userName: string; onLogout: () => void }) {
+function Desktop({ userName, isPrimary, onLogout }: { userName: string; isPrimary: boolean; onLogout: () => void }) {
   const { can } = useAuth();
   const { activateSection, activeSectionId } = useWindows();
   const pathname = usePathname();
   const router = useRouter();
+  const { data: due } = useReminderDueCount(isPrimary);
 
   const openSection = (s: SectionDef) =>
     activateSection({ id: s.view, title: s.label, href: s.href, node: <s.Component /> });
@@ -28,7 +30,9 @@ function Desktop({ userName, onLogout }: { userName: string; onLogout: () => voi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
-  const navSections = SECTIONS.filter((s) => s.nav && can(s.view));
+  const navSections = SECTIONS.filter((s) => s.nav && (s.primaryOnly ? isPrimary : can(s.view)));
+  const remindersSection = SECTIONS.find((s) => s.view === 'reminders');
+  const dueCount = due?.count ?? 0;
 
   return (
     <>
@@ -51,6 +55,14 @@ function Desktop({ userName, onLogout }: { userName: string; onLogout: () => voi
           </button>
         ))}
       </nav>
+      {isPrimary && dueCount > 0 && remindersSection && (
+        <div
+          onClick={() => { openSection(remindersSection); router.push(remindersSection.href); }}
+          style={{ cursor: 'pointer', background: 'var(--debit)', color: '#fff', padding: '8px 16px', fontWeight: 700, fontSize: 14, textAlign: 'center' }}
+        >
+          🔔 عندك {dueCount} تذكير مستحق — اضغط للعرض
+        </div>
+      )}
       <main className="page"><SectionOutlet /></main>
     </>
   );
@@ -85,7 +97,7 @@ export default function AppLayout() {
   return (
     <UnsavedProvider>
       <WindowsProvider>
-        <Desktop userName={user.name} onLogout={() => { logout(); router.replace('/login'); }} />
+        <Desktop userName={user.name} isPrimary={!!user.isPrimary} onLogout={() => { logout(); router.replace('/login'); }} />
       </WindowsProvider>
     </UnsavedProvider>
   );

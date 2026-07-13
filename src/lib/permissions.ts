@@ -82,4 +82,5 @@ export const PERMISSIONS: PermGroup[] = [
     ],
   },
   { page: 'audit', label: 'سجل النشاط', actions: [] },
+  { page: 'reports', label: 'التقارير', actions: [] },
 ];
