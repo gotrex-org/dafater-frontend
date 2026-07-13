@@ -13,6 +13,10 @@ const KINDS: ReminderKind[] = ['INSTALLMENT', 'COLLECT', 'PAY', 'APPOINTMENT', '
 const scheduleText = (r: Reminder | { recurrence: ReminderRecurrence; dayOfMonth?: number | null; date?: string | null }) =>
   r.recurrence === 'MONTHLY' ? `كل شهر يوم ${r.dayOfMonth ?? 1}` : r.date ? `بتاريخ ${fmtDate(r.date)}` : '—';
 
+// Human timing for a due reminder based on days-to-target (negative = overdue).
+const dueText = (d: number | null | undefined) =>
+  d == null ? 'مستحق' : d > 0 ? `باقي ${d} يوم` : d === 0 ? 'مستحق اليوم' : `متأخّر ${-d} يوم`;
+
 const emptyForm = (): CreateReminderDto => ({ title: '', kind: 'INSTALLMENT', amount: undefined, recurrence: 'MONTHLY', dayOfMonth: 1, date: undefined, note: '' });
 
 export function RemindersView() {
@@ -112,7 +116,7 @@ export function RemindersView() {
               <div style={{ flex: 1, minWidth: 200 }}>
                 <div style={{ fontWeight: 700 }}>
                   {r.title}
-                  {r.due && <span className="pill" style={{ marginInlineStart: 8, background: 'var(--debit)', color: '#fff' }}>مستحق</span>}
+                  {r.due && <span className="pill" style={{ marginInlineStart: 8, background: (r.daysUntil ?? 0) > 0 ? 'var(--gold)' : 'var(--debit)', color: '#fff' }}>{dueText(r.daysUntil)}</span>}
                 </div>
                 <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
                   <span className="pill" style={{ marginInlineEnd: 6 }}>{REMINDER_KIND_LABEL[r.kind]}</span>

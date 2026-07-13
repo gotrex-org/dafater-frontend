@@ -14,6 +14,7 @@ export interface Reminder {
   doneAt?: string | null;
   due: boolean;
   nextDate: string | null;
+  daysUntil?: number | null; // days to the next occurrence (negative = overdue)
 }
 
 export interface CreateReminderDto {
