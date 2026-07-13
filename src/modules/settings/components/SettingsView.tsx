@@ -19,6 +19,7 @@ export function SettingsView() {
   const [graceDays, setGraceDays] = useState<number>(8);
   const [feePerDay, setFeePerDay] = useState<number>(1200);
   const [tripsMsg, setTripsMsg] = useState('');
+  const [productsOpen, setProductsOpen] = useState(false);
 
   useEffect(() => {
     if (config) {
@@ -98,11 +99,25 @@ export function SettingsView() {
         <PartiesRegistry />
       </CollapsibleSection>
 
-      <CollapsibleSection title="سجل الأصناف" defaultOpen={false}>
-        <ProductsManager />
-      </CollapsibleSection>
+      <button
+        className="card"
+        style={{ width: '100%', textAlign: 'start', padding: '14px 16px', marginTop: 12, cursor: 'pointer', border: '1px solid var(--line)', background: 'var(--surface)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+        onClick={() => setProductsOpen(true)}
+      >
+        <span style={{ fontWeight: 700, fontSize: 15 }}>سجل الأصناف</span>
+        <span className="muted" style={{ fontSize: 13 }}>فتح في نافذة ←</span>
+      </button>
 
       {(user?.admin || can('settings.users')) && <UsersManager />}
+
+      {productsOpen && (
+        <div className="modal-overlay" onClick={() => setProductsOpen(false)}>
+          <div className="modal" style={{ width: '94%', maxWidth: 960, maxHeight: '90vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head"><b>سجل الأصناف</b><button className="btn btn-ghost btn-sm" onClick={() => setProductsOpen(false)}>×</button></div>
+            <div style={{ padding: 16 }}><ProductsManager /></div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
