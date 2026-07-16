@@ -1,4 +1,4 @@
-export type PartyRole = 'CLIENT' | 'SUPPLIER' | 'AGENT';
+export type PartyRole = 'CLIENT' | 'SUPPLIER' | 'AGENT' | 'PERSON';
 export type PartyType = 'INVOICE' | 'LEDGER';
 
 export interface LinkedPartyRef {

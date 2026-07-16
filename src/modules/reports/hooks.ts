@@ -25,3 +25,9 @@ export const useInactiveClients = (days: number) =>
 
 export const useProfitLoss = ({ from, to }: R) =>
   useQuery({ queryKey: ['reports', 'profit-loss', from, to], queryFn: () => reportsApi.profitLoss(from, to) });
+
+export const useWarehouseExpenses = ({ from, to }: R) =>
+  useQuery({ queryKey: ['reports', 'warehouse-expenses', from, to], queryFn: () => reportsApi.warehouseExpenses(from, to) });
+
+export const useCustodyBalances = () =>
+  useQuery({ queryKey: ['reports', 'custody-balances'], queryFn: () => reportsApi.custodyBalances() });

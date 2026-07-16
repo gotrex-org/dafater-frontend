@@ -94,6 +94,13 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
   background: #fff; font-size: 15px; color: var(--ink); width: 100%;
 }
 .field input:focus, .field select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* Checkboxes/radios inside fields must render at natural size (not stretched to 100%) so
+   they sit tightly next to their label instead of looking scattered. */
+.field input[type=checkbox], .field input[type=radio] {
+  width: 16px; height: 16px; flex: none; padding: 0; margin: 0; border-radius: 4px;
+  accent-color: var(--accent); box-shadow: none;
+}
+.field label.check-inline { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
 .form-grid { display: grid; gap: 12px; padding: 16px; grid-template-columns: 1fr; }
 @media (min-width: 620px) { .form-grid { grid-template-columns: 1fr 1fr; } }
 .full { grid-column: 1 / -1; }

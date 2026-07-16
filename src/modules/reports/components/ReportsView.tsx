@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { EGP, QTY, fmtDate } from '@/lib/format';
 import { PageTitle, Spinner, StatsGrid, StatCard } from '@/components/common';
-import { useReportSummary, useTopProducts, useTopClients, useTopSuppliers, useBusiest, useInactiveClients, useProfitLoss } from '../hooks';
+import { useReportSummary, useTopProducts, useTopClients, useTopSuppliers, useBusiest, useInactiveClients, useProfitLoss, useWarehouseExpenses, useCustodyBalances } from '../hooks';
 import { FinancePanel } from '../../finance/components/FinancePanel';
 
 // A thin proportional bar for quick visual comparison inside a table cell.
@@ -34,6 +34,8 @@ export function ReportsView({ embedded = false }: { embedded?: boolean }) {
   const busiest = useBusiest(r);
   const inactive = useInactiveClients(inactiveDays);
   const pl = useProfitLoss(r);
+  const whExp = useWarehouseExpenses(r);
+  const custody = useCustodyBalances();
 
   const maxQty = Math.max(1, ...(products.data ?? []).map((p) => p.qty));
   const maxClient = Math.max(1, ...(clients.data ?? []).map((c) => c.total));
@@ -70,14 +72,64 @@ export function ReportsView({ embedded = false }: { embedded?: boolean }) {
       {/* Profit & loss */}
       <Section title="📈 ربح وخسارة">
         {pl.isLoading || !pl.data ? <Spinner /> : (
-          <StatsGrid columns={6}>
+          <StatsGrid columns={4}>
             <StatCard variant="gold" label="الإيرادات (صافي المبيعات)" value={`${EGP(pl.data.revenue)} ج.م`} />
             <StatCard label="التكلفة (مشتريات + مصاريف بضاعة)" value={`${EGP(pl.data.cost)} ج.م`} />
             <StatCard label="منها: مصاريف على البضاعة" value={`${EGP(pl.data.goodsExpenses)} ج.م`} />
             <StatCard label="مجمل الربح" value={`${EGP(pl.data.grossProfit)} ج.م`} />
-            <StatCard variant="debit" label="المصاريف التشغيلية (مرتبات/إيجار)" value={`${EGP(pl.data.expenses)} ج.م`} />
+            <StatCard variant="debit" label="المصاريف التشغيلية (مرتبات/إيجار + مخزن)" value={`${EGP(pl.data.expenses)} ج.م`} />
+            <StatCard variant="debit" label="منها: مصاريف المخزن" value={`${EGP(pl.data.warehouseExpenses)} ج.م`} />
+            <StatCard variant="debit" label="تسويات نقدية" value={`${EGP(pl.data.settlement)} ج.م`} />
             <StatCard variant={pl.data.netProfit >= 0 ? 'accent' : 'debit'} label="صافي الربح" value={`${EGP(pl.data.netProfit)} ج.م`} />
           </StatsGrid>
+        )}
+      </Section>
+
+      {/* Warehouse expenses breakdown */}
+      <Section title="🏬 مصاريف المخزن (إيجار / مرتبات / تحميل / تخليص)">
+        {whExp.isLoading ? <Spinner /> : !whExp.data?.warehouses.length ? <div className="empty">لا توجد مصاريف مخزن في الفترة</div> : (
+          <>
+            <div style={{ marginBottom: 10, fontWeight: 700 }}>الإجمالي: <span className="num deb">{EGP(whExp.data.total)} ج.م</span></div>
+            <div className="tbl-wrap">
+              <table>
+                <thead><tr><th>المخزن</th><th>البنود</th><th style={{ width: 130 }}>الإجمالي</th></tr></thead>
+                <tbody>
+                  {whExp.data.warehouses.map((w) => (
+                    <tr key={w.id}>
+                      <td><b>{w.name}</b></td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {w.categories.map((c) => (
+                            <span key={c.name} className="pill" style={{ fontSize: 12 }}>{c.name}: {EGP(c.total)}</span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="num deb">{EGP(w.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </Section>
+
+      {/* Custody (عهدة) outstanding balances */}
+      <Section title="🤝 العُهَد (فلوس مع الناس أمانة/سلف)">
+        {custody.isLoading ? <Spinner /> : !custody.data?.holders.length ? <div className="empty">لا توجد عُهَد مفتوحة</div> : (
+          <>
+            <div style={{ marginBottom: 10, fontWeight: 700 }}>إجمالي العُهَد المفتوحة: <span className="num deb">{EGP(custody.data.total)} ج.م</span></div>
+            <div className="tbl-wrap">
+              <table>
+                <thead><tr><th style={{ width: 32 }}>#</th><th>صاحب العهدة</th><th style={{ width: 140 }}>المبلغ اللي عليه</th></tr></thead>
+                <tbody>
+                  {custody.data.holders.map((h, i) => (
+                    <tr key={h.id}><td className="muted">{i + 1}</td><td><b>{h.name}</b></td><td className="num deb">{EGP(h.balance)}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </Section>
 

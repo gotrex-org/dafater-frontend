@@ -8,8 +8,12 @@ import { PageTitle, Field, Combobox, MoneyInput } from '@/components/common';
 import { PartyCombobox } from '../../invoices/components/PartyCombobox';
 import { useAllParties } from '../../parties/hooks';
 import { useAllTreasury } from '../../treasury/hooks';
+import { useAllWarehouses } from '../../warehouses/hooks';
 import { useAllExpenseCategories } from '../../expense-categories/hooks';
 import { ExpenseCategoriesManager } from '../../expense-categories/components/ExpenseCategoriesManager';
+import { WarehouseSchedulesManager } from '../../warehouse-expenses/components/WarehouseSchedulesManager';
+import { GoodsCostPicker } from './GoodsCostPicker';
+import type { CashDir, CashTarget, GoodsMode, GoodsItem } from '../dtos';
 import { usePostEntry, usePendingCollections, useResolveCollection } from '../hooks';
 import { useForexAgents, useEgpInAny } from '../../forex/hooks';
 import { usePendingDriverTrips, useAddPayment } from '../../driver-trips/hooks';
@@ -20,10 +24,9 @@ type TabType = EntryType | 'driverPayment' | 'balanceTransfer';
 const TABS: { t: TabType; label: string; perm: string }[] = [
   { t: 'collect', label: 'تحصيل من عميل', perm: 'entry.collect' },
   { t: 'paySupplier', label: 'دفع لمورد', perm: 'entry.pay' },
-  { t: 'expense', label: 'مصروف', perm: 'entry.expense' },
+  { t: 'cash', label: 'صرف وتوريد نقدية', perm: 'entry.expense' },
   { t: 'transfer', label: 'تحويل بين الخزائن', perm: 'entry.transfer' },
   { t: 'balanceTransfer', label: 'تحويل بين الأطراف', perm: 'entry.partyTransfer' },
-  { t: 'adjust', label: 'تسوية حساب', perm: 'entry.adjust' },
   { t: 'unknownCollect', label: 'تحصيل مجهول', perm: 'entry.unknown' },
   { t: 'partyTransfer', label: 'التحويل إلى وسيط', perm: 'entry.partyTransfer' },
   { t: 'driverPayment', label: 'سائقين', perm: 'entry.driverPayment' },
@@ -224,7 +227,7 @@ function DriverPaymentSection() {
 }
 
 export function EntryForm() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const allowedTabs = TABS.filter((tb) => can(tb.perm));
   const [type, setType] = useState<TabType>('collect');
   useEffect(() => {
@@ -233,7 +236,9 @@ export function EntryForm() {
   const { data: clients } = useAllParties('CLIENT');
   const { data: suppliers } = useAllParties('SUPPLIER');
   const { data: agents } = useAllParties('AGENT');
+  const { data: persons } = useAllParties('PERSON');
   const { data: treasury } = useAllTreasury();
+  const { data: warehouses } = useAllWarehouses();
   const { data: cats } = useAllExpenseCategories();
   const { data: forexAgents } = useForexAgents();
   const postEntry = usePostEntry();
@@ -246,6 +251,13 @@ export function EntryForm() {
   const [treasuryId, setTreasuryId] = useState('');
   const [treasuryId2, setTreasuryId2] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [warehouseId, setWarehouseId] = useState('');
+  const [cashDir, setCashDir] = useState<CashDir>('out');
+  const [cashTarget, setCashTarget] = useState<CashTarget>('warehouse');
+  const [goodsMode, setGoodsMode] = useState<GoodsMode>('invoices');
+  const [invoiceIds, setInvoiceIds] = useState<string[]>([]);
+  const [goodsItems, setGoodsItems] = useState<GoodsItem[]>([]);
+  const [holderName, setHolderName] = useState('');
   const [amount, setAmount] = useState('');
   const [direction, setDirection] = useState<'debit' | 'credit'>('debit');
   const [rate, setRate] = useState('');
@@ -273,8 +285,9 @@ export function EntryForm() {
 
   const reset = () => {
     setAmount(''); setNote(''); setPartyId(''); setPartyId2('');
-    setTreasuryId(''); setTreasuryId2(''); setCategoryId('');
+    setTreasuryId(''); setTreasuryId2(''); setCategoryId(''); setWarehouseId('');
     setRate(''); setAddFee(false); setFeeAmount('500'); setForexAgentId(''); setExpensePartyId('');
+    setInvoiceIds([]); setGoodsItems([]); setHolderName('');
   };
 
   const submit = () => {
@@ -304,6 +317,38 @@ export function EntryForm() {
         { type: 'partyTransfer', date, amount: Number(amount), partyId, partyId2, note: note || undefined },
         {
           onSuccess: () => { setMsg('تم التحويل بين الأطراف ✓'); reset(); },
+          onError: (e: any) => setError(e.message),
+        },
+      );
+      return;
+    }
+
+    // صرف وتوريد نقدية موحّد بجهة
+    if (type === 'cash') {
+      if (!amount || Number(amount) <= 0) return setError('اكتب المبلغ');
+      if (cashTarget !== 'account' && !treasuryId) return setError('اختر الخزنة');
+      if ((cashTarget === 'client' || cashTarget === 'supplier') && !partyId) return setError(cashTarget === 'client' ? 'اختر العميل' : 'اختر المورد');
+      if (cashTarget === 'account' && !partyId) return setError('اختر الحساب');
+      if (cashTarget === 'custody' && !holderName.trim()) return setError('اكتب اسم صاحب العهدة');
+      if (cashTarget === 'warehouse' && !warehouseId) return setError('اختر المخزن');
+      postEntry.mutate(
+        {
+          type: 'cash', date, amount: Number(amount),
+          cashDir, cashTarget,
+          treasuryId: cashTarget === 'account' ? undefined : treasuryId,
+          partyId: (cashTarget === 'client' || cashTarget === 'supplier' || cashTarget === 'account') ? partyId : undefined,
+          holderName: cashTarget === 'custody' ? holderName.trim() : undefined,
+          warehouseId: (cashTarget === 'warehouse' || cashTarget === 'goods') ? warehouseId || undefined : undefined,
+          categoryId: cashTarget === 'warehouse' ? categoryId || undefined : undefined,
+          ...(cashTarget === 'goods' ? {
+            goodsMode,
+            invoiceIds: goodsMode === 'invoices' ? invoiceIds : undefined,
+            goodsItems: goodsMode !== 'invoices' ? goodsItems.filter((g) => g.productId) : undefined,
+          } : {}),
+          note: note || undefined,
+        },
+        {
+          onSuccess: () => { setMsg('تم تسجيل الحركة ✓'); reset(); },
           onError: (e: any) => setError(e.message),
         },
       );
@@ -348,6 +393,86 @@ export function EntryForm() {
           <>
             <div className="form-grid">
               <Field label="التاريخ"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+
+              {type === 'cash' && (
+                <>
+                  <Field label="نوع الحركة">
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" className={`btn btn-sm ${cashDir === 'out' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCashDir('out')}>{cashTarget === 'account' ? 'عليه (يزيد المستحق عليه)' : 'صرف (خروج نقدية)'}</button>
+                      <button type="button" className={`btn btn-sm ${cashDir === 'in' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCashDir('in')}>{cashTarget === 'account' ? 'له (يقلل المستحق عليه)' : 'توريد (دخول نقدية)'}</button>
+                    </div>
+                  </Field>
+
+                  <Field label="الجهة">
+                    <select value={cashTarget} onChange={(e) => { setCashTarget(e.target.value as CashTarget); setPartyId(''); setWarehouseId(''); setCategoryId(''); setHolderName(''); }}>
+                      <option value="client">عميل</option>
+                      <option value="supplier">مورد</option>
+                      <option value="warehouse">مخزن</option>
+                      <option value="goods">بضاعة</option>
+                      <option value="custody">عهدة</option>
+                      <option value="account">تسوية حساب</option>
+                      <option value="settlement">تسوية نقدية</option>
+                    </select>
+                  </Field>
+
+                  {cashTarget === 'custody' && (
+                    <Field label="صاحب العهدة (أي شخص)">
+                      <input
+                        value={holderName}
+                        onChange={(e) => setHolderName(e.target.value)}
+                        placeholder="اكتب الاسم…"
+                        list="custody-holders"
+                      />
+                      <datalist id="custody-holders">
+                        {(persons?.data ?? []).map((p) => <option key={p.id} value={p.name} />)}
+                      </datalist>
+                    </Field>
+                  )}
+
+                  {(cashTarget === 'client' || cashTarget === 'supplier') && (
+                    <Field label={cashTarget === 'client' ? 'العميل' : 'المورد'}>
+                      <PartyCombobox
+                        parties={cashTarget === 'client' ? (clients?.data ?? []) : (suppliers?.data ?? [])}
+                        value={partyId}
+                        onChange={setPartyId}
+                        role={cashTarget === 'supplier' ? 'SUPPLIER' : 'CLIENT'}
+                      />
+                    </Field>
+                  )}
+
+                  {cashTarget === 'account' && (
+                    <Field label="الحساب">
+                      <PartyCombobox parties={allParties} value={partyId} onChange={setPartyId} role="CLIENT" />
+                    </Field>
+                  )}
+
+                  {(cashTarget === 'warehouse' || cashTarget === 'goods') && (
+                    <Field label={cashTarget === 'warehouse' ? 'المخزن' : 'المخزن (اختياري)'}>
+                      <Combobox options={warehouses?.data ?? []} value={warehouseId} onChange={setWarehouseId} placeholder={cashTarget === 'goods' ? 'اختياري' : undefined} />
+                    </Field>
+                  )}
+
+                  {cashTarget === 'goods' && (
+                    <GoodsCostPicker
+                      mode={goodsMode}
+                      setMode={setGoodsMode}
+                      invoiceIds={invoiceIds}
+                      setInvoiceIds={setInvoiceIds}
+                      goodsItems={goodsItems}
+                      setGoodsItems={setGoodsItems}
+                    />
+                  )}
+
+                  {cashTarget === 'warehouse' && (
+                    <Field label="بند المصروف (تحميل / تخليص...)" full>
+                      <Combobox options={cats?.data ?? []} value={categoryId} onChange={setCategoryId} placeholder="اختياري" />
+                      <div style={{ marginTop: 8 }}>
+                        <ExpenseCategoriesManager canManage={can('settings')} />
+                      </div>
+                    </Field>
+                  )}
+                </>
+              )}
 
               {(type === 'collect' || type === 'paySupplier' || type === 'adjust') && (
                 <Field label={type === 'collect' ? 'العميل' : type === 'paySupplier' ? 'المورد' : 'الحساب'}>
@@ -397,7 +522,7 @@ export function EntryForm() {
                 </Field>
               )}
 
-              {type !== 'adjust' && type !== 'balanceTransfer' && (
+              {type !== 'adjust' && type !== 'balanceTransfer' && !(type === 'cash' && cashTarget === 'account') && (
                 <Field label={type === 'transfer' ? 'من حساب' : type === 'partyTransfer' ? 'من خزنة' : 'حساب الخزنة'}>
                   <Combobox options={treasury?.data ?? []} value={treasuryId} onChange={setTreasuryId} placeholder={type === 'partyTransfer' ? 'اختياري…' : undefined} />
                 </Field>
@@ -453,6 +578,8 @@ export function EntryForm() {
           </>
         )}
       </div>
+
+      {type === 'cash' && cashTarget === 'warehouse' && user?.isPrimary && <WarehouseSchedulesManager />}
 
       <PendingCollections />
     </>

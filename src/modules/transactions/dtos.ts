@@ -1,4 +1,9 @@
-export type EntryType = 'collect' | 'paySupplier' | 'expense' | 'transfer' | 'adjust' | 'unknownCollect' | 'deposit' | 'withdraw' | 'partyTransfer';
+export type EntryType = 'collect' | 'paySupplier' | 'expense' | 'cash' | 'transfer' | 'adjust' | 'unknownCollect' | 'deposit' | 'withdraw' | 'partyTransfer';
+
+export type CashDir = 'out' | 'in';
+export type CashTarget = 'client' | 'supplier' | 'warehouse' | 'goods' | 'settlement' | 'account' | 'custody';
+export type GoodsMode = 'invoices' | 'products' | 'count';
+export interface GoodsItem { productId: string; count?: number }
 
 export interface PendingCollection {
   id: string;
@@ -18,6 +23,13 @@ export interface PostEntryDto {
   treasuryId?: string;
   treasuryId2?: string;
   categoryId?: string;
+  warehouseId?: string;
+  cashDir?: CashDir;
+  cashTarget?: CashTarget;
+  holderName?: string;
+  goodsMode?: GoodsMode;
+  invoiceIds?: string[];
+  goodsItems?: GoodsItem[];
   rate?: number;
   amount2?: number;
   direction?: 'debit' | 'credit';

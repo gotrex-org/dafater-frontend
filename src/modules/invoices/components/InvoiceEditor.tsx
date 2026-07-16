@@ -265,8 +265,19 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
       <PageTitle title={isEdit ? `تعديل ${kind === 'SALE' ? 'فاتورة بيع' : 'فاتورة شراء'} رقم ${invoice?.no ?? no}` : kind === 'SALE' ? 'فاتورة بيع جديدة' : 'فاتورة شراء جديدة'} />
       <div className="card" onKeyDown={fieldNavKeyDown}>
         <div className="form-grid">
-          {!isEdit && <Field label="رقم الفاتورة"><input value={no} onChange={(e) => setNo(e.target.value)} placeholder={partyId ? '…' : 'اختر العميل أولاً'} style={no ? { fontWeight: 700 } : {}} /></Field>}
-          <Field label="التاريخ"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+          {!isEdit && (
+            <Field label="رقم الفاتورة">
+              <input
+                value={no}
+                readOnly
+                placeholder=""
+                title="رقم تلقائي — يظهر بعد اختيار الطرف"
+                style={{ fontWeight: 700, textAlign: 'center', width: `${Math.max((no?.length || 0) + 2, 4)}ch` }}
+              />
+              {!partyId && <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>تلقائي بعد اختيار {role === 'CLIENT' ? 'العميل' : 'المورد'}</div>}
+            </Field>
+          )}
+          <Field label="التاريخ"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: 'fit-content', maxWidth: '100%' }} /></Field>
           <Field label={kind === 'SALE' ? 'العميل' : 'المورد'}>
             {directSale ? (
               <span className="muted" style={{ fontSize: 13 }}>{directSaleLoading ? '...' : 'بيع مباشر — بدون عميل محدد'}</span>
@@ -274,7 +285,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
               <PartyCombobox parties={parties?.data ?? []} value={partyId} onChange={setPartyId} role={role} />
             )}
             {kind === 'SALE' && !isEdit && (
-              <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, fontWeight: 600, marginTop: 6, cursor: 'pointer' }}>
+              <label className="check-inline" style={{ fontSize: 12, fontWeight: 600, marginTop: 6 }}>
                 <input type="checkbox" checked={directSale} onChange={(e) => toggleDirectSale(e.target.checked)} />
                 بيع مباشر (بدون اختيار عميل)
               </label>
@@ -285,7 +296,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
           </Field>
           <Field label="البيان (اختياري)" full><input value={note} onChange={(e) => setNote(e.target.value)} /></Field>
           <Field label="نوع الفاتورة" full>
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 700, cursor: 'pointer', color: fake ? 'var(--debit)' : undefined }}>
+            <label className="check-inline" style={{ fontWeight: 700, color: fake ? 'var(--debit)' : undefined }}>
               <input type="checkbox" checked={fake} onChange={(e) => setFake(e.target.checked)} />
               فاتورة وهمية (مستند فقط — مش هتتسجّل في الحسابات ولا الخزنة ولا المخزن)
             </label>
@@ -398,28 +409,28 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
           })}>+ إضافة صنف</button>
         </div>
 
-        {/* البنود الإضافية — قسم منفصل تمامًا عن الأصناف، بشكل مختلف */}
-        <div style={{ margin: '4px 16px 14px', padding: 12, borderRadius: 12, background: 'var(--accent-soft)', border: '1.5px dashed var(--accent)' }}>
-          <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 8, color: 'var(--accent-d)' }}>🧾 بنود إضافية (خدمات ورسوم)</div>
-          <div style={{ display: 'grid', gap: 6 }}>
+        {/* البنود الإضافية — قسم منفصل عن الأصناف، بحجم أصغر ولون قريب من سطح الكارت */}
+        <div style={{ margin: '4px 16px 14px', padding: 9, borderRadius: 10, background: 'var(--line-soft)', border: '1px solid var(--line)' }}>
+          <div style={{ fontWeight: 700, fontSize: 11.5, marginBottom: 6, color: 'var(--ink-soft)' }}>🧾 بنود إضافية (خدمات ورسوم)</div>
+          <div style={{ display: 'grid', gap: 4 }}>
             {lines.map((l, i) => {
               if (!l.bnd) return null;
               return (
-                <div key={l._key} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', background: '#fff', borderRadius: 8, padding: '6px 8px' }}>
-                  <div style={{ flex: 1, minWidth: 170 }}>
+                <div key={l._key} style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', background: 'var(--surface)', borderRadius: 6, padding: '4px 6px', fontSize: 12 }}>
+                  <div style={{ flex: 1, minWidth: 150 }}>
                     <ProductCombobox products={products?.data ?? []} value={l.productId} onChange={(id) => setLine(i, { productId: id })} />
                   </div>
-                  <MoneyInput value={l.qty} onChange={(v) => setLine(i, { qty: v })} placeholder="كمية" style={{ width: 64 }} />
-                  <span className="muted" style={{ fontSize: 12 }}>×</span>
-                  <MoneyInput value={l.price} onChange={(v) => setLine(i, { price: v })} placeholder="سعر" style={{ width: 90 }} />
-                  <span className="num" style={{ minWidth: 84, fontWeight: 800, textAlign: 'end' }}>{money(Number(l.qty) * Number(l.price), cur)}</span>
+                  <MoneyInput value={l.qty} onChange={(v) => setLine(i, { qty: v })} placeholder="كمية" style={{ width: 56 }} />
+                  <span className="muted" style={{ fontSize: 11 }}>×</span>
+                  <MoneyInput value={l.price} onChange={(v) => setLine(i, { price: v })} placeholder="سعر" style={{ width: 78 }} />
+                  <span className="num" style={{ minWidth: 74, fontWeight: 700, textAlign: 'end', fontSize: 12 }}>{money(Number(l.qty) * Number(l.price), cur)}</span>
                   <button className="btn btn-danger btn-sm" onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}>×</button>
                 </div>
               );
             })}
-            {!lines.some((l) => l.bnd) && <div className="muted" style={{ fontSize: 12.5 }}>لا توجد بنود إضافية</div>}
+            {!lines.some((l) => l.bnd) && <div className="muted" style={{ fontSize: 11.5 }}>لا توجد بنود إضافية</div>}
           </div>
-          <button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={() => setLines((ls) => [...ls, bndBlank()])}>+ بند إضافي</button>
+          <button className="btn btn-ghost btn-sm" style={{ marginTop: 6, fontSize: 12 }} onClick={() => setLines((ls) => [...ls, bndBlank()])}>+ بند إضافي</button>
         </div>
 
         {!fake && (
