@@ -23,6 +23,7 @@ import type { InvoiceDraft } from '../draftTypes';
 interface Line { _key: number; productId: string; qty: string; price: string; freight: string; commission: string; bnd?: boolean; }
 let _nextKey = 0;
 const blankLine = (): Line => ({ _key: _nextKey++, productId: '', qty: '', price: '', freight: '', commission: '' });
+const bndBlank = (): Line => ({ ...blankLine(), bnd: true }); // بند إضافي (خدمة/رسوم) منفصل عن الأصناف
 let _draftSeq = 0;
 const newDraftId = () => `draft_${++_draftSeq}_${Date.now()}`;
 
@@ -216,7 +217,8 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
             ? { commissionAmount: Number(commissionAmount) }
             : {}),
         },
-        { onSuccess: (inv) => setSaved(inv), onError: (e: any) => setError(e.message) },
+        // Purchase invoices never make a vehicle manifest — just close. Sales offer it.
+        { onSuccess: (inv) => { if (kind === 'SALE') setSaved(inv); else onClose(); }, onError: (e: any) => setError(e.message) },
       );
     }
   };
@@ -318,12 +320,13 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
             <thead><tr><th>الكمية</th><th>الصنف</th><th>السعر {isUSD ? '($)' : '(ج.م)'}</th>{kind === 'PURCHASE' && <><th>ناولون</th><th>عمولة</th><th>صافي السعر</th></>}<th>الإجمالي</th><th></th></tr></thead>
             <tbody>
               {lines.map((l, i) => {
+                if (l.bnd) return null; // البنود الإضافية ليها قسم منفصل تحت
                 const prod = l.productId ? products?.data.find((p) => p.id === l.productId) : undefined;
                 const stockRow = prod && !prod.service ? stockByProduct.get(l.productId) : undefined;
                 const lastPrice = prod ? lastPriceByProduct.get(l.productId) : undefined;
                 const pinned = prod ? (kind === 'SALE' ? !!prod.pinSale : !!prod.pinPurchase) : false;
                 return (
-                  <tr key={l._key} style={l.bnd ? { fontSize: 12.5, background: 'var(--line-soft)' } : undefined}>
+                  <tr key={l._key}>
                     <td><MoneyInput value={l.qty} onChange={(v) => setLine(i, { qty: v })} placeholder="0" style={{ width: 80 }} /></td>
                     <td style={{ minWidth: 320 }}>
                       <ProductCombobox
@@ -388,11 +391,35 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
         </div>
         <div style={{ padding: '10px 16px' }}>
           <button className="btn btn-ghost btn-sm" onClick={() => setLines((ls) => {
-            // insert new product lines ABOVE the pinned بنود so بنود stay at the bottom
+            // keep new product lines above the بنود block in the array
             const idx = ls.findIndex((l) => l.bnd);
             const nl = blankLine();
             return idx === -1 ? [...ls, nl] : [...ls.slice(0, idx), nl, ...ls.slice(idx)];
           })}>+ إضافة صنف</button>
+        </div>
+
+        {/* البنود الإضافية — قسم منفصل تمامًا عن الأصناف، بشكل مختلف */}
+        <div style={{ margin: '4px 16px 14px', padding: 12, borderRadius: 12, background: 'var(--accent-soft)', border: '1.5px dashed var(--accent)' }}>
+          <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 8, color: 'var(--accent-d)' }}>🧾 بنود إضافية (خدمات ورسوم)</div>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {lines.map((l, i) => {
+              if (!l.bnd) return null;
+              return (
+                <div key={l._key} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', background: '#fff', borderRadius: 8, padding: '6px 8px' }}>
+                  <div style={{ flex: 1, minWidth: 170 }}>
+                    <ProductCombobox products={products?.data ?? []} value={l.productId} onChange={(id) => setLine(i, { productId: id })} />
+                  </div>
+                  <MoneyInput value={l.qty} onChange={(v) => setLine(i, { qty: v })} placeholder="كمية" style={{ width: 64 }} />
+                  <span className="muted" style={{ fontSize: 12 }}>×</span>
+                  <MoneyInput value={l.price} onChange={(v) => setLine(i, { price: v })} placeholder="سعر" style={{ width: 90 }} />
+                  <span className="num" style={{ minWidth: 84, fontWeight: 800, textAlign: 'end' }}>{money(Number(l.qty) * Number(l.price), cur)}</span>
+                  <button className="btn btn-danger btn-sm" onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}>×</button>
+                </div>
+              );
+            })}
+            {!lines.some((l) => l.bnd) && <div className="muted" style={{ fontSize: 12.5 }}>لا توجد بنود إضافية</div>}
+          </div>
+          <button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={() => setLines((ls) => [...ls, bndBlank()])}>+ بند إضافي</button>
         </div>
 
         {!fake && (

@@ -33,7 +33,7 @@ export const SECTIONS: SectionDef[] = [
   { view: 'dash',         href: '/dashboard',    label: 'لوحة التحكم',       Component: DashboardView,  nav: true },
   { view: 'entry',        href: '/entry',        label: 'الإدخال اليومي',    Component: EntryForm,      nav: true },
   { view: 'invoices',     href: '/invoices',     label: 'الفواتير',          Component: InvoicesView,   nav: true },
-  { view: 'deals',        href: '/deals',        label: 'البيع الخارجي',     Component: DealsView,      nav: true },
+  { view: 'deals',        href: '/deals',        label: 'البيع الخارجي',     Component: DealsView },
   { view: 'manifests',    href: '/manifests',    label: 'كشوفات العربيات',   Component: ManifestsView,  nav: true },
   { view: 'driver-trips', href: '/driver-trips', label: 'كشف السائقين',      Component: DriverTripsView, nav: true },
   { view: 'requests',     href: '/requests',     label: 'الطلبيات',          Component: RequestsView,   nav: true },

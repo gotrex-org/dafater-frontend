@@ -12,13 +12,14 @@ import { InvoiceEditor } from './InvoiceEditor';
 import { InvoiceDetail } from './InvoiceDetail';
 import { ReturnsView } from '../../returns/components/ReturnsView';
 import { DiscountsView } from '../../discounts/components/DiscountsView';
+import { DealsView } from '../../deals/components/DealsView';
 
 const invoiceTotal = (inv: Invoice) => inv.items.reduce((s, it) => s + it.qty * it.price, 0);
 
 export function InvoicesView() {
   const { can } = useAuth();
   const { open } = useWindows();
-  const [section, setSection] = useState<'invoices' | 'returns' | 'discounts'>('invoices');
+  const [section, setSection] = useState<'invoices' | 'returns' | 'discounts' | 'deals'>('invoices');
   const [kind, setKind] = useState<InvoiceKind>('SALE');
   const [selected, setSelected] = useState<Invoice | null>(null);
   const [search, setSearch] = useState('');
@@ -39,18 +40,23 @@ export function InvoicesView() {
     <div className="toolbar">
       <SegmentedControl
         value={section}
-        onChange={(v) => setSection(v as 'invoices' | 'returns' | 'discounts')}
-        options={[{ value: 'invoices', label: 'الفواتير' }, { value: 'returns', label: 'المرتجعات' }, { value: 'discounts', label: 'الخصومات' }]}
+        onChange={(v) => setSection(v as typeof section)}
+        options={[
+          { value: 'invoices', label: 'الفواتير' },
+          { value: 'deals', label: 'البيع الخارجي' },
+          { value: 'returns', label: 'المرتجعات' },
+          { value: 'discounts', label: 'الخصومات' },
+        ]}
       />
     </div>
   );
 
-  if (section === 'returns' || section === 'discounts') {
+  if (section === 'returns' || section === 'discounts' || section === 'deals') {
     return (
       <>
-        <PageTitle title="الفواتير والمرتجعات والخصومات" />
+        <PageTitle title="الفواتير" />
         {sectionSwitch}
-        {section === 'returns' ? <ReturnsView /> : <DiscountsView />}
+        {section === 'returns' ? <ReturnsView /> : section === 'discounts' ? <DiscountsView /> : <DealsView />}
       </>
     );
   }
