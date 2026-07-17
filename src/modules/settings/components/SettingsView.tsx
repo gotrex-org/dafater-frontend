@@ -8,6 +8,7 @@ import { useConfig, useUpdateConfig } from '../../config/hooks';
 import { UsersManager } from '../../users/components/UsersManager';
 import { PartiesRegistry } from '../../parties/components/PartiesRegistry';
 import { ProductsManager } from '../../products/components/ProductsManager';
+import { ExpenseCategoriesManager } from '../../expense-categories/components/ExpenseCategoriesManager';
 
 export function SettingsView() {
   const { user, can } = useAuth();
@@ -97,6 +98,11 @@ export function SettingsView() {
 
       <CollapsibleSection title="سجل العملاء والموردين" defaultOpen={false}>
         <PartiesRegistry />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="بنود المصاريف (إضافة وتعديل وحذف)" defaultOpen={false}>
+        <div className="muted" style={{ fontSize: 13, marginBottom: 10 }}>البنود دي بتظهر في تقرير المصاريف. تقدر تضيف بند من هنا أو من الحركة اليومية، لكن التعديل والحذف من هنا بس.</div>
+        <ExpenseCategoriesManager canManage />
       </CollapsibleSection>
 
       <button

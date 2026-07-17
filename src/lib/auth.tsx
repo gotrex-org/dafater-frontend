@@ -81,6 +81,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user?.id ?? null]);
 
+  // online heartbeat — يحدّث "آخر ظهور" كل دقيقة طول ما التطبيق مفتوح ومسجّل دخول
+  useEffect(() => {
+    if (!user) return;
+    const ping = () => { authApi.heartbeat().catch(() => {}); };
+    ping();
+    const iv = setInterval(ping, 60_000);
+    return () => clearInterval(iv);
+  }, [user?.id ?? null]);
+
   const can = (view: string) => !!user && (user.admin || user.views.includes(view));
 
   const syncUser = (patch: Partial<AuthUser>) => {

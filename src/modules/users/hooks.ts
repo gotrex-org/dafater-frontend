@@ -11,7 +11,8 @@ export const userKeys = {
 };
 
 export function useUsers(params: ListParams = {}) {
-  return useQuery({ queryKey: userKeys.list(params), queryFn: () => usersApi.list(params) });
+  // Refetch periodically so the "online / آخر ظهور" status stays fresh while viewing.
+  return useQuery({ queryKey: userKeys.list(params), queryFn: () => usersApi.list(params), refetchInterval: 30_000 });
 }
 
 export function useCreateUser() {

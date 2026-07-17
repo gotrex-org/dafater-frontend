@@ -19,6 +19,9 @@ export interface WarehouseExpenseRow { id: string; name: string; total: number; 
 export interface WarehouseExpenses { total: number; warehouses: WarehouseExpenseRow[]; }
 export interface CustodyHolder { id: string; name: string; balance: number; }
 export interface CustodyBalances { total: number; holders: CustodyHolder[]; }
+export interface ExpenseGroupRow { key: 'WAREHOUSE' | 'EXTERNAL'; label: string; total: number; items: { name: string; total: number }[]; }
+export interface ExpensesByCategory { total: number; groups: ExpenseGroupRow[]; }
+export interface BusiestFor { months: { month: string; total: number; count: number }[]; peak: { month: string; total: number; count: number } | null; }
 
 const range = (from?: string, to?: string) => {
   const p = new URLSearchParams();
@@ -38,4 +41,7 @@ export const reportsApi = {
   profitLoss: (from?: string, to?: string) => api.get<ProfitLoss>(`/reports/profit-loss${range(from, to)}`),
   warehouseExpenses: (from?: string, to?: string) => api.get<WarehouseExpenses>(`/reports/warehouse-expenses${range(from, to)}`),
   custodyBalances: () => api.get<CustodyBalances>('/reports/custody-balances'),
+  expensesByCategory: (from?: string, to?: string) => api.get<ExpensesByCategory>(`/reports/expenses-by-category${range(from, to)}`),
+  busiestFor: (type: 'client' | 'supplier' | 'product', id: string, from?: string, to?: string) =>
+    api.get<BusiestFor>(`/reports/busiest-for?type=${type}&id=${encodeURIComponent(id)}${from ? `&from=${from}` : ''}${to ? `&to=${to}` : ''}`),
 };

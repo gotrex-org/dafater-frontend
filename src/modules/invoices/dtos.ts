@@ -10,7 +10,15 @@ export interface InvoiceItem {
   qty: number;
   price: number;
   freight?: number;
+  freightTreasury?: { id: string; name: string } | null;
+  freightNote?: string | null;
+  tea?: number;
+  teaTreasury?: { id: string; name: string } | null;
+  teaNote?: string | null;
   commission?: number;
+  commissionQty?: number;
+  commissionPrice?: number;
+  commissionParty?: { id: string; name: string } | null;
   product?: Product;
 }
 
@@ -37,7 +45,14 @@ export interface CreateInvoiceItemDto {
   qty: number;
   price: number;
   freight?: number;
-  commission?: number;
+  freightTreasuryId?: string;
+  freightNote?: string;
+  tea?: number;
+  teaTreasuryId?: string;
+  teaNote?: string;
+  commissionQty?: number;
+  commissionPrice?: number;
+  commissionPartyId?: string;
 }
 
 export interface CreateInvoiceDto {

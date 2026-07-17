@@ -31,3 +31,9 @@ export const useWarehouseExpenses = ({ from, to }: R) =>
 
 export const useCustodyBalances = () =>
   useQuery({ queryKey: ['reports', 'custody-balances'], queryFn: () => reportsApi.custodyBalances() });
+
+export const useExpensesByCategory = ({ from, to }: R) =>
+  useQuery({ queryKey: ['reports', 'expenses-by-category', from, to], queryFn: () => reportsApi.expensesByCategory(from, to) });
+
+export const useBusiestFor = (type: 'client' | 'supplier' | 'product', id: string | null, { from, to }: R) =>
+  useQuery({ queryKey: ['reports', 'busiest-for', type, id, from, to], queryFn: () => reportsApi.busiestFor(type, id as string, from, to), enabled: !!id });

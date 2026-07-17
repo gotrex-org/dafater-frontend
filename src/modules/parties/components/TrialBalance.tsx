@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/auth';
 import type { Party } from '../dtos';
 import { useParties } from '../hooks';
 
-const ROLE_LABEL: Record<string, string> = { CLIENT: 'عميل', SUPPLIER: 'مورد', AGENT: 'صاحب عمولة' };
+const ROLE_LABEL: Record<string, string> = { CLIENT: 'عميل', SUPPLIER: 'مورد', AGENT: 'صاحب عمولة', PERSON: 'عهدة' };
 
 // Convert a party's balance to EGP. EGP parties pass through; USD parties use their
 // weighted-average rate — returns { egp: null } when a USD party has no rate yet (can't
@@ -49,7 +49,7 @@ export function TrialBalance({ onOpenParty }: { onOpenParty: (uid: string) => vo
       return true;
     });
     return deduped
-      .filter((p) => !isRestricted || restrictedIds.includes(p.id))
+      .filter((p) => !isRestricted || !restrictedIds.includes(p.id))
       .filter((p) => (showZeros ? true : Math.abs(p.balance ?? 0) >= 0.005))
       .filter((p) => p.name.includes(search.trim()))
       .sort((a, b) => Math.abs(b.balance ?? 0) - Math.abs(a.balance ?? 0));

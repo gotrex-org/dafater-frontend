@@ -7,7 +7,7 @@ import { fieldNavKeyDown } from '@/lib/field-nav';
 import { PageTitle, Field, Combobox, MoneyInput } from '@/components/common';
 import { PartyCombobox } from '../../invoices/components/PartyCombobox';
 import { useAllParties } from '../../parties/hooks';
-import { useAllTreasury } from '../../treasury/hooks';
+import { useAllTreasury, useTreasuryNames } from '../../treasury/hooks';
 import { useAllWarehouses } from '../../warehouses/hooks';
 import { useAllExpenseCategories } from '../../expense-categories/hooks';
 import { ExpenseCategoriesManager } from '../../expense-categories/components/ExpenseCategoriesManager';
@@ -238,6 +238,7 @@ export function EntryForm() {
   const { data: agents } = useAllParties('AGENT');
   const { data: persons } = useAllParties('PERSON');
   const { data: treasury } = useAllTreasury();
+  const { data: treasuryNames } = useTreasuryNames(); // كل الخزائن (وجهة التحويل لأي خزينة)
   const { data: warehouses } = useAllWarehouses();
   const { data: cats } = useAllExpenseCategories();
   const { data: forexAgents } = useForexAgents();
@@ -273,8 +274,18 @@ export function EntryForm() {
   // Every party (client + supplier + agent) — for the ledger-only party-to-party transfer.
   const allParties = [...(clients?.data ?? []), ...(suppliers?.data ?? []), ...(agents?.data ?? [])];
   const treasuryCur = (treasury?.data.find((t) => t.id === treasuryId) as any)?.currency;
-  const treasury2Cur = (treasury?.data.find((t) => t.id === treasuryId2) as any)?.currency;
+  const treasury2Cur = (treasuryNames?.find((t) => t.id === treasuryId2) as any)?.currency;
   const selParty = type === 'collect' ? clients?.data.find((c) => c.id === partyId) : type === 'paySupplier' ? suppliers?.data.find((s) => s.id === partyId) : undefined;
+  // الطرف المختار حسب نوع الحركة/الجهة — عشان نظهر رصيده الحالي وانا بعمل المعاملة.
+  const activeParty =
+    type === 'collect' ? clients?.data.find((c) => c.id === partyId)
+    : type === 'paySupplier' ? suppliers?.data.find((s) => s.id === partyId)
+    : type === 'adjust' ? allParties.find((p) => p.id === partyId)
+    : type === 'cash' && cashTarget === 'client' ? clients?.data.find((c) => c.id === partyId)
+    : type === 'cash' && cashTarget === 'supplier' ? suppliers?.data.find((s) => s.id === partyId)
+    : type === 'cash' && cashTarget === 'account' ? allParties.find((p) => p.id === partyId)
+    : type === 'cash' && cashTarget === 'custody' ? persons?.data.find((p) => p.name === holderName.trim())
+    : undefined;
   const selPartyCur = (selParty as any)?.currency;
   const usdPay = (type === 'collect' || type === 'paySupplier') && (selPartyCur === 'USD' || treasuryCur === 'USD');
   const usdResult = usdPay && Number(rate) > 0 && Number(amount) > 0 ? Number(amount) / Number(rate) : undefined;
@@ -331,6 +342,7 @@ export function EntryForm() {
       if (cashTarget === 'account' && !partyId) return setError('اختر الحساب');
       if (cashTarget === 'custody' && !holderName.trim()) return setError('اكتب اسم صاحب العهدة');
       if (cashTarget === 'warehouse' && !warehouseId) return setError('اختر المخزن');
+      if (cashTarget === 'external' && !categoryId) return setError('اختر بند المصروف الخارجي');
       postEntry.mutate(
         {
           type: 'cash', date, amount: Number(amount),
@@ -339,7 +351,7 @@ export function EntryForm() {
           partyId: (cashTarget === 'client' || cashTarget === 'supplier' || cashTarget === 'account') ? partyId : undefined,
           holderName: cashTarget === 'custody' ? holderName.trim() : undefined,
           warehouseId: (cashTarget === 'warehouse' || cashTarget === 'goods') ? warehouseId || undefined : undefined,
-          categoryId: cashTarget === 'warehouse' ? categoryId || undefined : undefined,
+          categoryId: (cashTarget === 'warehouse' || cashTarget === 'external') ? categoryId || undefined : undefined,
           ...(cashTarget === 'goods' ? {
             goodsMode,
             invoiceIds: goodsMode === 'invoices' ? invoiceIds : undefined,
@@ -369,7 +381,16 @@ export function EntryForm() {
         note: note || undefined,
       },
       {
-        onSuccess: () => { setMsg('تم تسجيل الحركة ✓'); reset(); },
+        onSuccess: () => {
+          // notification صغير للخزنة اللي اتحوّلها المبلغ
+          if (type === 'transfer') {
+            const dest = treasuryNames?.find((t) => t.id === treasuryId2)?.name;
+            setMsg(dest ? `✓ اتحوّل ${EGP(Number(amount))} لخزنة ${dest}` : 'تم التحويل ✓');
+          } else {
+            setMsg('تم تسجيل الحركة ✓');
+          }
+          reset();
+        },
         onError: (e: any) => setError(e.message),
       },
     );
@@ -407,7 +428,8 @@ export function EntryForm() {
                     <select value={cashTarget} onChange={(e) => { setCashTarget(e.target.value as CashTarget); setPartyId(''); setWarehouseId(''); setCategoryId(''); setHolderName(''); }}>
                       <option value="client">عميل</option>
                       <option value="supplier">مورد</option>
-                      <option value="warehouse">مخزن</option>
+                      <option value="warehouse">مصاريف مخزن</option>
+                      <option value="external">مصاريف خارجية</option>
                       <option value="goods">بضاعة</option>
                       <option value="custody">عهدة</option>
                       <option value="account">تسوية حساب</option>
@@ -463,11 +485,15 @@ export function EntryForm() {
                     />
                   )}
 
-                  {cashTarget === 'warehouse' && (
-                    <Field label="بند المصروف (تحميل / تخليص...)" full>
-                      <Combobox options={cats?.data ?? []} value={categoryId} onChange={setCategoryId} placeholder="اختياري" />
+                  {(cashTarget === 'warehouse' || cashTarget === 'external') && (
+                    <Field label={cashTarget === 'external' ? 'بند المصروف الخارجي (ناولون/تخليص...)' : 'بند مصروف المخزن (تحميل/تخليص...)'} full>
+                      <Combobox
+                        options={(cats?.data ?? []).filter((c) => (c.group ?? 'WAREHOUSE') === (cashTarget === 'external' ? 'EXTERNAL' : 'WAREHOUSE'))}
+                        value={categoryId} onChange={setCategoryId}
+                        placeholder={cashTarget === 'external' ? 'اختر البند' : 'اختياري'}
+                      />
                       <div style={{ marginTop: 8 }}>
-                        <ExpenseCategoriesManager canManage={can('settings')} />
+                        <ExpenseCategoriesManager canManage addOnly />
                       </div>
                     </Field>
                   )}
@@ -517,7 +543,7 @@ export function EntryForm() {
                 <Field label="بند المصروف" full>
                   <Combobox options={cats?.data ?? []} value={categoryId} onChange={setCategoryId} />
                   <div style={{ marginTop: 8 }}>
-                    <ExpenseCategoriesManager canManage={can('settings')} />
+                    <ExpenseCategoriesManager canManage addOnly />
                   </div>
                 </Field>
               )}
@@ -529,8 +555,8 @@ export function EntryForm() {
               )}
 
               {type === 'transfer' && (
-                <Field label="إلى حساب">
-                  <Combobox options={treasury?.data ?? []} value={treasuryId2} onChange={setTreasuryId2} />
+                <Field label="إلى حساب (أي خزينة)">
+                  <Combobox options={treasuryNames ?? []} value={treasuryId2} onChange={setTreasuryId2} />
                 </Field>
               )}
 
@@ -559,6 +585,11 @@ export function EntryForm() {
                   <MoneyInput value={amount} onChange={setAmount} placeholder="0.00" />
                 )}
               </Field>
+              {activeParty && (
+                <div style={{ gridColumn: '1/-1', fontSize: 12.5, fontWeight: 700 }}>
+                  رصيد {activeParty.name} الحالي: <span className={(activeParty.balance ?? 0) >= 0 ? 'deb' : 'cre'}>{EGP(Math.abs(activeParty.balance ?? 0))} {(activeParty.balance ?? 0) >= 0 ? 'عليه' : 'له'}</span>
+                </div>
+              )}
               <Field label="البيان" full><input value={note} onChange={(e) => setNote(e.target.value)} /></Field>
             </div>
             {(type === 'collect' || type === 'unknownCollect') && (

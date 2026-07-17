@@ -43,6 +43,7 @@ function LedgerTab() {
   const isRestricted = !user?.admin && restrictedIds.length > 0;
 
   const [role, setRole] = useState<PartyRole>('CLIENT');
+  const [moreOpen, setMoreOpen] = useState(false); // قائمة الثلاث نقاط (commission / عهدة)
   const [selected, setSelected] = useState<Party | null>(null);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortKey>('balance');
@@ -56,7 +57,8 @@ function LedgerTab() {
 
   const all = data?.data ?? [];
   const filtered = all.filter((p) => {
-    if (isRestricted && !restrictedIds.includes(p.id)) return false;
+    // ledgerPartyIds = قائمة إخفاء: الأطراف اللي فيها ماتظهرش.
+    if (isRestricted && restrictedIds.includes(p.id)) return false;
     return p.name.includes(search.trim());
   });
   const sorted = [...filtered].sort((a, b) => {
@@ -78,17 +80,34 @@ function LedgerTab() {
   return (
     <>
       <div className="toolbar">
-        <SegmentedControl
-          value={role}
-          onChange={(v) => setRole(v as PartyRole)}
-          options={[
-            { value: 'CLIENT', label: 'العملاء' },
-            ...(!isRestricted ? [
-              { value: 'SUPPLIER', label: 'الموردين' },
-              { value: 'AGENT', label: 'أصحاب commission' },
-            ] : []),
-          ]}
-        />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <SegmentedControl
+            value={role}
+            onChange={(v) => setRole(v as PartyRole)}
+            options={[
+              { value: 'CLIENT', label: 'العملاء' },
+              ...(!isRestricted ? [{ value: 'SUPPLIER', label: 'الموردين' }] : []),
+            ]}
+          />
+          {!isRestricted && (
+            <div style={{ position: 'relative' }}>
+              <button
+                className={`btn btn-sm ${role === 'AGENT' || role === 'PERSON' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setMoreOpen((o) => !o)}
+                title="commission / عهدة"
+                style={{ fontWeight: 800, fontSize: role === 'AGENT' || role === 'PERSON' ? 13 : 17, lineHeight: 1 }}
+              >
+                {role === 'AGENT' ? 'commission' : role === 'PERSON' ? 'عهدة' : '⋮'}
+              </button>
+              {moreOpen && (
+                <div style={{ position: 'absolute', top: '100%', insetInlineStart: 0, zIndex: 30, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,.12)', padding: 4, display: 'grid', gap: 2, minWidth: 150, marginTop: 4 }}>
+                  <button className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { setRole('AGENT'); setMoreOpen(false); }}>أصحاب commission</button>
+                  <button className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { setRole('PERSON'); setMoreOpen(false); }}>عهدة (أمانات/سلف)</button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} style={{ padding: '10px 12px', border: '1.5px solid var(--line)', borderRadius: 10 }}>
           <option value="balance">ترتيب: الرصيد</option>
           <option value="name">ترتيب: أبجدي</option>

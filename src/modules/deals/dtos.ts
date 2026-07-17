@@ -5,6 +5,19 @@ export interface DealItem {
   price: number; // sell
   buyPrice?: number;
   product?: { id: string; name: string };
+  // تكاليف إضافية على البند (زي الفواتير — ناولون خارجي/شاي/عمولة)
+  freight?: number;
+  freightTreasuryId?: string;
+  freightNote?: string | null;
+  freightTreasury?: { id: string; name: string } | null;
+  tea?: number;
+  teaTreasuryId?: string;
+  teaNote?: string | null;
+  teaTreasury?: { id: string; name: string } | null;
+  commissionQty?: number;
+  commissionPrice?: number;
+  commissionPartyId?: string;
+  commissionParty?: { id: string; name: string } | null;
 }
 
 export interface Deal {

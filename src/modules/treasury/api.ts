@@ -5,6 +5,7 @@ import type { TreasuryAccount, TreasuryMovement, ExpenseByCategory, TreasuryDto 
 
 export const treasuryApi = {
   list: (params: ListParams = {}) => api.get<Paginated<TreasuryAccount>>(`/treasury${toQuery(params)}`),
+  names: () => api.get<{ id: string; name: string; currency?: string }[]>('/treasury/names'),
   movements: (params: ListParams = {}) =>
     api.get<Paginated<TreasuryMovement>>(`/treasury/movements${toQuery(params)}`),
   expensesByCategory: () => api.get<ExpenseByCategory[]>('/treasury/expenses-by-category'),

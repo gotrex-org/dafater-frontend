@@ -8,6 +8,7 @@ import { UnsavedProvider } from '@/lib/unsaved';
 import { WindowsProvider, SectionOutlet, useWindows } from '@/lib/windows';
 import { SECTIONS, sectionByHref, type SectionDef } from '@/lib/sections';
 import { useReminderDueCount } from '@/modules/reminders/hooks';
+import { useWarehouseDueCount } from '@/modules/warehouse-expenses/hooks';
 import { RemindersView } from '@/modules/reminders/components/RemindersView';
 
 // Sections render as normal full pages inside <SectionOutlet/>, but each is a mounted
@@ -19,6 +20,7 @@ function Desktop({ userName, isPrimary, onLogout }: { userName: string; isPrimar
   const pathname = usePathname();
   const router = useRouter();
   const { data: due } = useReminderDueCount(isPrimary);
+  const { data: whDue } = useWarehouseDueCount(isPrimary);
   const [remindersOpen, setRemindersOpen] = useState(false);
 
   const openSection = (s: SectionDef) =>
@@ -33,7 +35,7 @@ function Desktop({ userName, isPrimary, onLogout }: { userName: string; isPrimar
   }, [pathname]);
 
   const navSections = SECTIONS.filter((s) => s.nav && (s.primaryOnly ? isPrimary : can(s.view)));
-  const dueCount = due?.count ?? 0;
+  const dueCount = (due?.count ?? 0) + (whDue?.count ?? 0);
 
   return (
     <>

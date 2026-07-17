@@ -7,6 +7,7 @@ import {
   useReminders, useCreateReminder, useUpdateReminder, useReminderDone, useReminderUndo, useDeleteReminder,
 } from '../hooks';
 import { REMINDER_KIND_LABEL, type Reminder, type ReminderKind, type ReminderRecurrence, type CreateReminderDto } from '../dtos';
+import { WarehouseDuesPanel } from '../../warehouse-expenses/components/WarehouseDuesPanel';
 
 const KINDS: ReminderKind[] = ['INSTALLMENT', 'COLLECT', 'PAY', 'APPOINTMENT', 'OTHER'];
 
@@ -65,6 +66,8 @@ export function RemindersView({ embedded = false }: { embedded?: boolean }) {
   return (
     <>
       {!embedded && <PageTitle title="التذكيرات" subtitle="أقساط ومصاريف شهرية، نقدية تتحصّل أو تتدفع، مواعيد، وأي حاجة شخصية — خاصة بيك أنت بس" />}
+
+      <div style={{ marginBottom: 12 }}><WarehouseDuesPanel compact /></div>
 
       <div className="toolbar">
         <button className="btn btn-primary btn-sm sp" onClick={openNew}>+ تذكير جديد</button>

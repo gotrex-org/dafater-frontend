@@ -4,19 +4,17 @@ import { useState } from 'react';
 import { EGP } from '@/lib/format';
 import { Field, Combobox, MoneyInput } from '@/components/common';
 import { useAllWarehouses } from '../../warehouses/hooks';
-import { useAllTreasury } from '../../treasury/hooks';
 import { useWarehouseSchedules, useCreateWarehouseSchedule, useDeleteWarehouseSchedule } from '../hooks';
 
-// بنود المخزن الثابتة (إيجار/مرتبات...) — تُخصم تلقائيًا أول كل شهر. خاصة بصاحب الحساب فقط.
+// بنود المخزن الثابتة (إيجار/مرتبات...) — كل شهر بتظهر كاستحقاق في التذكيرات، وما تتخصمش
+// من الخزنة إلا لما حد يتأكّد إنها اتدفعت. خاصة بصاحب الحساب فقط.
 export function WarehouseSchedulesManager() {
   const { data: schedules = [] } = useWarehouseSchedules();
   const { data: warehouses } = useAllWarehouses();
-  const { data: treasury } = useAllTreasury();
   const create = useCreateWarehouseSchedule();
   const del = useDeleteWarehouseSchedule();
 
   const [warehouseId, setWarehouseId] = useState('');
-  const [treasuryId, setTreasuryId] = useState('');
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [dayOfMonth, setDayOfMonth] = useState('1');
@@ -25,11 +23,10 @@ export function WarehouseSchedulesManager() {
 
   const submit = () => {
     setErr(''); setMsg('');
-    if (!warehouseId) return setErr('اختر المخزن');
     if (!title.trim()) return setErr('اكتب اسم البند (إيجار / مرتبات...)');
     if (!amount || Number(amount) <= 0) return setErr('اكتب المبلغ');
     create.mutate(
-      { warehouseId, treasuryId: treasuryId || undefined, title: title.trim(), amount: Number(amount), dayOfMonth: Number(dayOfMonth) || 1 },
+      { warehouseId: warehouseId || undefined, title: title.trim(), amount: Number(amount), dayOfMonth: Number(dayOfMonth) || 1 },
       { onSuccess: () => { setMsg('تمت إضافة البند ✓'); setTitle(''); setAmount(''); }, onError: (e: any) => setErr(e.message) },
     );
   };
@@ -49,9 +46,8 @@ export function WarehouseSchedulesManager() {
               <div key={s.id} style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid var(--line-soft)', paddingBottom: 8 }}>
                 <span style={{ fontWeight: 700 }}>{s.title}</span>
                 <span className="num" style={{ color: 'var(--debit)', fontWeight: 700 }}>{EGP(s.amount)}</span>
-                <span className="muted" style={{ fontSize: 13 }}>{s.warehouse?.name}</span>
+                <span className="muted" style={{ fontSize: 13 }}>{s.warehouse?.name ?? 'عام على الشركة'}</span>
                 <span className="muted" style={{ fontSize: 12 }}>يوم {s.dayOfMonth} من كل شهر</span>
-                {s.treasury?.name && <span className="muted" style={{ fontSize: 12 }}>من {s.treasury.name}</span>}
                 <button className="btn btn-ghost btn-sm" style={{ color: 'var(--debit)', marginInlineStart: 'auto' }} onClick={() => remove(s.id, s.title)} disabled={del.isPending}>× إيقاف</button>
               </div>
             ))}
@@ -61,12 +57,12 @@ export function WarehouseSchedulesManager() {
         )}
 
         <div className="form-grid">
-          <Field label="المخزن"><Combobox options={warehouses?.data ?? []} value={warehouseId} onChange={setWarehouseId} /></Field>
+          <Field label="المخزن (اختياري)"><Combobox options={warehouses?.data ?? []} value={warehouseId} onChange={setWarehouseId} placeholder="عام على الشركة" /></Field>
           <Field label="اسم البند"><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="إيجار / مرتبات" /></Field>
           <Field label="المبلغ الشهري"><MoneyInput value={amount} onChange={setAmount} placeholder="0.00" /></Field>
-          <Field label="يوم الخصم من الشهر"><input type="number" min={1} max={28} value={dayOfMonth} onChange={(e) => setDayOfMonth(e.target.value)} /></Field>
-          <Field label="الخزنة (اختياري)"><Combobox options={treasury?.data ?? []} value={treasuryId} onChange={setTreasuryId} placeholder="اختياري" /></Field>
+          <Field label="يوم الاستحقاق من الشهر"><input type="number" min={1} max={28} value={dayOfMonth} onChange={(e) => setDayOfMonth(e.target.value)} /></Field>
         </div>
+        <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>البند بيظهر كل شهر في التذكيرات كاستحقاق — وما يتخصمش من الخزنة إلا لما حد يأكّد إنه اتدفع.</div>
         {err && <div className="err-text">{err}</div>}
         {msg && <div style={{ color: 'var(--credit)', fontWeight: 700 }}>{msg}</div>}
         <div className="toolbar" style={{ marginTop: 8, padding: 0 }}>

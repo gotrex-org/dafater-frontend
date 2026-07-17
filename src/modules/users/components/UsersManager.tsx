@@ -11,6 +11,35 @@ import type { User } from '../dtos';
 
 const ALL_KEYS = PERMISSIONS.flatMap((g) => [g.page, ...g.actions.map((a) => a.key)]);
 
+// نص "آخر ظهور" نسبي (من X دقيقة/ساعة/يوم)
+function sinceText(iso?: string | null): string {
+  if (!iso) return 'لم يدخل بعد';
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'من لحظات';
+  if (min < 60) return `من ${min} دقيقة`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `من ${hr} ساعة`;
+  const days = Math.floor(hr / 24);
+  if (days < 30) return `من ${days} يوم`;
+  return new Date(iso).toLocaleDateString('ar-EG');
+}
+
+// مؤشر أونلاين / آخر ظهور — للمالك فقط
+function PresenceBadge({ user }: { user: User }) {
+  return user.online ? (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 700, color: 'var(--credit)' }}>
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--credit)', display: 'inline-block' }} />
+      متصل الآن
+    </span>
+  ) : (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--ink-soft)' }}>
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--line)', display: 'inline-block' }} />
+      آخر ظهور {sinceText(user.lastSeenAt)}
+    </span>
+  );
+}
+
 function PermTree({ admin, views, setViews }: { admin: boolean; views: string[]; setViews: (v: string[]) => void }) {
   const has = (k: string) => views.includes(k);
   const togglePage = (page: string) => {
@@ -221,6 +250,7 @@ function UserRow({ user, canDelete }: { user: User; canDelete: boolean }) {
           {user.role === 'CUSTOMER' ? <span className="pill" style={{ background: 'var(--credit-bg)', color: 'var(--credit)' }}>عميل</span> : user.admin && <span className="pill">مدير</span>}
           {user.party && <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}> — {user.party.name}</span>}
         </b>
+        {me?.isPrimary && <PresenceBadge user={user} />}
         {locked
           ? <span className="muted" style={{ fontSize: 12 }}>محمي — لا يمكن تعديله</span>
           : <button className="btn btn-ghost btn-sm" onClick={() => setOpen((o) => !o)}>{open ? 'إغلاق' : 'تعديل'}</button>}
@@ -259,10 +289,10 @@ function UserRow({ user, canDelete }: { user: User; canDelete: boolean }) {
                   value={ledgerPartyIds}
                   onChange={setLedgerPartyIds}
                   allItems={ledgerParties}
-                  title="كشف الحساب — عملاء/موردين مخصصين"
-                  unitLabel="طرف"
-                  emptyHint="لا يوجد تقييد — الموظف يشوف كل العملاء والموردين"
-                  addPlaceholder="ابحث عن عميل أو مورد لإضافته…"
+                  title="إخفاء أطراف من كشف الحساب"
+                  unitLabel="طرف مخفي"
+                  emptyHint="مفيش إخفاء — الموظف يشوف كل العملاء والموردين"
+                  addPlaceholder="ابحث عن عميل أو مورد لإخفائه…"
                 />
               )}
               {hasTreasury && (

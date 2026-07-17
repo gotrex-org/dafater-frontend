@@ -20,6 +20,11 @@ export function useAllTreasury() {
   return useTreasury({ all: true });
 }
 
+// كل الخزائن بالاسم (من غير تقييد) — لاختيار وجهة التحويل.
+export function useTreasuryNames() {
+  return useQuery({ queryKey: ['treasury', 'names'], queryFn: () => treasuryApi.names() });
+}
+
 export function useTreasuryMovements(params: ListParams = {}) {
   return useQuery({ queryKey: treasuryKeys.movements(params), queryFn: () => treasuryApi.movements(params) });
 }

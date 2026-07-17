@@ -7,6 +7,16 @@ export interface InvoiceDraftLine {
   productId: string;
   qty: string;
   price: string;
+  bnd?: boolean;
+  freight?: string;
+  freightTreasuryId?: string;
+  freightNote?: string;
+  tea?: string;
+  teaTreasuryId?: string;
+  teaNote?: string;
+  commQty?: string;
+  commPrice?: string;
+  commPartyId?: string;
 }
 
 export interface InvoiceDraftState {
@@ -19,8 +29,6 @@ export interface InvoiceDraftState {
   paid: string;
   note: string;
   exchangeRate: string;
-  commissionAmount: string;
-  commissionPartyId: string;
   lines: InvoiceDraftLine[];
 }
 

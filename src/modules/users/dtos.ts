@@ -10,6 +10,8 @@ export interface User {
   role: 'STAFF' | 'CUSTOMER';
   party?: { id: string; name: string } | null;
   createdAt?: string;
+  lastSeenAt?: string | null;
+  online?: boolean;
 }
 
 export interface CreateUserDto {

@@ -1,7 +1,7 @@
 export type EntryType = 'collect' | 'paySupplier' | 'expense' | 'cash' | 'transfer' | 'adjust' | 'unknownCollect' | 'deposit' | 'withdraw' | 'partyTransfer';
 
 export type CashDir = 'out' | 'in';
-export type CashTarget = 'client' | 'supplier' | 'warehouse' | 'goods' | 'settlement' | 'account' | 'custody';
+export type CashTarget = 'client' | 'supplier' | 'warehouse' | 'external' | 'goods' | 'settlement' | 'account' | 'custody';
 export type GoodsMode = 'invoices' | 'products' | 'count';
 export interface GoodsItem { productId: string; count?: number }
 
