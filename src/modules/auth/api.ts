@@ -5,5 +5,5 @@ import type { LoginDto } from './dtos';
 export const authApi = {
   login: (dto: LoginDto) => api.post<{ token: string; user: AuthUser }>('/auth/login', dto),
   me: () => api.get<AuthUser>('/auth/me'),
-  heartbeat: () => api.post<{ ok: boolean }>('/auth/heartbeat', {}),
+  heartbeat: () => api.post<{ ok: boolean }>('/auth/heartbeat', {}, { silent: true }),
 };
