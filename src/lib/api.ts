@@ -41,8 +41,10 @@ http.interceptors.response.use(
   (res) => {
     // Toast a confirmation for successful writes (POST/PATCH/PUT/DELETE) — not
     // GET, since list/detail fetches happen constantly and would spam toasts.
+    // Background writes (e.g. the online heartbeat) opt out via `silent` so they
+    // don't pop a "تم بنجاح" toast every minute.
     const method = res.config.method?.toLowerCase();
-    if (method && method !== 'get') {
+    if (method && method !== 'get' && !(res.config as any).silent) {
       toast.success('تم بنجاح');
     }
     return res;
@@ -72,10 +74,14 @@ http.interceptors.response.use(
   },
 );
 
+// Per-request options for writes. `silent: true` suppresses the success toast —
+// used by background writes like the heartbeat.
+type WriteOpts = { silent?: boolean };
+
 export const api = {
   get: <T>(path: string) => http.get<T>(path).then((r) => r.data),
-  post: <T>(path: string, body?: unknown) => http.post<T>(path, body ?? {}).then((r) => r.data),
-  patch: <T>(path: string, body?: unknown) => http.patch<T>(path, body ?? {}).then((r) => r.data),
-  put: <T>(path: string, body?: unknown) => http.put<T>(path, body ?? {}).then((r) => r.data),
-  del: <T>(path: string) => http.delete<T>(path).then((r) => r.data),
+  post: <T>(path: string, body?: unknown, opts?: WriteOpts) => http.post<T>(path, body ?? {}, opts).then((r) => r.data),
+  patch: <T>(path: string, body?: unknown, opts?: WriteOpts) => http.patch<T>(path, body ?? {}, opts).then((r) => r.data),
+  put: <T>(path: string, body?: unknown, opts?: WriteOpts) => http.put<T>(path, body ?? {}, opts).then((r) => r.data),
+  del: <T>(path: string, opts?: WriteOpts) => http.delete<T>(path, opts).then((r) => r.data),
 };
