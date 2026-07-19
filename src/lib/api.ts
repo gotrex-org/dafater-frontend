@@ -1,7 +1,7 @@
 // Axios-based HTTP client for the Dafater API.
 // Keeps the same `api.get/post/patch/put/del` surface used across all modules,
 // but adds interceptors (auth header, 401 handling, error normalization).
-import axios, { AxiosError, AxiosInstance } from 'axios';
+import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 import { toast } from './toast';
 
 // An explicitly-empty NEXT_PUBLIC_API_URL (set at build time) means "same origin,
@@ -75,8 +75,9 @@ http.interceptors.response.use(
 );
 
 // Per-request options for writes. `silent: true` suppresses the success toast —
-// used by background writes like the heartbeat.
-type WriteOpts = { silent?: boolean };
+// used by background writes like the heartbeat. Extends AxiosRequestConfig so it
+// can be passed straight through as the request config.
+type WriteOpts = AxiosRequestConfig & { silent?: boolean };
 
 export const api = {
   get: <T>(path: string) => http.get<T>(path).then((r) => r.data),
