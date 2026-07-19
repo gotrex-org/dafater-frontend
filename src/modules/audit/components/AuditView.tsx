@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useTableState } from '@/lib/useTableState';
 import { money } from '@/lib/format';
-import { PageTitle, DataTable, type Column } from '@/components/common';
+import { PageTitle, DataTable, SearchInput, type Column } from '@/components/common';
 import { useAuth } from '@/lib/auth';
 import { useUsers } from '../../users/hooks';
 import { RecordOpener, canOpenRecord } from '../../records/RecordOpener';
@@ -271,12 +271,21 @@ function AuditDetail({ log, onBack, onOpen }: { log: AuditLog; onBack: () => voi
 export function AuditView() {
   const { page, setPage, pageSize, setPageSize } = useTableState();
   const [user, setUser] = useState('');
+  const [search, setSearch] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [selected, setSelected] = useState<AuditLog | null>(null);
   const [target, setTarget] = useState<{ entity: string; uid: string } | null>(null);
   const [restoreErr, setRestoreErr] = useState('');
   const { user: authUser } = useAuth();
   const { data: users } = useUsers();
-  const { data, isLoading } = useAudit({ page, pageSize, user: user || undefined });
+  const { data, isLoading } = useAudit({
+    page, pageSize,
+    user: user || undefined,
+    search: search || undefined,
+    from: from || undefined,
+    to: to || undefined,
+  });
   const undoAudit = useUndoAudit();
 
   if (target) return <RecordOpener entity={target.entity} uid={target.uid} onClose={() => setTarget(null)} />;
@@ -337,11 +346,17 @@ export function AuditView() {
           {restoreErr}
         </div>
       )}
-      <div className="toolbar">
+      <div className="toolbar" style={{ flexWrap: 'wrap' }}>
         <select value={user} onChange={(e) => { setUser(e.target.value); setPage(1); }} style={{ padding: '10px 12px', border: '1.5px solid var(--line)', borderRadius: 10 }}>
           <option value="">كل المستخدمين</option>
           {users?.data.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
         </select>
+        <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="بحث بالتفاصيل أو المستخدم…" />
+        <span className="muted" style={{ fontSize: 12 }}>من</span>
+        <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} style={{ padding: '7px 10px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 13 }} />
+        <span className="muted" style={{ fontSize: 12 }}>إلى</span>
+        <input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} style={{ padding: '7px 10px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 13 }} />
+        {(search || from || to) && <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(''); setFrom(''); setTo(''); setPage(1); }}>× مسح</button>}
       </div>
       <DataTable
         columns={columns}
