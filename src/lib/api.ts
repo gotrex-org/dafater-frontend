@@ -52,6 +52,11 @@ http.interceptors.response.use(
   (error: AxiosError<any>) => {
     const status = error.response?.status;
 
+    const body = error.response?.data;
+    const message = Array.isArray(body?.message)
+      ? body.message.join('، ')
+      : body?.message || error.message || `HTTP ${status ?? ''}`.trim();
+
     if (status === 401 && typeof window !== 'undefined') {
       setToken(null);
       // also drop the cached user, otherwise a stale user (e.g. after the token
@@ -60,12 +65,11 @@ http.interceptors.response.use(
       if (!location.pathname.startsWith('/login') && !location.pathname.startsWith('/order')) {
         location.href = '/login';
       }
+      // انتهاء الجلسة أمر طبيعي — منعرضش توست خطأ أحمر وإحنا بنحوّل لصفحة الدخول
+      const err = new Error(message) as Error & { status?: number };
+      err.status = status;
+      return Promise.reject(err);
     }
-
-    const body = error.response?.data;
-    const message = Array.isArray(body?.message)
-      ? body.message.join('، ')
-      : body?.message || error.message || `HTTP ${status ?? ''}`.trim();
 
     toast.error(message);
     const err = new Error(message) as Error & { status?: number };

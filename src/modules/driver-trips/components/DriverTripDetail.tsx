@@ -113,9 +113,10 @@ export function DriverTripDetail({ trip, onBack }: Props) {
 
   const freightPaid = trip.payments.filter((p) => p.paymentType === 'freight').reduce((s, p) => s + p.amount, 0);
   const delayPaid   = trip.payments.filter((p) => p.paymentType === 'delay').reduce((s, p) => s + p.amount, 0);
+  const advancePaid = trip.payments.filter((p) => p.paymentType === 'advance').reduce((s, p) => s + p.amount, 0);
   const teaPaid     = trip.payments.filter((p) => p.paymentType === 'tea').reduce((s, p) => s + p.amount, 0);
   const wdPaid      = trip.payments.filter((p) => p.paymentType === 'weightDiff').reduce((s, p) => s + p.amount, 0);
-  const totalPaid   = freightPaid + delayPaid + teaPaid + wdPaid;
+  const totalPaid   = freightPaid + delayPaid + advancePaid + teaPaid + wdPaid;
   const remaining   = Math.max(0, trip.agreedFreight - freightPaid);
 
   const isClosed        = !!trip.arrivalDate;
@@ -123,7 +124,10 @@ export function DriverTripDetail({ trip, onBack }: Props) {
   const delayFee        = trip.delayFee ?? 0;
   const weightDiffTotal = trip.weightDiffAmount ?? 0;
   const delayDays       = days !== null ? Math.max(0, days - graceDays) : 0;
-  const remainingDelay  = Math.max(0, delayFee - delayPaid);
+  // السلفة بتتخصم من رصيد العطلات زي دفعة العطلة. الصافي ممكن يبقى سالب (سلفة مقدمة → السائق مدين).
+  const delayNet        = delayFee - delayPaid - advancePaid;
+  const remainingDelay  = Math.max(0, delayNet);
+  const advanceOver     = Math.max(0, -delayNet); // سلفة زيادة عن رصيد العطلات (على السائق)
   const remainingWD     = Math.max(0, weightDiffTotal - wdPaid);
   const hasUnpaidDelay  = isClosed && delayFee > 0 && remainingDelay > 0;
   const hasUnpaidWD     = isClosed && weightDiffTotal > 0 && remainingWD > 0;
@@ -135,7 +139,7 @@ export function DriverTripDetail({ trip, onBack }: Props) {
   const previewDelay = Math.max(0, previewDays - graceDays);
   const previewFee = previewDelay * feeRate;
 
-  const [payType, setPayType] = useState<'freight' | 'delay' | 'weightDiff'>('freight');
+  const [payType, setPayType] = useState<'freight' | 'delay' | 'weightDiff' | 'advance'>('freight');
   const [payTreasuryId, setPayTreasuryId] = useState('');
 
   const savePayment = () => {
@@ -266,8 +270,10 @@ export function DriverTripDetail({ trip, onBack }: Props) {
                 ['أيام العطلة', `${delayDays} يوم`, 'deb'],
                 ['إجمالي العطلة', EGP(delayFee), 'deb'],
                 ['مدفوع من العطلة', EGP(delayPaid), delayPaid > 0 ? 'cre' : ''],
+                ...(advancePaid > 0 ? [['سلفة (تُخصم من العطلة)', EGP(advancePaid), 'deb'] as [string, string, string]] : []),
                 ['متبقي من العطلة', EGP(remainingDelay), remainingDelay > 0 ? 'deb' : 'cre'],
-              ] : [['الرحلة', 'في المعاد ✓', 'cre']]),
+                ...(advanceOver > 0 ? [['سلفة زيادة (على السائق)', EGP(advanceOver), 'deb'] as [string, string, string]] : []),
+              ] : advancePaid > 0 ? [['سلفة للسائق', EGP(advancePaid), 'deb'] as [string, string, string]] : [['الرحلة', 'في المعاد ✓', 'cre']]),
               ...(weightDiffTotal > 0 ? [
                 ['فرق وزن (على العميل)', EGP(weightDiffTotal), 'deb'],
                 ['مدفوع للسائق', EGP(wdPaid), wdPaid > 0 ? 'cre' : ''],
@@ -366,6 +372,7 @@ export function DriverTripDetail({ trip, onBack }: Props) {
                 <select value={payType} onChange={(e) => setPayType(e.target.value as any)} style={{ minWidth: 120 }}>
                   <option value="freight">ناولون</option>
                   {(trip.delayFee ?? 0) > 0 && <option value="delay">عطلة</option>}
+                  <option value="advance">سلفة</option>
                   {weightDiffTotal > 0 && <option value="weightDiff">فرق وزن</option>}
                 </select>
               </Field>
@@ -411,6 +418,7 @@ export function DriverTripDetail({ trip, onBack }: Props) {
                         delay:      { label: 'عطلة',    bg: '#fff3e0',          color: '#e67e00' },
                         tea:        { label: 'شاي',     bg: '#f3e8ff',          color: '#7c3aed' },
                         weightDiff: { label: 'فرق وزن', bg: '#e0f2fe',          color: '#0369a1' },
+                        advance:    { label: 'سلفة',    bg: '#fee2e2',          color: '#b91c1c' },
                       };
                       const c = cfg[p.paymentType] ?? cfg.freight;
                       return <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, fontWeight: 700, background: c.bg, color: c.color }}>{c.label}</span>;
@@ -434,6 +442,7 @@ export function DriverTripDetail({ trip, onBack }: Props) {
                 <td colSpan={5} style={{ padding: '8px', fontWeight: 700, textAlign: 'left', fontSize: 13 }}>
                   ناولون: <span className="num cre">{EGP(freightPaid)}</span>
                   {delayPaid > 0 && <> &nbsp;|&nbsp; عطلة: <span className="num cre">{EGP(delayPaid)}</span></>}
+                  {advancePaid > 0 && <> &nbsp;|&nbsp; سلفة: <span className="num" style={{ color: '#b91c1c' }}>{EGP(advancePaid)}</span></>}
                   {teaPaid > 0 && <> &nbsp;|&nbsp; شاي: <span className="num" style={{ color: '#7c3aed' }}>{EGP(teaPaid)}</span></>}
                   {wdPaid > 0 && <> &nbsp;|&nbsp; فرق وزن: <span className="num" style={{ color: '#0369a1' }}>{EGP(wdPaid)}</span></>}
                   &nbsp;|&nbsp; الإجمالي: <span className="num cre">{EGP(totalPaid)}</span>

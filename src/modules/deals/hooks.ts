@@ -27,6 +27,7 @@ export function useCreateDeal() {
       qc.invalidateQueries({ queryKey: dealKeys.all });
       qc.invalidateQueries({ queryKey: ['parties'] });
       qc.invalidateQueries({ queryKey: ['treasury'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }
@@ -39,6 +40,7 @@ export function useUpdateDeal() {
       qc.invalidateQueries({ queryKey: dealKeys.all });
       qc.invalidateQueries({ queryKey: ['parties'] });
       qc.invalidateQueries({ queryKey: ['treasury'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }
@@ -51,6 +53,7 @@ export function useUpdateDealCommission() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: dealKeys.all });
       qc.invalidateQueries({ queryKey: ['parties'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }
@@ -63,6 +66,7 @@ export function useDeleteDeal() {
       qc.invalidateQueries({ queryKey: dealKeys.all });
       qc.invalidateQueries({ queryKey: ['parties'] });
       qc.invalidateQueries({ queryKey: ['treasury'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }

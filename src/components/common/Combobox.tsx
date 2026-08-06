@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { normalizeAr } from '@/lib/arabicSearch';
 
 export interface ComboItem { id: string; name: string; }
 
@@ -30,8 +31,8 @@ export function Combobox({
     if (!focused) { setQuery(options.find((o) => o.id === value)?.name ?? ''); setSearching(false); }
   }, [value, options, focused]);
 
-  const q = searching ? query.trim().toLowerCase() : '';
-  const matches = (q ? options.filter((o) => o.name.toLowerCase().includes(q)) : options).slice(0, 50);
+  const q = searching ? normalizeAr(query) : '';
+  const matches = (q ? options.filter((o) => normalizeAr(o.name).includes(q)) : options).slice(0, 50);
 
   const pick = (o: ComboItem) => { onChange(o.id); setQuery(o.name); setOpen(false); setSearching(false); };
   const onInput = (v: string) => { setQuery(v); setSearching(true); setOpen(true); setHi(0); if (value) onChange(''); };

@@ -58,6 +58,8 @@ export function useUpdateInvoiceCommission() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: invoiceKeys.all });
       qc.invalidateQueries({ queryKey: ['parties'] });
+      qc.invalidateQueries({ queryKey: ['treasury'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }

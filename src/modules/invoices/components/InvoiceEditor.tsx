@@ -78,16 +78,19 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   const [partyId, setPartyId] = useState(d?.partyId ?? invoice?.party?.id ?? '');
   const [directSale, setDirectSale] = useState(d?.directSale ?? false);
   const [directSaleLoading, setDirectSaleLoading] = useState(false);
+  // توكن يتزوّد مع كل تبديل — عشان لو اليوزر شال العلامة قبل ما الطلب يرجع، نتجاهل النتيجة القديمة
+  const directSaleToken = useRef(0);
 
   // "بيع مباشر" — skip picking a customer by silently using a shared system
   // party (created once, reused every time) instead.
   const toggleDirectSale = (on: boolean) => {
+    const token = ++directSaleToken.current;
     setDirectSale(on);
     if (on) {
       setDirectSaleLoading(true);
       partiesApi.directSale()
-        .then((p) => setPartyId(p.id))
-        .finally(() => setDirectSaleLoading(false));
+        .then((p) => { if (token === directSaleToken.current) setPartyId(p.id); })
+        .finally(() => { if (token === directSaleToken.current) setDirectSaleLoading(false); });
     } else {
       setPartyId('');
     }
@@ -106,8 +109,8 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   const lastPriceByProduct = new Map((lastPrices ?? []).map((r) => [r.productId, r]));
   const [treasuryId, setTreasuryId] = useState(d?.treasuryId ?? '');
   const [paid, setPaid] = useState(d?.paid ?? (invoice ? String(invoice.paid || '') : ''));
-  const [discount, setDiscount] = useState(invoice?.discount ? String(invoice.discount) : '');
-  const [fake, setFake] = useState(invoice?.fake ?? false);
+  const [discount, setDiscount] = useState(d?.discount ?? (invoice?.discount ? String(invoice.discount) : ''));
+  const [fake, setFake] = useState(d?.fake ?? invoice?.fake ?? false);
   const [note, setNote] = useState(d?.note ?? invoice?.note ?? '');
   const [exchangeRate, setExchangeRate] = useState(d?.exchangeRate ?? (invoice?.exchangeRate ? String(invoice.exchangeRate) : ''));
   const [lines, setLines] = useState<Line[]>(
@@ -132,7 +135,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   const [saved, setSaved] = useState<Invoice | null>(null);
   const [makeManifest, setMakeManifest] = useState(false);
   const [menuFor, setMenuFor] = useState<number | null>(null); // زر الثلاث نقاط المفتوح (حسب _key)
-  const [showDiscount, setShowDiscount] = useState<boolean>(!!invoice?.discount);
+  const [showDiscount, setShowDiscount] = useState<boolean>(!!(d?.discount && Number(d.discount) > 0) || !!invoice?.discount);
 
   // prefill pinned lines for new invoices — which items pin depends on the invoice kind
   useEffect(() => {
@@ -163,7 +166,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
       title: `فاتورة ${kindLabel}${no ? ` رقم ${no}` : ''}${who}`,
       updatedAt: Date.now(),
       state: {
-        no, date, partyId, directSale, warehouseId, treasuryId, paid, note,
+        no, date, partyId, directSale, warehouseId, treasuryId, paid, discount, fake, note,
         exchangeRate,
         lines: lines.map((l) => ({ productId: l.productId, qty: l.qty, price: l.price, bnd: l.bnd, freight: l.freight, freightTreasuryId: l.freightTreasuryId, freightNote: l.freightNote, tea: l.tea, teaTreasuryId: l.teaTreasuryId, teaNote: l.teaNote, commQty: l.commQty, commPrice: l.commPrice, commPartyId: l.commPartyId })),
       },

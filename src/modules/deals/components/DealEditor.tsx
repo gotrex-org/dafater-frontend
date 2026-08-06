@@ -12,7 +12,6 @@ import { ProductCombobox } from '../../products/components/ProductCombobox';
 import { CommissionPicker } from '../../invoices/components/CommissionPicker';
 import { PartyCombobox } from '../../invoices/components/PartyCombobox';
 import { ManifestEditor } from '../../manifests/components/ManifestEditor';
-import { useAuth } from '@/lib/auth';
 import { useCreateDeal, useUpdateDeal } from '../hooks';
 import { useUpdateProduct } from '../../products/hooks';
 import { dealsApi } from '../api';
@@ -24,14 +23,15 @@ interface Line {
   tea: string; teaTreasuryId: string; teaNote: string;             // شاي
   commQty: string; commPrice: string; commPartyId: string;         // عمولة = عدد × سعر لمين
   showFreight?: boolean; showTea?: boolean; showComm?: boolean;
+  bnd?: boolean; // بند إضافي (خدمة/رسوم) — قسم منفصل تحت الأصناف زي الفواتير
 }
 let _dk = 0;
 const blank = (): Line => ({ _key: _dk++, productId: '', qty: '', buyPrice: '', sellPrice: '', freight: '', freightTreasuryId: '', freightNote: '', tea: '', teaTreasuryId: '', teaNote: '', commQty: '', commPrice: '', commPartyId: '' });
+const bndBlank = (): Line => ({ ...blank(), bnd: true });
 const num = (s: string) => Number(s) || 0;
 
 export function DealEditor({ onClose, initialDeal }: { onClose: () => void; initialDeal?: Deal }) {
   const isEdit = !!initialDeal;
-  const { can } = useAuth();
   const { data: clients } = useAllParties('CLIENT');
   const { data: suppliers } = useAllParties('SUPPLIER');
   const { data: products } = useAllProducts();
@@ -54,9 +54,6 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
     if (!clientId || isEdit) return;
     dealsApi.nextNo(clientId).then(({ no: n }) => setNo(n)).catch(() => {});
   }, [clientId, isEdit]);
-  const [commissionAmount, setCommissionAmount] = useState('');
-  const [commissionPartyId, setCommissionPartyId] = useState('');
-  const [nawlon, setNawlon] = useState(() => initialDeal?.nawlon ? String(initialDeal.nawlon) : '');
   const [lines, setLines] = useState<Line[]>(() =>
     initialDeal?.items.length
       ? initialDeal.items.map((it) => ({
@@ -74,14 +71,24 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
   );
   const [menuFor, setMenuFor] = useState<number | null>(null);
   const [prefilled, setPrefilled] = useState(!!initialDeal);
+  // في التعديل، لما الأصناف تحمّل نصنّف الخدمات كبنود إضافية (تحت الأصناف) زي الفواتير.
+  const [classified, setClassified] = useState(!isEdit);
 
-  // prefill service lines for new deals
+  // prefill service items as بنود إضافية for new deals (a blank product line first)
   useEffect(() => {
     if (prefilled || !products) return;
     const svc = products.data.filter((p) => p.service);
-    if (svc.length) setLines([...svc.map((p) => ({ ...blank(), productId: p.id })), blank()]);
+    if (svc.length) setLines([blank(), ...svc.map((p) => ({ ...bndBlank(), productId: p.id }))]);
     setPrefilled(true);
   }, [products, prefilled]);
+
+  // on edit: reclassify existing service lines into the بنود block once products are known
+  useEffect(() => {
+    if (classified || !products) return;
+    const svcIds = new Set(products.data.filter((p) => p.service).map((p) => p.id));
+    setLines((ls) => ls.map((l) => (svcIds.has(l.productId) ? { ...l, bnd: true } : l)));
+    setClassified(true);
+  }, [products, classified]);
 
   const [error, setError] = useState('');
   const [saved, setSaved] = useState<{ clientName: string; items: { name: string; qty: number }[] } | null>(null);
@@ -126,9 +133,7 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
     const dto = {
       date, no: no.trim() || undefined, clientId, supplierId, items,
       paidIn: num(paidIn) || undefined, paidOut: num(paidOut) || undefined,
-      nawlon: num(nawlon) || undefined,
       treasuryId: treasuryId || undefined, note: note.trim() || undefined,
-      ...(num(commissionAmount) > 0 && commissionPartyId ? { commissionAmount: num(commissionAmount), commissionPartyId } : {}),
     };
 
     if (isEdit) {
@@ -200,21 +205,24 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
             $ مورد دولاري — سعر الشراء بالدولار، سعر البيع بالجنيه
           </div>
         )}
-        <div className="tbl-wrap combo-table">
+        <div className="tbl-wrap combo-table invoice-items">
           <table>
             <thead>
               <tr>
-                <th>الصنف</th><th>الكمية</th>
+                <th>الكمية</th><th>الصنف</th>
                 <th>سعر الشراء {supplierIsUSD ? '($)' : '(ج.م)'}</th>
                 <th>سعر البيع (ج.م)</th>
+                <th>الإجمالي</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {lines.map((l, i) => {
+                if (l.bnd) return null; // البنود الإضافية ليها قسم منفصل تحت
                 const prod = l.productId ? products?.data.find((p) => p.id === l.productId) : undefined;
                 return (
                   <tr key={l._key}>
+                    <td><MoneyInput value={l.qty} onChange={(v) => setLine(i, { qty: v })} placeholder="0" style={{ width: 70 }} /></td>
                     <td style={{ minWidth: 240 }}>
                       <ProductCombobox products={products?.data ?? []} value={l.productId} onChange={(id) => setLine(i, { productId: id })} />
                       {(l.showFreight || l.showTea || l.showComm) && (
@@ -253,9 +261,9 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
                         </div>
                       )}
                     </td>
-                    <td><MoneyInput value={l.qty} onChange={(v) => setLine(i, { qty: v })} placeholder="0" style={{ width: 70 }} /></td>
                     <td><MoneyInput value={l.buyPrice} placeholder="0" onChange={(v) => setLine(i, { buyPrice: v })} style={{ width: 100 }} /></td>
                     <td><MoneyInput value={l.sellPrice} placeholder="0" onChange={(v) => setLine(i, { sellPrice: v })} style={{ width: 100 }} /></td>
+                    <td className="num">{EGP(num(l.qty) * num(l.sellPrice))}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center', position: 'relative' }}>
                         {prod && (
@@ -284,13 +292,36 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
           </table>
         </div>
         <div style={{ padding: '10px 16px' }}>
-          <button className="btn btn-ghost btn-sm" onClick={() => setLines((ls) => [...ls, blank()])}>+ إضافة صنف</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setLines((ls) => {
+            // keep new product lines above the بنود block in the array
+            const idx = ls.findIndex((l) => l.bnd);
+            const nl = blank();
+            return idx === -1 ? [...ls, nl] : [...ls.slice(0, idx), nl, ...ls.slice(idx)];
+          })}>+ إضافة صنف</button>
         </div>
 
-        <div className="form-grid" style={{ borderTop: '1px solid var(--line-soft)' }}>
-          <Field label="ناولون (رسوم مناولة/شحن — تُضاف على العميل)">
-            <MoneyInput value={nawlon} onChange={setNawlon} placeholder="0.00" />
-          </Field>
+        {/* البنود الإضافية — قسم منفصل عن الأصناف، زي الفواتير العادية (سعر بيع بس) */}
+        <div style={{ margin: '4px 16px 14px', padding: 9, borderRadius: 10, background: 'var(--line-soft)', border: '1px solid var(--line)' }}>
+          <div style={{ fontWeight: 700, fontSize: 11.5, marginBottom: 6, color: 'var(--ink-soft)' }}>🧾 بنود إضافية (خدمات ورسوم)</div>
+          <div style={{ display: 'grid', gap: 4 }}>
+            {lines.map((l, i) => {
+              if (!l.bnd) return null;
+              return (
+                <div key={l._key} style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', background: 'var(--surface)', borderRadius: 6, padding: '4px 6px', fontSize: 12 }}>
+                  <div style={{ flex: 1, minWidth: 150 }}>
+                    <ProductCombobox products={products?.data ?? []} value={l.productId} onChange={(id) => setLine(i, { productId: id })} />
+                  </div>
+                  <MoneyInput value={l.qty} onChange={(v) => setLine(i, { qty: v })} placeholder="كمية" style={{ width: 56 }} />
+                  <span className="muted" style={{ fontSize: 11 }}>×</span>
+                  <MoneyInput value={l.sellPrice} onChange={(v) => setLine(i, { sellPrice: v })} placeholder="سعر" style={{ width: 78 }} />
+                  <span className="num" style={{ minWidth: 74, fontWeight: 700, textAlign: 'end', fontSize: 12 }}>{EGP(num(l.qty) * num(l.sellPrice))}</span>
+                  <button className="btn btn-danger btn-sm" onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}>×</button>
+                </div>
+              );
+            })}
+            {!lines.some((l) => l.bnd) && <div className="muted" style={{ fontSize: 11.5 }}>لا توجد بنود إضافية</div>}
+          </div>
+          <button className="btn btn-ghost btn-sm" style={{ marginTop: 6, fontSize: 12 }} onClick={() => setLines((ls) => [...ls, bndBlank()])}>+ بند إضافي</button>
         </div>
 
         <div className="form-grid" style={{ borderTop: '1px solid var(--line-soft)' }}>
@@ -299,16 +330,8 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
           <Field label="حساب الخزنة"><Combobox options={treasury?.data ?? []} value={treasuryId} onChange={setTreasuryId} /></Field>
         </div>
 
-        {can('invoices.commission') && (
-          <div className="form-grid" style={{ borderTop: '1px solid var(--line-soft)' }}>
-            <Field label="مبلغ commission"><MoneyInput value={commissionAmount} onChange={setCommissionAmount} placeholder="0.00" /></Field>
-            <Field label="commission لصالح (تُضاف لرصيده)"><CommissionPicker value={commissionPartyId} onChange={setCommissionPartyId} /></Field>
-          </div>
-        )}
-
         <div className="page-title num" style={{ padding: '0 16px', display: 'flex', gap: 24, flexWrap: 'wrap' }}>
           <span>إجمالي البيع: {EGP(sellTotal)}</span>
-          {num(nawlon) > 0 && <span style={{ color: 'var(--debit)', fontSize: 14 }}>ناولون: {EGP(num(nawlon))}</span>}
           {supplierIsUSD
             ? <span style={{ color: 'var(--debit)', fontSize: 14 }}>إجمالي الشراء: {money(buyTotal, 'USD')}</span>
             : <span style={{ color: 'var(--debit)', fontSize: 14 }}>إجمالي الشراء: {EGP(buyTotal)}</span>

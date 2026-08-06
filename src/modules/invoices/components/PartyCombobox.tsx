@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { normalizeAr } from '@/lib/arabicSearch';
 import { useCreateParty } from '../../parties/hooks';
 import type { Party, PartyRole } from '../../parties/dtos';
 
@@ -33,9 +34,9 @@ export function PartyCombobox({
     if (!focused) { setQuery(parties.find((p) => p.id === value)?.name ?? ''); setSearching(false); }
   }, [value, parties, focused]);
 
-  const q = searching ? query.trim().toLowerCase() : '';
-  const matches = (q ? parties.filter((p) => p.name.toLowerCase().includes(q)) : parties).slice(0, 50);
-  const hasExact = !!q && parties.some((p) => p.name.toLowerCase() === q);
+  const q = searching ? normalizeAr(query) : '';
+  const matches = (q ? parties.filter((p) => normalizeAr(p.name).includes(q)) : parties).slice(0, 50);
+  const hasExact = !!q && parties.some((p) => normalizeAr(p.name) === q);
   const options: Opt[] = [
     ...matches.map((party) => ({ kind: 'party' as const, party })),
     ...(q && !hasExact ? [{ kind: 'create' as const, name: query.trim() }] : []),

@@ -337,6 +337,10 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 @media screen and (max-width: 860px) {
   .print-sheet { width: 100%; min-height: auto; padding: 16px; }
 }
+/* كشف الحساب على الشاشة يملأ العرض كامل بدل عرض A4 الضيّق (210mm) — ويفضل A4 عند الطباعة */
+@media screen {
+  .ledger-sheet { width: 100%; min-height: auto; }
+}
 
 @page { size: A4; margin: 0; }
 @media print {

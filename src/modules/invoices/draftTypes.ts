@@ -27,6 +27,8 @@ export interface InvoiceDraftState {
   warehouseId: string;
   treasuryId: string;
   paid: string;
+  discount: string;
+  fake: boolean;
   note: string;
   exchangeRate: string;
   lines: InvoiceDraftLine[];

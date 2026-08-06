@@ -96,7 +96,7 @@ export function SettingsView() {
         </div>
       </CollapsibleSection>
 
-      <CollapsibleSection title="سجل العملاء والموردين" defaultOpen={false}>
+      <CollapsibleSection title="سجل العملاء والموردين وأصحاب العهد" defaultOpen={false}>
         <PartiesRegistry />
       </CollapsibleSection>
 

@@ -112,7 +112,7 @@ function DriverPaymentSection() {
 
   const [date, setDate] = useState(todayISO());
   const [tripId, setTripId] = useState('');
-  const [payType, setPayType] = useState<'freight' | 'delay' | 'weightDiff'>('freight');
+  const [payType, setPayType] = useState<'freight' | 'delay' | 'weightDiff' | 'advance'>('freight');
   const [amount, setAmount] = useState('');
   const [treasuryId, setTreasuryId] = useState('');
   const [note, setNote] = useState('');
@@ -133,13 +133,14 @@ function DriverPaymentSection() {
       if (payType === 'freight'    && !canFreight    && canWeightDiff) setPayType('weightDiff');
       if (payType === 'delay'      && !canDelay      && canFreight)    setPayType('freight');
       if (payType === 'weightDiff' && !canWeightDiff && canFreight)    setPayType('freight');
-      setAmount(String(payType === 'freight' ? remainingFreight : payType === 'delay' ? remainingDelay : remainingWeightDiff));
+      // الأنواع المحدودة تتعبّى بالمتبقي؛ السلفة حرة (من غير سقف) فتُترك فاضية للكتابة.
+      setAmount(payType === 'freight' ? String(remainingFreight) : payType === 'delay' ? String(remainingDelay) : payType === 'weightDiff' ? String(remainingWeightDiff) : '');
     }
   }, [tripId, payType]);
 
   const reset = () => { setTripId(''); setAmount(''); setNote(''); setTreasuryId(''); setMsg(''); };
 
-  const maxAmount = payType === 'freight' ? remainingFreight : payType === 'delay' ? remainingDelay : remainingWeightDiff;
+  const maxAmount = payType === 'freight' ? remainingFreight : payType === 'delay' ? remainingDelay : payType === 'weightDiff' ? remainingWeightDiff : Infinity;
 
   const submit = () => {
     setError(''); setMsg('');
@@ -196,10 +197,15 @@ function DriverPaymentSection() {
                   onChange={() => { setPayType('weightDiff'); setAmount(String(remainingWeightDiff)); }} />
                 فرق وزن {canWeightDiff ? <span className="muted" style={{ fontSize: 12 }}>({EGP(remainingWeightDiff)} متبقي)</span> : <span style={{ color: 'var(--muted)', fontSize: 11 }}>{(selTrip.weightDiffAmount ?? 0) > 0 ? '(سُدّد)' : '(لا يوجد)'}</span>}
               </label>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input type="radio" name="dpType" value="advance" checked={payType === 'advance'}
+                  onChange={() => { setPayType('advance'); setAmount(''); }} />
+                سلفة <span className="muted" style={{ fontSize: 12 }}>(تُخصم من العطلة)</span>
+              </label>
             </div>
           </Field>
 
-          <Field label={`المبلغ (أقصى ${EGP(maxAmount)})`}>
+          <Field label={payType === 'advance' ? 'المبلغ (سلفة)' : `المبلغ (أقصى ${EGP(maxAmount)})`}>
             <MoneyInput
               value={amount}
               onChange={(v) => { setAmount(Number(v) > maxAmount ? String(maxAmount) : v); }}
@@ -259,6 +265,8 @@ export function EntryForm() {
   const [invoiceIds, setInvoiceIds] = useState<string[]>([]);
   const [goodsItems, setGoodsItems] = useState<GoodsItem[]>([]);
   const [holderName, setHolderName] = useState('');
+  // وجهة تسوية العهدة عند التوريد: خزنة (رد كاش) / عميل (يتحمّلها) / بند (مصروف)
+  const [custodyDest, setCustodyDest] = useState<'treasury' | 'client' | 'category'>('treasury');
   const [amount, setAmount] = useState('');
   const [direction, setDirection] = useState<'debit' | 'credit'>('debit');
   const [rate, setRate] = useState('');
@@ -337,21 +345,28 @@ export function EntryForm() {
     // صرف وتوريد نقدية موحّد بجهة
     if (type === 'cash') {
       if (!amount || Number(amount) <= 0) return setError('اكتب المبلغ');
-      if (cashTarget !== 'account' && !treasuryId) return setError('اختر الخزنة');
+      // تسوية العهدة لعميل/بند مالهاش خزنة (الكاش خرج وقت صرف العهدة).
+      const custodySettleClient = cashTarget === 'custody' && cashDir === 'in' && custodyDest === 'client';
+      const custodySettleCategory = cashTarget === 'custody' && cashDir === 'in' && custodyDest === 'category';
+      const needsTreasury = cashTarget !== 'account' && !custodySettleClient && !custodySettleCategory;
+      if (needsTreasury && !treasuryId) return setError('اختر الخزنة');
       if ((cashTarget === 'client' || cashTarget === 'supplier') && !partyId) return setError(cashTarget === 'client' ? 'اختر العميل' : 'اختر المورد');
       if (cashTarget === 'account' && !partyId) return setError('اختر الحساب');
       if (cashTarget === 'custody' && !holderName.trim()) return setError('اكتب اسم صاحب العهدة');
+      if (custodySettleClient && !partyId) return setError('اختر العميل اللي هتتحوّل عليه العهدة');
+      if (custodySettleCategory && !categoryId) return setError('اختر بند المصروف');
       if (cashTarget === 'warehouse' && !warehouseId) return setError('اختر المخزن');
       if (cashTarget === 'external' && !categoryId) return setError('اختر بند المصروف الخارجي');
       postEntry.mutate(
         {
           type: 'cash', date, amount: Number(amount),
           cashDir, cashTarget,
-          treasuryId: cashTarget === 'account' ? undefined : treasuryId,
-          partyId: (cashTarget === 'client' || cashTarget === 'supplier' || cashTarget === 'account') ? partyId : undefined,
+          treasuryId: needsTreasury ? treasuryId : undefined,
+          partyId: (cashTarget === 'client' || cashTarget === 'supplier' || cashTarget === 'account' || custodySettleClient) ? partyId : undefined,
           holderName: cashTarget === 'custody' ? holderName.trim() : undefined,
+          custodyDest: cashTarget === 'custody' && cashDir === 'in' ? custodyDest : undefined,
           warehouseId: (cashTarget === 'warehouse' || cashTarget === 'goods') ? warehouseId || undefined : undefined,
-          categoryId: (cashTarget === 'warehouse' || cashTarget === 'external') ? categoryId || undefined : undefined,
+          categoryId: (cashTarget === 'warehouse' || cashTarget === 'external' || custodySettleCategory) ? categoryId || undefined : undefined,
           ...(cashTarget === 'goods' ? {
             goodsMode,
             invoiceIds: goodsMode === 'invoices' ? invoiceIds : undefined,
@@ -365,6 +380,29 @@ export function EntryForm() {
         },
       );
       return;
+    }
+
+    // تحقّق قبل الإرسال للأنواع اللي مكانتش بتتحقّق (تحصيل/دفع لمورد/تحويل/تحصيل مجهول/تسوية)
+    if (!amount || Number(amount) <= 0) return setError('اكتب المبلغ');
+    if (type === 'collect') {
+      if (!partyId) return setError('اختر العميل');
+      if (!treasuryId) return setError('اختر الخزنة');
+    }
+    if (type === 'unknownCollect') {
+      if (!treasuryId) return setError('اختر الخزنة');
+    }
+    if (type === 'paySupplier') {
+      if (!partyId) return setError('اختر المورد');
+      if (!treasuryId) return setError('اختر الخزنة');
+    }
+    if (type === 'transfer') {
+      if (!treasuryId) return setError('اختر الخزنة المُحوِّل منها');
+      if (!treasuryId2) return setError('اختر الخزنة المُحوَّل إليها');
+      if (treasuryId === treasuryId2) return setError('لا يمكن التحويل لنفس الخزنة');
+      if (diffCur && !(Number(rate) > 0)) return setError('اكتب سعر الدولار للتحويل بين عملتين مختلفتين');
+    }
+    if (type === 'adjust') {
+      if (!partyId) return setError('اختر الحساب');
     }
 
     postEntry.mutate(
@@ -425,7 +463,7 @@ export function EntryForm() {
                   </Field>
 
                   <Field label="الجهة">
-                    <select value={cashTarget} onChange={(e) => { setCashTarget(e.target.value as CashTarget); setPartyId(''); setWarehouseId(''); setCategoryId(''); setHolderName(''); }}>
+                    <select value={cashTarget} onChange={(e) => { setCashTarget(e.target.value as CashTarget); setPartyId(''); setWarehouseId(''); setCategoryId(''); setHolderName(''); setCustodyDest('treasury'); }}>
                       <option value="client">عميل</option>
                       <option value="supplier">مورد</option>
                       <option value="warehouse">مصاريف مخزن</option>
@@ -448,6 +486,32 @@ export function EntryForm() {
                       <datalist id="custody-holders">
                         {(persons?.data ?? []).map((p) => <option key={p.id} value={p.name} />)}
                       </datalist>
+                    </Field>
+                  )}
+
+                  {/* تسوية العهدة عند التوريد: سداد لخزنة / تحويل لعميل / تحويل لبند مصروف */}
+                  {cashTarget === 'custody' && cashDir === 'in' && (
+                    <Field label="وجهة التسوية">
+                      <select value={custodyDest} onChange={(e) => { setCustodyDest(e.target.value as any); setPartyId(''); setCategoryId(''); }}>
+                        <option value="treasury">سداد لخزنة (رد كاش)</option>
+                        <option value="client">تحويل لعميل (يتحمّلها)</option>
+                        <option value="category">تحويل لبند مصروف</option>
+                      </select>
+                    </Field>
+                  )}
+
+                  {cashTarget === 'custody' && cashDir === 'in' && custodyDest === 'client' && (
+                    <Field label="العميل (هيتحمّل العهدة)">
+                      <PartyCombobox parties={clients?.data ?? []} value={partyId} onChange={setPartyId} role="CLIENT" />
+                    </Field>
+                  )}
+
+                  {cashTarget === 'custody' && cashDir === 'in' && custodyDest === 'category' && (
+                    <Field label="بند المصروف" full>
+                      <Combobox options={cats?.data ?? []} value={categoryId} onChange={setCategoryId} placeholder="اختر البند" />
+                      <div style={{ marginTop: 8 }}>
+                        <ExpenseCategoriesManager canManage addOnly />
+                      </div>
                     </Field>
                   )}
 
@@ -548,7 +612,8 @@ export function EntryForm() {
                 </Field>
               )}
 
-              {type !== 'adjust' && type !== 'balanceTransfer' && !(type === 'cash' && cashTarget === 'account') && (
+              {type !== 'adjust' && type !== 'balanceTransfer' && !(type === 'cash' && cashTarget === 'account')
+                && !(type === 'cash' && cashTarget === 'custody' && cashDir === 'in' && (custodyDest === 'client' || custodyDest === 'category')) && (
                 <Field label={type === 'transfer' ? 'من حساب' : type === 'partyTransfer' ? 'من خزنة' : 'حساب الخزنة'}>
                   <Combobox options={treasury?.data ?? []} value={treasuryId} onChange={setTreasuryId} placeholder={type === 'partyTransfer' ? 'اختياري…' : undefined} />
                 </Field>

@@ -2,7 +2,7 @@ export interface DriverPayment {
   id: string;
   date: string;
   amount: number;
-  paymentType: 'freight' | 'delay' | 'tea' | 'weightDiff';
+  paymentType: 'freight' | 'delay' | 'tea' | 'weightDiff' | 'advance';
   note?: string | null;
   createdAt: string;
 }
@@ -29,6 +29,7 @@ export interface DriverTrip {
   // computed by findAll
   totalFreightPaid?: number;
   totalDelayPaid?: number;
+  totalAdvancePaid?: number;
   totalWeightDiffPaid?: number;
   remainingFreight?: number;
   remainingDelay?: number;
@@ -68,7 +69,7 @@ export interface AddPaymentDto {
   date: string;
   amount: number;
   note?: string;
-  paymentType?: 'freight' | 'delay' | 'weightDiff';
+  paymentType?: 'freight' | 'delay' | 'weightDiff' | 'advance';
   treasuryId?: string;
   weightDiffAmount?: number;
 }

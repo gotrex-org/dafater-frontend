@@ -47,6 +47,9 @@ export function useEgpInAny() {
     onSuccess: (_, { agentUid }) => {
       qc.invalidateQueries({ queryKey: KEYS.all });
       qc.invalidateQueries({ queryKey: KEYS.one(agentUid) });
+      qc.invalidateQueries({ queryKey: ['treasury'] });
+      qc.invalidateQueries({ queryKey: ['parties'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }
@@ -55,7 +58,13 @@ export function useUsdOut(agentUid: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (dto: UsdOutDto) => forexApi.usdOut(agentUid, dto),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: KEYS.all }); qc.invalidateQueries({ queryKey: KEYS.one(agentUid) }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
+      qc.invalidateQueries({ queryKey: KEYS.one(agentUid) });
+      qc.invalidateQueries({ queryKey: ['treasury'] });
+      qc.invalidateQueries({ queryKey: ['parties'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    },
   });
 }
 
@@ -63,7 +72,13 @@ export function useSettle(agentUid: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (dto: SettleDto) => forexApi.settle(agentUid, dto),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: KEYS.all }); qc.invalidateQueries({ queryKey: KEYS.one(agentUid) }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
+      qc.invalidateQueries({ queryKey: KEYS.one(agentUid) });
+      qc.invalidateQueries({ queryKey: ['treasury'] });
+      qc.invalidateQueries({ queryKey: ['parties'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    },
   });
 }
 

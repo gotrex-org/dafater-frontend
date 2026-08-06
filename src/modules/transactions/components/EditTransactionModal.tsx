@@ -44,6 +44,9 @@ export function EditTransactionModal({ txn, onClose }: { txn: EditableTransactio
 
   const save = () => {
     setError('');
+    // المبلغ لو اتعدّل لقيمة غير صالحة/صفر منبعتوش كـ undefined بصمت — نوقف ونظهر خطأ
+    const amtChanged = amount !== String(primaryAmt);
+    if (amtChanged && !(Number(amount) > 0)) return setError('اكتب مبلغًا صحيحًا أكبر من صفر');
     update.mutate(
       { id: txn.id, dto: { date, amount: Number(amount) || undefined, note: note || undefined } },
       { onSuccess: onClose, onError: (e: any) => setError(e.message) },

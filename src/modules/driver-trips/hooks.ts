@@ -32,7 +32,7 @@ export function useCreateDriverTrip() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (dto: CreateDriverTripDto) => driverTripsApi.create(dto),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [KEY] }),
+    onSuccess: () => invalidateAfterPayment(qc),
   });
 }
 
@@ -40,7 +40,7 @@ export function useUpdateDriverTrip() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, dto }: { id: string; dto: UpdateDriverTripDto }) => driverTripsApi.update(id, dto),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [KEY] }),
+    onSuccess: () => invalidateAfterPayment(qc),
   });
 }
 

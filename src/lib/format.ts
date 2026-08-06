@@ -13,7 +13,8 @@ export const money = (n: number | undefined | null, currency?: 'EGP' | 'USD' | n
 export const QTY = (n: number | undefined | null) =>
   (Number(n) || 0).toLocaleString('en-US', { maximumFractionDigits: 3 });
 
-export const todayISO = () => new Date().toISOString().slice(0, 10);
+// تاريخ اليوم بالتوقيت المحلّي (مصر UTC+2/+3) — مش UTC، عشان الإدخال بالليل ما يتسجّلش «امبارح».
+export const todayISO = () => new Date().toLocaleDateString('en-CA');
 
 export const fmtDate = (iso: string) => {
   try {

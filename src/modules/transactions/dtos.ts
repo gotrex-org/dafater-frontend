@@ -27,6 +27,7 @@ export interface PostEntryDto {
   cashDir?: CashDir;
   cashTarget?: CashTarget;
   holderName?: string;
+  custodyDest?: 'treasury' | 'client' | 'category';
   goodsMode?: GoodsMode;
   invoiceIds?: string[];
   goodsItems?: GoodsItem[];

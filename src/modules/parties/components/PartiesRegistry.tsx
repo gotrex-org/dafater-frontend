@@ -107,6 +107,8 @@ function PartyRow({ party, canDelete, canManage }: { party: Party; canDelete: bo
   };
 
   const otherRole: 'CLIENT' | 'SUPPLIER' = party.role === 'CLIENT' ? 'SUPPLIER' : 'CLIENT';
+  // أصحاب العهد (PERSON) مالهمش ربط عميل↔مورد ولا عملة دولارية — بيتخفوا عنهم الحاجتين دول.
+  const isPerson = party.role === 'PERSON';
 
   return (
     <div style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 12, marginBottom: 8 }}>
@@ -115,7 +117,7 @@ function PartyRow({ party, canDelete, canManage }: { party: Party; canDelete: bo
           {party.name}
           {party.currency === 'USD' && <span className="pill" style={{ marginInlineStart: 6 }}>دولار</span>}
           {party.phone && <span className="muted" style={{ fontSize: 12, fontWeight: 400, marginInlineStart: 8 }}>{party.phone}</span>}
-          <LinkPanel party={party} canManage={canManage} otherRole={otherRole} />
+          {!isPerson && <LinkPanel party={party} canManage={canManage} otherRole={otherRole} />}
         </span>
         <span className={`num ${(party.balance ?? 0) >= 0 ? 'deb' : 'cre'}`} style={{ fontWeight: 700 }}>{EGP(party.balance)}</span>
         <button className="btn btn-ghost btn-sm" onClick={() => setOpen((o) => !o)}>{open ? 'إغلاق' : 'تعديل'}</button>
@@ -125,10 +127,12 @@ function PartyRow({ party, canDelete, canManage }: { party: Party; canDelete: bo
         <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input placeholder="الاسم" value={name} onChange={(e) => setName(e.target.value)} style={{ flex: 1, minWidth: 130 }} />
           <input placeholder="تليفون" value={phone} onChange={(e) => setPhone(e.target.value)} style={{ maxWidth: 140 }} />
-          <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer' }}>
-            <input type="checkbox" checked={currency === 'USD'} onChange={(e) => setCurrency(e.target.checked ? 'USD' : 'EGP')} />
-            {party.role === 'CLIENT' ? 'عميل دولاري $' : 'مورد دولاري $'}
-          </label>
+          {!isPerson && (
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer' }}>
+              <input type="checkbox" checked={currency === 'USD'} onChange={(e) => setCurrency(e.target.checked ? 'USD' : 'EGP')} />
+              {party.role === 'CLIENT' ? 'عميل دولاري $' : 'مورد دولاري $'}
+            </label>
+          )}
           <MoneyInput value={opening} onChange={setOpening} placeholder="رصيد افتتاحي" style={{ maxWidth: 130 }} />
           <button className="btn btn-primary btn-sm" onClick={save} disabled={update.isPending}>حفظ</button>
           <button className="btn btn-ghost btn-sm" onClick={() => setOpen(false)}>إلغاء</button>
@@ -139,9 +143,12 @@ function PartyRow({ party, canDelete, canManage }: { party: Party; canDelete: bo
   );
 }
 
+type RegistryRole = 'CLIENT' | 'SUPPLIER' | 'PERSON';
+const ROLE_LABEL: Record<RegistryRole, string> = { CLIENT: 'عميل', SUPPLIER: 'مورد', PERSON: 'صاحب عهدة' };
+
 export function PartiesRegistry() {
   const { user, can } = useAuth();
-  const [role, setRole] = useState<'CLIENT' | 'SUPPLIER'>('CLIENT');
+  const [role, setRole] = useState<RegistryRole>('CLIENT');
   const [search, setSearch] = useState('');
   const { page, setPage, pageSize } = useTableState();
   const { data, isLoading } = useParties({ role, all: true });
@@ -153,13 +160,17 @@ export function PartiesRegistry() {
   const [pErr, setPErr] = useState('');
 
   const canManage = !!user?.admin || can('settings');
-  const roleLabel = role === 'CLIENT' ? 'عميل' : 'مورد';
+  const roleLabel = ROLE_LABEL[role];
+  const isPerson = role === 'PERSON';
 
   const addParty = () => {
     if (!pName.trim()) { setPErr('اكتب الاسم'); return; }
     setPErr('');
     createParty.mutate(
-      { name: pName.trim(), role, type: 'INVOICE', currency: pCurrency, phone: pPhone.trim() || undefined },
+      // أصحاب العهد أطراف بدور PERSON بالجنيه — من غير نوع INVOICE ولا عملة دولارية.
+      isPerson
+        ? { name: pName.trim(), role, currency: 'EGP', phone: pPhone.trim() || undefined }
+        : { name: pName.trim(), role, type: 'INVOICE', currency: pCurrency, phone: pPhone.trim() || undefined },
       { onSuccess: () => { setPName(''); setPPhone(''); setAdding(false); }, onError: (e: any) => setPErr(e.message) },
     );
   };
@@ -181,7 +192,11 @@ export function PartiesRegistry() {
         <SegmentedControl
           value={role}
           onChange={setRole}
-          options={[{ value: 'CLIENT', label: 'العملاء' }, { value: 'SUPPLIER', label: 'الموردين' }]}
+          options={[
+            { value: 'CLIENT', label: 'العملاء' },
+            { value: 'SUPPLIER', label: 'الموردين' },
+            { value: 'PERSON', label: 'أصحاب العهد' },
+          ]}
         />
         <SearchInput value={search} onChange={setSearch} placeholder="بحث بالاسم…" />
         {!adding && canManage && (
@@ -195,10 +210,12 @@ export function PartiesRegistry() {
             onKeyDown={(e) => { if (e.key === 'Enter') addParty(); if (e.key === 'Escape') setAdding(false); }}
             style={{ flex: 1, minWidth: 150 }} />
           <input placeholder="تليفون (اختياري)" value={pPhone} onChange={(e) => setPPhone(e.target.value)} style={{ maxWidth: 150 }} />
-          <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer' }}>
-            <input type="checkbox" checked={pCurrency === 'USD'} onChange={(e) => setPCurrency(e.target.checked ? 'USD' : 'EGP')} />
-            {role === 'CLIENT' ? 'عميل دولاري $' : 'مورد دولاري $'}
-          </label>
+          {!isPerson && (
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer' }}>
+              <input type="checkbox" checked={pCurrency === 'USD'} onChange={(e) => setPCurrency(e.target.checked ? 'USD' : 'EGP')} />
+              {role === 'CLIENT' ? 'عميل دولاري $' : 'مورد دولاري $'}
+            </label>
+          )}
           <button className="btn btn-primary btn-sm" onClick={addParty} disabled={createParty.isPending}>حفظ</button>
           <button className="btn btn-ghost btn-sm" onClick={() => { setAdding(false); setPName(''); setPErr(''); }}>إلغاء</button>
           {pErr && <span className="err-text">{pErr}</span>}
