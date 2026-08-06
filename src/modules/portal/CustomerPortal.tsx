@@ -1,9 +1,16 @@
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { fmtDate, fmtDateTime, EGP } from '@/lib/format';
+import { downloadElementAsPdf, printElementOnePage } from '@/lib/pdf';
+
+// أول يوم في الشهر الحالي (توقيت محلي) — الكشف يبدأ منه افتراضيًا
+function portalStartOfMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+}
 import { ProductCombobox } from '../products/components/ProductCombobox';
 import type { AuthUser, Paginated } from '@/lib/types';
 
@@ -258,12 +265,24 @@ function OrdersTab({ products }: { products: CatalogProduct[] }) {
 
 type LedgerKind = 'all' | 'invoices' | 'collect';
 
-function LedgerTab() {
-  const [from, setFrom] = useState('');
+function LedgerTab({ partyName }: { partyName?: string }) {
+  // افتراضيًا من أول الشهر — قابل للتغيير من الفلتر
+  const [from, setFrom] = useState(portalStartOfMonth());
   const [to, setTo] = useState('');
   const [kind, setKind] = useState<LedgerKind>('all');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const { data, isLoading } = useMyLedger({ from: from || undefined, to: to || undefined });
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const didScroll = useRef(false);
+
+  // أول ما البيانات تحمّل، انزل لآخر الكشف (أحدث معاملة) — والمستخدم يسكرول فوق للأقدم
+  useEffect(() => {
+    if (data && !didScroll.current && bottomRef.current) {
+      bottomRef.current.scrollIntoView({ block: 'end' });
+      didScroll.current = true;
+    }
+  }, [data]);
 
   const toggle = (id: string) =>
     setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -271,36 +290,44 @@ function LedgerTab() {
   if (isLoading) return <div className="empty">جاري التحميل…</div>;
   if (!data) return null;
 
-  const visibleRows = (data.rows ?? []).filter((r) => {
-    if (kind === 'invoices') return !!(r.invoiceUid || r.dealUid);
-    if (kind === 'collect') return !r.invoiceUid && !r.dealUid;
-    return true;
-  });
+  // من الأقدم للأحدث — آخر معاملة تحت
+  const visibleRows = (data.rows ?? [])
+    .filter((r) => {
+      if (kind === 'invoices') return !!(r.invoiceUid || r.dealUid);
+      if (kind === 'collect') return !r.invoiceUid && !r.dealUid;
+      return true;
+    })
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const totalDebit = visibleRows.reduce((s, r) => s + (r.debit || 0), 0);
+  const totalCredit = visibleRows.reduce((s, r) => s + (r.credit || 0), 0);
 
   return (
     <>
-      <div className="toolbar" style={{ marginBottom: 12, flexWrap: 'wrap' }}>
+      <div className="toolbar no-print" style={{ marginBottom: 12, flexWrap: 'wrap' }}>
         <span className="muted" style={{ fontSize: 13 }}>من</span>
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ padding: '7px 10px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 13 }} />
         <span className="muted" style={{ fontSize: 13 }}>إلى</span>
         <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={{ padding: '7px 10px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 13 }} />
         {(from || to) && <button className="btn btn-ghost btn-sm" onClick={() => { setFrom(''); setTo(''); }}>كل الفترة</button>}
+        <div style={{ flex: 1 }} />
+        <button className="btn btn-ghost btn-sm" onClick={() => sheetRef.current && downloadElementAsPdf(sheetRef.current, `كشف-حساب${partyName ? '-' + partyName : ''}`)}>⬇ تحميل PDF</button>
+        <button className="btn btn-primary btn-sm" onClick={() => sheetRef.current && printElementOnePage(sheetRef.current, `كشف-حساب${partyName ? '-' + partyName : ''}`)}>🖨 طباعة</button>
       </div>
 
-      <div className="toolbar" style={{ marginBottom: 12 }}>
+      <div className="toolbar no-print" style={{ marginBottom: 12 }}>
         {([['all', 'كشف الكل'], ['invoices', 'الفواتير فقط'], ['collect', 'التحصيل فقط']] as [LedgerKind, string][]).map(([k, label]) => (
           <button key={k} className={`btn btn-sm ${kind === k ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setKind(k)}>{label}</button>
         ))}
       </div>
 
-      <div className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
-        رصيد افتتاحي: <b className="num">{EGP(data.opening)}</b>
-      </div>
+      <div ref={sheetRef} className="card print-sheet ledger-sheet">
+        <div className="mf-logo">أبو شامة</div>
+        <div className="mf-head"><h2>كشف حساب{partyName ? ` — ${partyName}` : ''}</h2></div>
+        <div className="muted" style={{ margin: '8px 4px' }}>
+          رصيد افتتاحي: <span className="num">{EGP(data.opening)}</span>
+        </div>
 
-      {visibleRows.length === 0 && <div className="empty">لا توجد حركات</div>}
-
-      {visibleRows.length > 0 && (
-        <div className="tbl-wrap">
+        <div className="tbl-wrap mf-grow">
           <table>
             <thead>
               <tr>
@@ -345,13 +372,23 @@ function LedgerTab() {
                   </Fragment>
                 );
               })}
+              {visibleRows.length > 0 && (
+                <tr className="mf-total">
+                  <td colSpan={2} style={{ fontWeight: 800 }}>الإجمالي</td>
+                  <td className="num deb">{EGP(totalDebit)}</td>
+                  <td className="num cre">{EGP(totalCredit)}</td>
+                  {kind === 'all' && <td className="num" style={{ fontWeight: 800, color: data.balance <= 0 ? 'var(--credit)' : 'var(--debit)' }}>{EGP(Math.abs(data.balance))} {data.balance <= 0 ? 'له' : 'عليه'}</td>}
+                </tr>
+              )}
+              {visibleRows.length === 0 && <tr><td colSpan={kind === 'all' ? 5 : 4} className="empty">لا توجد حركات</td></tr>}
             </tbody>
           </table>
         </div>
-      )}
 
-      <div style={{ textAlign: 'left', fontWeight: 800, fontSize: 15, marginTop: 12 }}>
-        الرصيد الجاري: <span className="num">{EGP(data.balance)}</span>
+        <div className="page-title num" style={{ marginTop: 14, textAlign: 'left' }}>
+          الرصيد الجاري: {EGP(Math.abs(data.balance))} {data.balance <= 0 ? 'له' : 'عليه'}
+        </div>
+        <div ref={bottomRef} />
       </div>
     </>
   );
@@ -637,7 +674,7 @@ export function CustomerPortal({ user }: { user: AuthUser }) {
       {tab === 'orders' && <OrdersTab products={products} />}
 
       {/* ledger */}
-      {tab === 'ledger' && <LedgerTab />}
+      {tab === 'ledger' && <LedgerTab partyName={user.partyName} />}
 
       {/* manifests */}
       {tab === 'manifests' && <ManifestsTab />}

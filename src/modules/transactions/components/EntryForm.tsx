@@ -455,14 +455,35 @@ export function EntryForm() {
 
               {type === 'cash' && (
                 <>
-                  <Field label={cashTarget === 'custody' ? 'العملية' : 'نوع الحركة'}>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button type="button" className={`btn btn-sm ${cashDir === 'out' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCashDir('out')}>{cashTarget === 'custody' ? '⬆ صرف عهدة (تسليم فلوس)' : cashTarget === 'account' ? 'عليه (يزيد المستحق عليه)' : 'صرف (خروج نقدية)'}</button>
-                      <button type="button" className={`btn btn-sm ${cashDir === 'in' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCashDir('in')}>{cashTarget === 'custody' ? '⬇ رد / تسوية العهدة (استرجاع)' : cashTarget === 'account' ? 'له (يقلل المستحق عليه)' : 'توريد (دخول نقدية)'}</button>
-                    </div>
-                    {cashTarget === 'custody' && (
-                      <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                        {cashDir === 'out' ? 'الفلوس هتخرج من الخزنة وتتسجّل على الشخص.' : 'الفلوس هترجع/تتقفل — تدخل الخزنة أو تتحوّل لعميل أو بند.'}
+                  <Field label={cashTarget === 'custody' ? 'نوع عملية العهدة' : 'نوع الحركة'}>
+                    {cashTarget === 'custody' ? (
+                      <>
+                        <select
+                          value={cashDir === 'out' ? 'give' : custodyDest === 'client' ? 'client' : custodyDest === 'category' ? 'category' : 'cash'}
+                          onChange={(e) => {
+                            const op = e.target.value;
+                            if (op === 'give') { setCashDir('out'); setCustodyDest('treasury'); }
+                            else if (op === 'cash') { setCashDir('in'); setCustodyDest('treasury'); }
+                            else if (op === 'client') { setCashDir('in'); setCustodyDest('client'); setPartyId(''); }
+                            else { setCashDir('in'); setCustodyDest('category'); setCategoryId(''); }
+                          }}
+                        >
+                          <option value="give">⬆ صرف عهدة (تسليم فلوس للشخص)</option>
+                          <option value="cash">⬇ رد عهدة كاش (تدخل الخزنة)</option>
+                          <option value="client">↩ تحويل العهدة على عميل (بدون خزنة)</option>
+                          <option value="category">↩ تحويل العهدة لبند مصروف (بدون خزنة)</option>
+                        </select>
+                        <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                          {cashDir === 'out' ? 'الفلوس هتخرج من الخزنة وتتسجّل على الشخص.'
+                            : custodyDest === 'client' ? 'الشخص يتقفل والعهدة تتحوّل على حساب العميل (من غير خزنة).'
+                            : custodyDest === 'category' ? 'الشخص يتقفل والمبلغ يتسجّل مصروف على البند (من غير خزنة).'
+                            : 'الفلوس ترجع للخزنة والشخص يتقفل.'}
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button type="button" className={`btn btn-sm ${cashDir === 'out' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCashDir('out')}>{cashTarget === 'account' ? 'عليه (يزيد المستحق عليه)' : 'صرف (خروج نقدية)'}</button>
+                        <button type="button" className={`btn btn-sm ${cashDir === 'in' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCashDir('in')}>{cashTarget === 'account' ? 'له (يقلل المستحق عليه)' : 'توريد (دخول نقدية)'}</button>
                       </div>
                     )}
                   </Field>
@@ -491,17 +512,6 @@ export function EntryForm() {
                       <datalist id="custody-holders">
                         {(persons?.data ?? []).map((p) => <option key={p.id} value={p.name} />)}
                       </datalist>
-                    </Field>
-                  )}
-
-                  {/* تسوية العهدة عند التوريد: سداد لخزنة / تحويل لعميل / تحويل لبند مصروف */}
-                  {cashTarget === 'custody' && cashDir === 'in' && (
-                    <Field label="وجهة التسوية">
-                      <select value={custodyDest} onChange={(e) => { setCustodyDest(e.target.value as any); setPartyId(''); setCategoryId(''); }}>
-                        <option value="treasury">سداد لخزنة (رد كاش)</option>
-                        <option value="client">تحويل لعميل (يتحمّلها)</option>
-                        <option value="category">تحويل لبند مصروف</option>
-                      </select>
                     </Field>
                   )}
 
