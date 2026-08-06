@@ -67,9 +67,11 @@ main.page { max-width: 1000px; margin: 0 auto; padding: 18px 14px 90px; }
 .section { margin-top: 20px; }
 .section h2 { font-size: 16px; font-weight: 800; margin: 0 0 10px; }
 
-.tbl-wrap { overflow-x: auto; }
+/* من غير سكرول أفقي في أي جدول — الخلايا تلتف وتكسر أطول كلمة عشان الجدول يقعد جوه
+   عرض الصفحة مهما كان (الصفوف بتطول بس، من غير سكرول أفقي ولا قص). */
+.tbl-wrap { overflow-x: hidden; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th, td { padding: 11px 13px; text-align: start; white-space: nowrap; }
+th, td { padding: 11px 13px; text-align: start; white-space: normal; overflow-wrap: anywhere; }
 thead th { font-size: 12px; font-weight: 700; color: var(--ink-soft); background: var(--line-soft); border-bottom: 1px solid var(--line); }
 tbody tr { border-bottom: 1px solid var(--line-soft); }
 tbody tr:hover { background: #fbf9f3; }
@@ -171,6 +173,9 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 /* the statement should NOT look like an invoice grid — only thin lines between rows */
 .ledger-sheet table th, .ledger-sheet table td { border: none; font-weight: 600; }
 .ledger-sheet tbody tr { border-bottom: 1px solid var(--line-soft); }
+/* من غير سكرول أفقي في كشف الحساب — الخلايا تلتف عشان الجدول يقعد جوه عرض الصفحة */
+.ledger-sheet .tbl-wrap { overflow-x: hidden; }
+.ledger-sheet table th, .ledger-sheet table td { white-space: normal; overflow-wrap: anywhere; }
 .mf-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-bottom: 2px solid var(--ink); padding-bottom: 12px; }
 .mf-head h2 { margin: 0; font-size: 22px; }
 .mf-meta { display: flex; gap: 18px; font-size: 14px; }
