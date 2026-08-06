@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { money, EGP, fmtDate, todayISO } from '@/lib/format';
-import { downloadElementAsPdf } from '@/lib/pdf';
+import { downloadElementAsPdf, printElementOnePage } from '@/lib/pdf';
 import { replaceAmountInNote } from '@/lib/noteAmount';
 import { PageTitle, DataTable, SegmentedControl, Spinner, Combobox, Field, MoneyInput, type Column } from '@/components/common';
 import { useAuth } from '@/lib/auth';
@@ -132,10 +132,17 @@ function LedgerTab() {
   );
 }
 
+// أول يوم في الشهر الحالي بصيغة YYYY-MM-DD (توقيت محلي)
+function startOfMonthISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+}
+
 function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const { can } = useAuth();
   const cur = party.currency ?? 'EGP';
-  const [from, setFrom] = useState('');
+  // افتراضيًا الكشف من أول الشهر — والمستخدم يقدر يوسّع الفترة من الفلتر.
+  const [from, setFrom] = useState(startOfMonthISO());
   const [to, setTo] = useState('');
   const [kind, setKind] = useState<LedgerKind>('all');
   const { data, isLoading } = usePartyLedger(party.id, { from: from || undefined, to: to || undefined });
@@ -164,6 +171,9 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const [dealUid, setDealUid] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const sheetRef = useRef<HTMLDivElement>(null);
+  // الكشف بيفتح على آخر معاملة (تحت)؛ نسكرول للأسفل أول ما البيانات تحمّل، والمستخدم يسكرول فوق للأقدم.
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrolledParty = useRef<string | null>(null);
   const [showSettle, setShowSettle] = useState(false);
   const [wDate, setWDate] = useState(() => todayISO());
   const [wAmount, setWAmount] = useState('');
@@ -172,6 +182,14 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const [wError, setWError] = useState('');
   const [wMsg, setWMsg] = useState('');
   const postEntry = usePostEntry();
+
+  // أول ما بيانات الطرف تحمّل، انزل لآخر الكشف (أحدث معاملة) — مرة واحدة لكل طرف.
+  useEffect(() => {
+    if (data && scrolledParty.current !== party.id && bottomRef.current) {
+      bottomRef.current.scrollIntoView({ block: 'end' });
+      scrolledParty.current = party.id;
+    }
+  }, [data, party.id]);
 
   if (invoiceUid) return <InvoiceDetailById uid={invoiceUid} onBack={() => setInvoiceUid(null)} />;
   if (dealUid) return <DealDetailById uid={dealUid} onBack={() => setDealUid(null)} />;
@@ -185,12 +203,14 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
     if (kind === 'withdraw') return (r.debit ?? 0) > 0 && !r.invoiceUid && !r.dealUid;
     return true;
   });
-  // always newest → oldest
+  // من الأقدم للأحدث — آخر معاملة تحت (زي دفتر الحساب)
   const visibleRows = [...filteredRows].sort((a, b) => {
     const da = kind === 'invoices' ? (a.manifestDate ?? a.date) : a.date;
     const db = kind === 'invoices' ? (b.manifestDate ?? b.date) : b.date;
-    return new Date(db).getTime() - new Date(da).getTime();
+    return new Date(da).getTime() - new Date(db).getTime();
   });
+  const totalDebit = visibleRows.reduce((s, r) => s + (r.debit || 0), 0);
+  const totalCredit = visibleRows.reduce((s, r) => s + (r.credit || 0), 0);
 
   // rows with an expandable item breakdown, and a single show-all / hide-all toggle
   const detailRowIds = visibleRows.filter((r) => r.invoiceItems?.length).map((r) => r.id);
@@ -211,7 +231,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
           <button className="btn btn-ghost btn-sm" onClick={() => setShowSettle((v) => !v)}>+ تسوية commission</button>
         )}
         {data && <button className="btn btn-ghost btn-sm sp" onClick={() => sheetRef.current && downloadElementAsPdf(sheetRef.current, `كشف-حساب-${party.name}`)}>⬇ تحميل PDF</button>}
-        {data && <button className="btn btn-primary btn-sm" onClick={() => window.print()}>🖨 طباعة</button>}
+        {data && <button className="btn btn-primary btn-sm" onClick={() => sheetRef.current && printElementOnePage(sheetRef.current, `كشف-حساب-${party.name}`)}>🖨 طباعة</button>}
       </div>
 
       {showSettle && can('invoices.commission') && (
@@ -371,11 +391,20 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                     </Fragment>
                   );
                 })}
+                {visibleRows.length > 0 && (
+                  <tr className="mf-total">
+                    <td colSpan={3} style={{ fontWeight: 800 }}>الإجمالي</td>
+                    <td className="num deb">{money(totalDebit, cur)}</td>
+                    <td className="num cre">{money(totalCredit, cur)}</td>
+                    {kind === 'all' && <td className="num">{money(data.balance, cur)}</td>}
+                  </tr>
+                )}
                 {visibleRows.length === 0 && <tr><td colSpan={6} className="empty">لا توجد حركات</td></tr>}
               </tbody>
             </table>
           </div>
           <div className="page-title num" style={{ marginTop: 14, textAlign: 'left' }}>الرصيد الجاري: {amtWithEgp(data.balance, cur, party.avgExchangeRate)}</div>
+          <div ref={bottomRef} />
         </div>
       )}
 

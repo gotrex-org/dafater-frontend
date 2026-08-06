@@ -455,11 +455,16 @@ export function EntryForm() {
 
               {type === 'cash' && (
                 <>
-                  <Field label="نوع الحركة">
+                  <Field label={cashTarget === 'custody' ? 'العملية' : 'نوع الحركة'}>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button type="button" className={`btn btn-sm ${cashDir === 'out' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCashDir('out')}>{cashTarget === 'account' ? 'عليه (يزيد المستحق عليه)' : 'صرف (خروج نقدية)'}</button>
-                      <button type="button" className={`btn btn-sm ${cashDir === 'in' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCashDir('in')}>{cashTarget === 'account' ? 'له (يقلل المستحق عليه)' : 'توريد (دخول نقدية)'}</button>
+                      <button type="button" className={`btn btn-sm ${cashDir === 'out' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCashDir('out')}>{cashTarget === 'custody' ? '⬆ صرف عهدة (تسليم فلوس)' : cashTarget === 'account' ? 'عليه (يزيد المستحق عليه)' : 'صرف (خروج نقدية)'}</button>
+                      <button type="button" className={`btn btn-sm ${cashDir === 'in' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCashDir('in')}>{cashTarget === 'custody' ? '⬇ رد / تسوية العهدة (استرجاع)' : cashTarget === 'account' ? 'له (يقلل المستحق عليه)' : 'توريد (دخول نقدية)'}</button>
                     </div>
+                    {cashTarget === 'custody' && (
+                      <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                        {cashDir === 'out' ? 'الفلوس هتخرج من الخزنة وتتسجّل على الشخص.' : 'الفلوس هترجع/تتقفل — تدخل الخزنة أو تتحوّل لعميل أو بند.'}
+                      </div>
+                    )}
                   </Field>
 
                   <Field label="الجهة">

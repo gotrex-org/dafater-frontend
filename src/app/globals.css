@@ -172,6 +172,8 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 /* the statement should NOT look like an invoice grid — only thin lines between rows */
 .ledger-sheet table th, .ledger-sheet table td { border: none; font-weight: 600; }
 .ledger-sheet tbody tr { border-bottom: 1px solid var(--line-soft); }
+/* وقت التقاط الصفحة (PDF/طباعة صفحة واحدة) — الخلايا تلتف عشان متتقصّش في عرض A4 */
+.pdf-capture td, .pdf-capture th { white-space: normal !important; overflow-wrap: anywhere; }
 .mf-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-bottom: 2px solid var(--ink); padding-bottom: 12px; }
 .mf-head h2 { margin: 0; font-size: 22px; }
 .mf-meta { display: flex; gap: 18px; font-size: 14px; }
