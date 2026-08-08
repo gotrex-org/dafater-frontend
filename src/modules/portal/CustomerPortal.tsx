@@ -290,14 +290,14 @@ function LedgerTab({ partyName }: { partyName?: string }) {
   if (isLoading) return <div className="empty">جاري التحميل…</div>;
   if (!data) return null;
 
-  // من الأقدم للأحدث — آخر معاملة تحت
+  // الباك بيرجّع الأحدث فوق — نعكسها لترتيب زمني صح (شامل ترتيب نفس اليوم)
   const visibleRows = (data.rows ?? [])
     .filter((r) => {
       if (kind === 'invoices') return !!(r.invoiceUid || r.dealUid);
       if (kind === 'collect') return !r.invoiceUid && !r.dealUid;
       return true;
     })
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    .reverse();
   const totalDebit = visibleRows.reduce((s, r) => s + (r.debit || 0), 0);
   const totalCredit = visibleRows.reduce((s, r) => s + (r.credit || 0), 0);
 

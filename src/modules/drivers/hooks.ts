@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { driversApi } from './api';
-import type { UpdateDriverDto } from './dtos';
+import type { CreateDriverAdvanceDto, UpdateDriverDto } from './dtos';
 
 const KEY = ['drivers'];
 
@@ -24,5 +24,37 @@ export function useDeleteDriver() {
   return useMutation({
     mutationFn: (id: string) => driversApi.remove(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+export function useDriverAdvances(name: string | null) {
+  return useQuery({
+    queryKey: ['driver-advances', name],
+    queryFn: () => driversApi.listAdvances(name as string),
+    enabled: !!name,
+  });
+}
+
+export function useCreateDriverAdvance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (dto: CreateDriverAdvanceDto) => driversApi.createAdvance(dto),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEY });
+      qc.invalidateQueries({ queryKey: ['driver-advances'] });
+      qc.invalidateQueries({ queryKey: ['treasury'] });
+    },
+  });
+}
+
+export function useDeleteDriverAdvance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (uid: string) => driversApi.removeAdvance(uid),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEY });
+      qc.invalidateQueries({ queryKey: ['driver-advances'] });
+      qc.invalidateQueries({ queryKey: ['treasury'] });
+    },
   });
 }

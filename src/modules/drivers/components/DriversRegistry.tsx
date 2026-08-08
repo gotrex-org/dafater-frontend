@@ -1,16 +1,74 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Field, SearchInput, PlateInput, parsePlate, buildPlate } from '@/components/common';
+import { Field, SearchInput, PlateInput, parsePlate, buildPlate, Combobox, MoneyInput } from '@/components/common';
+import { EGP, todayISO } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
-import { useDrivers, useUpdateDriver, useDeleteDriver } from '../hooks';
+import { useAllTreasury } from '../../treasury/hooks';
+import { useDrivers, useUpdateDriver, useDeleteDriver, useCreateDriverAdvance, useDriverAdvances, useDeleteDriverAdvance } from '../hooks';
 import type { Driver } from '../dtos';
+
+// لوحة سلف السائق: صرف سلفة (كاش من خزنة) + قائمة السلف. العطلات بتسدّد السلفة تلقائيًا في الملخص.
+function DriverAdvancePanel({ driverName, treasuryOptions, canManage }: { driverName: string; treasuryOptions: { id: string; name: string }[]; canManage: boolean }) {
+  const create = useCreateDriverAdvance();
+  const del = useDeleteDriverAdvance();
+  const { data: advances } = useDriverAdvances(driverName);
+  const [amount, setAmount] = useState('');
+  const [treasuryId, setTreasuryId] = useState('');
+  const [date, setDate] = useState(todayISO());
+  const [note, setNote] = useState('');
+  const [err, setErr] = useState('');
+
+  const save = () => {
+    setErr('');
+    if (!amount || Number(amount) <= 0) return setErr('اكتب المبلغ');
+    if (!treasuryId) return setErr('اختر الخزنة');
+    create.mutate(
+      { driverName, date, amount: Number(amount), treasuryId, note: note.trim() || undefined },
+      { onSuccess: () => { setAmount(''); setNote(''); }, onError: (e: any) => setErr(e.message) },
+    );
+  };
+
+  return (
+    <div style={{ marginTop: 10, borderTop: '1px solid var(--line-soft)', paddingTop: 10 }}>
+      {canManage && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <Field label="مبلغ السلفة"><MoneyInput value={amount} onChange={setAmount} placeholder="0.00" style={{ maxWidth: 120 }} /></Field>
+          <Field label="من خزنة"><div style={{ minWidth: 150 }}><Combobox options={treasuryOptions} value={treasuryId} onChange={setTreasuryId} placeholder="اختر الخزنة" /></div></Field>
+          <Field label="التاريخ"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+          <Field label="بيان"><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="اختياري" style={{ maxWidth: 140 }} /></Field>
+          <button className="btn btn-primary btn-sm" onClick={save} disabled={create.isPending}>+ صرف سلفة</button>
+        </div>
+      )}
+      {err && <div className="err-text" style={{ marginTop: 6 }}>{err}</div>}
+      {(advances?.length ?? 0) > 0 && (
+        <div className="tbl-wrap" style={{ marginTop: 8 }}>
+          <table style={{ fontSize: 13 }}>
+            <thead><tr><th>التاريخ</th><th>المبلغ</th><th>بيان</th><th></th></tr></thead>
+            <tbody>
+              {advances!.map((a) => (
+                <tr key={a.id}>
+                  <td className="muted">{new Date(a.date).toLocaleDateString('en-CA')}</td>
+                  <td className="num deb">{EGP(a.amount)}</td>
+                  <td className="muted">{a.note || '—'}</td>
+                  <td>{canManage && <button className="btn btn-danger btn-sm" onClick={() => { if (window.confirm('حذف السلفة؟ هيرجّع الكاش للخزنة.')) del.mutate(a.id); }} disabled={del.isPending}>حذف</button>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function DriversRegistry() {
   const { can } = useAuth();
   const canManage = can('settings');
   const [search, setSearch] = useState('');
   const { data, isLoading } = useDrivers();
+  const { data: treasury } = useAllTreasury();
+  const [openAdvance, setOpenAdvance] = useState<string | null>(null);
   const updateDriver = useUpdateDriver();
   const deleteDriver = useDeleteDriver();
 
@@ -110,30 +168,43 @@ export function DriversRegistry() {
       )}
 
       <div style={{ display: 'grid', gap: 8 }}>
-        {drivers.map((d) => (
-          <div key={d.id} className="card" style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>{d.name}</div>
-              <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
-                {[d.nationalId && `ق: ${d.nationalId}`, d.phone, d.phone2, d.vehicleNo, d.trailerNo].filter(Boolean).join(' — ') || 'لا توجد بيانات إضافية'}
+        {drivers.map((d) => {
+          const totalAdvance = d.totalAdvance ?? 0;
+          const delayEarned = d.delayEarned ?? 0;
+          const outstanding = d.outstandingAdvance ?? Math.max(0, totalAdvance - delayEarned);
+          const hasMoney = totalAdvance > 0 || delayEarned > 0;
+          const advOpen = openAdvance === d.name;
+          return (
+          <div key={d.id} className="card" style={{ padding: '12px 16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{d.name}</div>
+                <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+                  {[d.nationalId && `ق: ${d.nationalId}`, d.phone, d.phone2, d.vehicleNo, d.trailerNo].filter(Boolean).join(' — ') || 'لا توجد بيانات إضافية'}
+                </div>
+                {d.note && <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>{d.note}</div>}
               </div>
-              {d.note && <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>{d.note}</div>}
-            </div>
-            {canManage && (
               <div className="toolbar" style={{ flexShrink: 0 }}>
-                <button className="btn btn-ghost btn-sm" onClick={() => openEdit(d)}>✏ تعديل</button>
-                <button
-                  className="btn btn-danger btn-sm"
-                  onClick={() => {
-                    if (!window.confirm(`حذف "${d.name}" من السجل؟`)) return;
-                    deleteDriver.mutate(d.id);
-                  }}
-                  disabled={deleteDriver.isPending}
-                >حذف</button>
+                <button className={`btn btn-sm ${advOpen ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setOpenAdvance(advOpen ? null : d.name)}>💰 السلف</button>
+                {canManage && <button className="btn btn-ghost btn-sm" onClick={() => openEdit(d)}>✏ تعديل</button>}
+                {canManage && (
+                  <button className="btn btn-danger btn-sm" onClick={() => { if (window.confirm(`حذف "${d.name}" من السجل؟`)) deleteDriver.mutate(d.id); }} disabled={deleteDriver.isPending}>حذف</button>
+                )}
+              </div>
+            </div>
+
+            {hasMoney && (
+              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 6, fontSize: 12.5, fontWeight: 700 }}>
+                <span>سلفة مصروفة: <span className="num deb">{EGP(totalAdvance)}</span></span>
+                <span>عطلات مكتسبة: <span className="num cre">{EGP(delayEarned)}</span></span>
+                <span>متبقي السلفة على السائق: <span className={`num ${outstanding > 0 ? 'deb' : 'cre'}`}>{EGP(outstanding)}</span></span>
               </div>
             )}
+
+            {advOpen && <DriverAdvancePanel driverName={d.name} treasuryOptions={treasury?.data ?? []} canManage={canManage} />}
           </div>
-        ))}
+          );
+        })}
         {!isLoading && drivers.length === 0 && (
           <div className="empty">لا يوجد سائقين مسجلين</div>
         )}

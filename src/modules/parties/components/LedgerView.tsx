@@ -203,12 +203,12 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
     if (kind === 'withdraw') return (r.debit ?? 0) > 0 && !r.invoiceUid && !r.dealUid;
     return true;
   });
-  // من الأقدم للأحدث — آخر معاملة تحت (زي دفتر الحساب)
-  const visibleRows = [...filteredRows].sort((a, b) => {
-    const da = kind === 'invoices' ? (a.manifestDate ?? a.date) : a.date;
-    const db = kind === 'invoices' ? (b.manifestDate ?? b.date) : b.date;
-    return new Date(da).getTime() - new Date(db).getTime();
-  });
+  // الباك بيرجّع الأحدث فوق (مرتّب date+createdAt تنازلي) — نعكسها لترتيب زمني صح
+  // شامل ترتيب حركات نفس اليوم. للفواتير نرتّب بتاريخ الكشف مع تثبيت الترتيب الزمني.
+  const chrono = [...filteredRows].reverse();
+  const visibleRows = kind === 'invoices'
+    ? chrono.sort((a, b) => new Date(a.manifestDate ?? a.date).getTime() - new Date(b.manifestDate ?? b.date).getTime())
+    : chrono;
   const totalDebit = visibleRows.reduce((s, r) => s + (r.debit || 0), 0);
   const totalCredit = visibleRows.reduce((s, r) => s + (r.credit || 0), 0);
 
