@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCreateProduct } from '../hooks';
 import type { Product } from '../dtos';
 
@@ -46,6 +46,15 @@ export function ProductCombobox({
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
   const [pendingCreate, setPendingCreate] = useState(false);
+
+  // في وضع الـid: لو الأصناف اتحمّلت بعد الفتح (تعديل فاتورة)، الاسم المعروض كان بيفضل فاضي
+  // لأنه بيتحسب مرة واحدة. نزامنه لما القيمة/الأصناف تجهز (والمستخدم مش بيكتب — القيمة موجودة).
+  useEffect(() => {
+    if (freeText) return;
+    const name = products.find((p) => p.id === value)?.name;
+    if (name && name !== query) setQuery(name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, products]);
 
   const q = query.trim().toLowerCase();
   const matches = (q ? products.filter((p) => p.name.toLowerCase().includes(q)) : products).slice(0, 100);

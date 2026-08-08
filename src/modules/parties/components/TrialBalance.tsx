@@ -48,8 +48,20 @@ export function TrialBalance({ onOpenParty }: { onOpenParty: (uid: string) => vo
       seen.add(key);
       return true;
     });
-    return deduped
-      .filter((p) => !isRestricted || !restrictedIds.includes(p.id))
+    const visible = deduped.filter((p) => !isRestricted || !restrictedIds.includes(p.id));
+
+    // كل أصحاب العهد (PERSON) بيتجمّعوا في حساب واحد "العهدة" برصيدهم المجمّع.
+    const persons = visible.filter((p) => p.role === 'PERSON');
+    const others = visible.filter((p) => p.role !== 'PERSON');
+    const custodyBalance = persons.reduce((s, p) => {
+      const { egp } = toEgp(p);
+      return s + (egp ?? 0); // العهدة بالمصري
+    }, 0);
+    const custodyRow = persons.length
+      ? ({ id: '__custody__', name: 'العهدة', role: 'PERSON', currency: 'EGP', balance: custodyBalance, __consolidated: true } as unknown as Party)
+      : null;
+
+    return (custodyRow ? [...others, custodyRow] : others)
       .filter((p) => (showZeros ? true : Math.abs(p.balance ?? 0) >= 0.005))
       .filter((p) => p.name.includes(search.trim()))
       .sort((a, b) => Math.abs(b.balance ?? 0) - Math.abs(a.balance ?? 0));
@@ -119,10 +131,12 @@ export function TrialBalance({ onOpenParty }: { onOpenParty: (uid: string) => vo
                     ? `${USD(usdAbs)} — بدون سعر صرف`
                     : `${USD(usdAbs)} (${EGP(Math.abs(egp))} ج.م)`;
                 };
+                const consolidated = (p as unknown as { __consolidated?: boolean }).__consolidated;
                 return (
-                  <tr key={p.id} onClick={() => onOpenParty(p.id)} style={{ cursor: 'pointer' }}>
+                  <tr key={p.id} onClick={() => { if (!consolidated) onOpenParty(p.id); }} style={{ cursor: consolidated ? 'default' : 'pointer' }}>
                     <td>
                       <b>{p.name}</b>
+                      {consolidated && <span className="pill" style={{ marginInlineStart: 6, opacity: 0.75, fontSize: 10 }}>كل أصحاب العهد مجمّعين</span>}
                       {isUSD && <span className="pill" style={{ marginInlineStart: 6 }}>دولار{rate > 0 ? ` @ ${EGP(rate)}` : ''}</span>}
                       {partner && <span className="pill" style={{ marginInlineStart: 6, opacity: 0.75, fontSize: 10 }}>مدمج مع {partner.name}</span>}
                     </td>
