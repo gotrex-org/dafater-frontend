@@ -328,8 +328,8 @@ export function EntryForm() {
     // Ledger-only transfer between any two parties (client↔supplier↔client) — moves the
     // balance from one party to another without touching a treasury.
     if (type === 'balanceTransfer') {
-      if (!partyId) return setError('اختر الطرف المُحوِّل (من)');
-      if (!partyId2) return setError('اختر الطرف المستلم (إلى)');
+      if (!partyId) return setError('اختر الطرف اللي له (هيتسجّل له)');
+      if (!partyId2) return setError('اختر الطرف اللي عليه (هيتسجّل عليه)');
       if (partyId === partyId2) return setError('لا يمكن التحويل لنفس الطرف');
       if (!amount || Number(amount) <= 0) return setError('اكتب المبلغ');
       postEntry.mutate(
@@ -603,12 +603,15 @@ export function EntryForm() {
 
               {type === 'balanceTransfer' && (
                 <>
-                  <Field label="من طرف (المُحوِّل)">
+                  <Field label="الطرف اللي له (يتسجّل له / دائن)">
                     <PartyCombobox parties={allParties} value={partyId} onChange={setPartyId} role="CLIENT" />
                   </Field>
-                  <Field label="إلى طرف (المستلم)">
+                  <Field label="الطرف اللي عليه (يتسجّل عليه / مدين)">
                     <PartyCombobox parties={allParties} value={partyId2} onChange={setPartyId2} role="CLIENT" />
                   </Field>
+                  <div className="muted" style={{ fontSize: 12, gridColumn: '1/-1' }}>
+                    التحويل بيسجّل المبلغ <b>له</b> للطرف الأول و<b>عليه</b> للطرف التاني.
+                  </div>
                 </>
               )}
 
