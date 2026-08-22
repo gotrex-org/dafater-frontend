@@ -298,8 +298,19 @@ function LedgerTab({ partyName }: { partyName?: string }) {
       return true;
     })
     .reverse();
-  const totalDebit = visibleRows.reduce((s, r) => s + (r.debit || 0), 0);
-  const totalCredit = visibleRows.reduce((s, r) => s + (r.credit || 0), 0);
+
+  // الرصيد الافتتاحي بيتحسب جوّه الإجمالي تحت — عشان الصافي يطلع "له/عليه" صح
+  // حتى لو العميل فلتر على الفواتير بس أو اختار "كل الفترة".
+  const opening = data.opening || 0;
+  const totalDebit = visibleRows.reduce((s, r) => s + (r.debit || 0), 0) + (opening > 0 ? opening : 0);
+  const totalCredit = visibleRows.reduce((s, r) => s + (r.credit || 0), 0) + (opening < 0 ? -opening : 0);
+  const net = totalDebit - totalCredit;
+  const cols = kind === 'all' ? 5 : 4;
+
+  // زرار واحد يكشف/يخفي تفاصيل كل الفواتير مرة واحدة
+  const detailRowIds = visibleRows.filter((r) => r.invoiceItems?.length).map((r) => r.id);
+  const allExpanded = detailRowIds.length > 0 && detailRowIds.every((id) => expanded.has(id));
+  const toggleAllDetails = () => setExpanded(allExpanded ? new Set() : new Set(detailRowIds));
 
   return (
     <>
@@ -318,13 +329,20 @@ function LedgerTab({ partyName }: { partyName?: string }) {
         {([['all', 'كشف الكل'], ['invoices', 'الفواتير فقط'], ['collect', 'التحصيل فقط']] as [LedgerKind, string][]).map(([k, label]) => (
           <button key={k} className={`btn btn-sm ${kind === k ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setKind(k)}>{label}</button>
         ))}
+        {detailRowIds.length > 0 && (
+          <button className="btn btn-ghost btn-sm sp" onClick={toggleAllDetails}>
+            {allExpanded ? '▾ إخفاء تفاصيل الفواتير' : '▸ كشف كل الفواتير'}
+          </button>
+        )}
       </div>
 
       <div ref={sheetRef} className="card print-sheet ledger-sheet">
         <div className="mf-logo">أبو شامة</div>
         <div className="mf-head"><h2>كشف حساب{partyName ? ` — ${partyName}` : ''}</h2></div>
         <div className="muted" style={{ margin: '8px 4px' }}>
-          رصيد افتتاحي: <span className="num">{EGP(data.opening)}</span>
+          {from || to
+            ? <>الفترة: {from ? fmtDate(from) : '…'} ← {to ? fmtDate(to) : '…'}</>
+            : 'الفترة: كل الحركات'}
         </div>
 
         <div className="tbl-wrap mf-grow">
@@ -336,6 +354,19 @@ function LedgerTab({ partyName }: { partyName?: string }) {
               </tr>
             </thead>
             <tbody>
+              {opening !== 0 && (
+                <tr>
+                  <td className="muted" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>—</td>
+                  <td style={{ fontWeight: 700 }}>رصيد افتتاحي</td>
+                  <td className="num deb">{opening > 0 ? EGP(opening) : ''}</td>
+                  <td className="num cre">{opening < 0 ? EGP(-opening) : ''}</td>
+                  {kind === 'all' && (
+                    <td className="num" style={{ fontWeight: 700, color: opening <= 0 ? 'var(--credit)' : 'var(--debit)' }}>
+                      {EGP(Math.abs(opening))} {opening <= 0 ? 'له' : 'عليه'}
+                    </td>
+                  )}
+                </tr>
+              )}
               {visibleRows.map((r) => {
                 const open = expanded.has(r.id) && !!r.invoiceItems?.length;
                 return (
@@ -357,7 +388,7 @@ function LedgerTab({ partyName }: { partyName?: string }) {
                     </tr>
                     {open && (
                       <tr>
-                        <td colSpan={kind === 'all' ? 5 : 4} style={{ background: '#eef4fa', borderInlineStart: '3px solid var(--blue, #2c5a86)', padding: '8px 16px' }}>
+                        <td colSpan={cols} style={{ background: '#eef4fa', borderInlineStart: '3px solid var(--blue, #2c5a86)', padding: '8px 16px' }}>
                           <table style={{ width: '100%', color: 'var(--ink)' }}>
                             <thead><tr><th>الكمية</th><th>الصنف</th><th>السعر</th><th>الإجمالي</th></tr></thead>
                             <tbody>
@@ -372,15 +403,33 @@ function LedgerTab({ partyName }: { partyName?: string }) {
                   </Fragment>
                 );
               })}
-              {visibleRows.length > 0 && (
-                <tr className="mf-total">
-                  <td colSpan={2} style={{ fontWeight: 800 }}>الإجمالي</td>
-                  <td className="num deb">{EGP(totalDebit)}</td>
-                  <td className="num cre">{EGP(totalCredit)}</td>
-                  {kind === 'all' && <td className="num" style={{ fontWeight: 800, color: data.balance <= 0 ? 'var(--credit)' : 'var(--debit)' }}>{EGP(Math.abs(data.balance))} {data.balance <= 0 ? 'له' : 'عليه'}</td>}
-                </tr>
+              {(visibleRows.length > 0 || opening !== 0) && (
+                <>
+                  <tr className="mf-total">
+                    <td colSpan={2} style={{ fontWeight: 800 }}>
+                      الإجمالي{opening !== 0 ? ' (شامل الرصيد الافتتاحي)' : ''}
+                    </td>
+                    <td className="num deb">{EGP(totalDebit)}</td>
+                    <td className="num cre">{EGP(totalCredit)}</td>
+                    {kind === 'all' && (
+                      <td className="num" style={{ fontWeight: 800, color: net <= 0 ? 'var(--credit)' : 'var(--debit)' }}>
+                        {EGP(Math.abs(net))} {net <= 0 ? 'له' : 'عليه'}
+                      </td>
+                    )}
+                  </tr>
+                  {kind !== 'all' && (
+                    <tr className="mf-total">
+                      <td colSpan={cols} style={{ fontWeight: 800, textAlign: 'left' }}>
+                        الصافي:{' '}
+                        <span className="num" style={{ color: net <= 0 ? 'var(--credit)' : 'var(--debit)' }}>
+                          {EGP(Math.abs(net))} {net <= 0 ? 'له' : 'عليه'}
+                        </span>
+                      </td>
+                    </tr>
+                  )}
+                </>
               )}
-              {visibleRows.length === 0 && <tr><td colSpan={kind === 'all' ? 5 : 4} className="empty">لا توجد حركات</td></tr>}
+              {visibleRows.length === 0 && opening === 0 && <tr><td colSpan={cols} className="empty">لا توجد حركات</td></tr>}
             </tbody>
           </table>
         </div>

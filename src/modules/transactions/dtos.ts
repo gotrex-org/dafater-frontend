@@ -36,6 +36,7 @@ export interface PostEntryDto {
   direction?: 'debit' | 'credit';
   transferFee?: number;
   note?: string;
+  clientNote?: string; // ملاحظة تظهر للعميل في بوابته بدل "استلام نقدية"
 }
 
 export interface Transaction {
@@ -58,6 +59,7 @@ export interface UpdateTransactionDto {
   date?: string;
   amount?: number;
   note?: string;
+  clientNote?: string; // '' = امسحها ورجّع العميل لـ "استلام نقدية"
   partyId?: string;
   treasuryId?: string;
 }

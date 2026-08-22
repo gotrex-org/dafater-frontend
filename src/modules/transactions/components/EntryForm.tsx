@@ -274,6 +274,8 @@ export function EntryForm() {
   const [feeAmount, setFeeAmount] = useState('500');
   const [expensePartyId, setExpensePartyId] = useState('');
   const [note, setNote] = useState('');
+  // بيان اختياري يظهر للعميل في بوابته بدل "استلام نقدية"
+  const [clientNote, setClientNote] = useState('');
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
 
@@ -303,7 +305,7 @@ export function EntryForm() {
     : undefined;
 
   const reset = () => {
-    setAmount(''); setNote(''); setPartyId(''); setPartyId2('');
+    setAmount(''); setNote(''); setClientNote(''); setPartyId(''); setPartyId2('');
     setTreasuryId(''); setTreasuryId2(''); setCategoryId(''); setWarehouseId('');
     setRate(''); setAddFee(false); setFeeAmount('500'); setForexAgentId(''); setExpensePartyId('');
     setInvoiceIds([]); setGoodsItems([]); setHolderName('');
@@ -417,6 +419,7 @@ export function EntryForm() {
         amount2: type === 'transfer' && received ? received : undefined,
         transferFee: (type === 'collect' || type === 'unknownCollect') && addFee ? Number(feeAmount) || undefined : undefined,
         note: note || undefined,
+        clientNote: type === 'collect' ? clientNote || undefined : undefined,
       },
       {
         onSuccess: () => {
@@ -674,6 +677,11 @@ export function EntryForm() {
                 </div>
               )}
               <Field label="البيان" full><input value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+              {type === 'collect' && (
+                <Field label="ملاحظة تظهر للعميل (اختياري)" full>
+                  <input value={clientNote} onChange={(e) => setClientNote(e.target.value)} placeholder="من غيرها العميل بيشوف: استلام نقدية" />
+                </Field>
+              )}
             </div>
             {(type === 'collect' || type === 'unknownCollect') && (
               <div className="fee-row">

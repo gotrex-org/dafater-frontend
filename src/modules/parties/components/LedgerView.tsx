@@ -151,6 +151,8 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const [editDate, setEditDate] = useState('');
   const [editAmount, setEditAmount] = useState('');
   const [editNote, setEditNote] = useState('');
+  // ملاحظة تظهر للعميل في بوابته بدل "استلام نقدية"
+  const [editClientNote, setEditClientNote] = useState('');
   const [editErr, setEditErr] = useState('');
   // keep the amount inside البيان in sync while editing (unless the note is hand-edited)
   const noteTouched = useRef(false);
@@ -346,6 +348,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                           setEditDate(r.date.slice(0, 10));
                           setEditAmount(String(r.debit || r.credit));
                           setEditNote(r.note ?? '');
+                          setEditClientNote(r.clientNote ?? '');
                           setEditErr('');
                           noteTouched.current = false;
                           syncedAmt.current = Number(r.debit || r.credit) || 0;
@@ -428,6 +431,12 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                   <span className="muted" style={{ fontSize: 13 }}>التاريخ</span><span>{fmtDate(sel.date)}</span>
                   <span className="muted" style={{ fontSize: 13 }}>النوع</span><span>{sel.type}</span>
                   {sel.note && <><span className="muted" style={{ fontSize: 13 }}>البيان</span><span>{sel.note}</span></>}
+                  {!sel.invoiceUid && !sel.dealUid && (
+                    <>
+                      <span className="muted" style={{ fontSize: 13 }}>يشوفه العميل</span>
+                      <span>{sel.clientNote || (sel.credit > 0 ? 'استلام نقدية' : sel.note || '—')}</span>
+                    </>
+                  )}
                   {sel.debit > 0 && <><span className="muted" style={{ fontSize: 13 }}>عليه</span><span className="deb num">{EGP(sel.debit)}</span></>}
                   {sel.credit > 0 && <><span className="muted" style={{ fontSize: 13 }}>له</span><span className="cre num">{EGP(sel.credit)}</span></>}
                   <span className="muted" style={{ fontSize: 13 }}>الرصيد</span><span className="num">{EGP(sel.balance)}</span>
@@ -463,6 +472,9 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                   <Field label="البيان" full>
                     <input value={editNote} onChange={(e) => { noteTouched.current = true; setEditNote(e.target.value); }} placeholder="البيان…" />
                   </Field>
+                  <Field label="ملاحظة تظهر للعميل (اختياري)" full>
+                    <input value={editClientNote} onChange={(e) => setEditClientNote(e.target.value)} placeholder="من غيرها العميل بيشوف: استلام نقدية" />
+                  </Field>
                 </div>
                 {editErr && <div className="err-text" style={{ marginTop: 8 }}>{editErr}</div>}
                 <div className="toolbar" style={{ marginTop: 14 }}>
@@ -472,7 +484,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                     onClick={() => {
                       setEditErr('');
                       updateTxn.mutate(
-                        { id: sel.id, dto: { date: editDate, amount: Number(editAmount) || undefined, note: editNote || undefined } },
+                        { id: sel.id, dto: { date: editDate, amount: Number(editAmount) || undefined, note: editNote || undefined, clientNote: editClientNote } },
                         {
                           onSuccess: () => { setSel(null); setSelEditing(false); },
                           onError: (e: any) => setEditErr(e.message ?? 'حدث خطأ'),

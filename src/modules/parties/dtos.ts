@@ -40,6 +40,8 @@ export interface LedgerRow {
   date: string;
   type: string;
   note?: string | null;
+  clientNote?: string | null; // البيان اللي العميل بيشوفه في بوابته (بدل "استلام نقدية")
+  docNo?: number | null; // ترقيم مستندات الطرف ورا بعض — المعروض للعميل
   debit: number;
   credit: number;
   balance: number;
