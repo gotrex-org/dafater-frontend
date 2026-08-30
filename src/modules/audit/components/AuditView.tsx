@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTableState } from '@/lib/useTableState';
-import { money } from '@/lib/format';
+import { money, fmtDate, fmtDateTime } from '@/lib/format';
 import { PageTitle, DataTable, SearchInput, type Column } from '@/components/common';
 import { useAuth } from '@/lib/auth';
 import { useUsers } from '../../users/hooks';
@@ -41,14 +41,6 @@ const ENTITY: Record<string, string> = {
 const ACTION: Record<string, string> = { CREATE: 'إضافة', UPDATE: 'تعديل', DELETE: 'حذف' };
 const ACTION_CLASS: Record<string, string> = { CREATE: 'cre', UPDATE: '', DELETE: 'deb' };
 
-const fmtWhen = (iso: string) => {
-  try {
-    return new Date(iso).toLocaleString('ar-EG', { dateStyle: 'long', timeStyle: 'short' });
-  } catch {
-    return iso;
-  }
-};
-
 const UNDO_LABEL: Record<string, { btn: string; confirm: string }> = {
   CREATE: { btn: 'إلغاء الإضافة', confirm: 'سيتم حذف هذا العنصر نهائياً. متأكد؟' },
   DELETE: { btn: 'استرجاع المحذوف', confirm: 'سيتم استرجاع هذا العنصر. متأكد؟' },
@@ -68,11 +60,17 @@ const SNAPSHOT_SKIP_KEYS = new Set([
 const isSkippableKey = (key: string, value: unknown) =>
   SNAPSHOT_SKIP_KEYS.has(key) || (/Id$/.test(key) && (value === null || typeof value !== 'object'));
 
+const DATE_RE = /^(\d{4}-\d{2}-\d{2})(T.*)?$/;
+
 function formatScalar(v: unknown): string {
   if (v == null) return '(فارغ)';
   if (typeof v === 'boolean') return v ? 'نعم' : 'لا';
-  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
-    try { return new Date(v).toLocaleDateString('ar-EG'); } catch { return v; }
+  // Snapshots keep the full ISO instant, while the audit interceptor normalises dates in
+  // the diff down to a bare "YYYY-MM-DD" — accept both, or a changed date renders raw. A
+  // bare day gets an explicit time so it reads as local midnight and can't slip a day.
+  if (typeof v === 'string') {
+    const day = DATE_RE.exec(v);
+    if (day) return fmtDate(day[2] ? v : `${day[1]}T00:00:00`);
   }
   // Never let an object/array reach a React child as [object Object] or throw — render
   // it as compact JSON. Primitives fall through to String().
@@ -209,7 +207,7 @@ function AuditDetail({ log, onBack, onOpen }: { log: AuditLog; onBack: () => voi
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '12px 24px', alignItems: 'baseline' }}>
           <span className="muted" style={{ fontSize: 13 }}>التوقيت</span>
-          <span>{fmtWhen(log.createdAt)}</span>
+          <span>{fmtDateTime(log.createdAt)}</span>
 
           <span className="muted" style={{ fontSize: 13 }}>المستخدم</span>
           <b style={{ color: colorFor(log.userName) }}>{log.userName}</b>
@@ -302,7 +300,7 @@ export function AuditView() {
   };
 
   const columns: Column<AuditLog>[] = [
-    { header: 'متى', cell: (r) => fmtWhen(r.createdAt), className: 'muted' },
+    { header: 'متى', cell: (r) => fmtDateTime(r.createdAt), className: 'muted' },
     { header: 'مين', cell: (r) => <b style={{ color: colorFor(r.userName) }}>{r.userName}</b> },
     { header: 'الإجراء', cell: (r) => <span className={ACTION_CLASS[r.action]}>{ACTION[r.action] ?? r.action}</span> },
     { header: 'النوع', cell: (r) => ENTITY[r.entity] ?? r.entity },
