@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { todayISO } from '@/lib/format';
+import { todayISO, fmtDate } from '@/lib/format';
 import { useNavigationGuard } from '@/lib/useNavigationGuard';
 import { fieldNavKeyDown } from '@/lib/field-nav';
 import { PageTitle, Field, Combobox, MoneyInput, PlateInput, parsePlate, buildPlate } from '@/components/common';
@@ -9,6 +9,7 @@ import { ProductCombobox } from '../../products/components/ProductCombobox';
 import { PartyCombobox } from '../../invoices/components/PartyCombobox';
 import { useAllProducts } from '../../products/hooks';
 import { useAllParties } from '../../parties/hooks';
+import { useInvoices } from '../../invoices/hooks';
 import { useCreateManifest, useUpdateManifest } from '../hooks';
 import { manifestsApi } from '../api';
 import { DriverTripEditor } from '../../driver-trips/components/DriverTripEditor';
@@ -23,7 +24,9 @@ interface Props {
   onClose: () => void;
   onCreated: (m: Manifest) => void;
   /** prefill (e.g. when starting a manifest from a just-saved invoice) */
-  initial?: { clientName?: string; items?: ManifestItem[]; note?: string };
+  // invoiceId بيربط العربية بالفاتورة — من غيره العربية بتفضل كشف مستقل وماتظهرش
+  // كتاب في الفاتورة (شوف ManifestTabs).
+  initial?: { clientName?: string; items?: ManifestItem[]; note?: string; invoiceId?: string };
   /** when editing an existing manifest */
   manifest?: Manifest;
 }
@@ -41,6 +44,13 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
   const [no, setNo] = useState(manifest?.no ?? '');
   const [date, setDate] = useState(manifest?.date?.slice(0, 10) ?? todayISO());
   const [clientName, setClientName] = useState(manifest?.clientName ?? initial?.clientName ?? '');
+  // الفاتورة المرتبطة — منها بتظهر العربية كتاب جوّه الفاتورة.
+  const [invoiceId, setInvoiceId] = useState(manifest?.invoice?.id ?? initial?.invoiceId ?? '');
+  // فواتير العميل المختار عشان قايمة الاختيار. البحث بيدوّر على اسم الطرف كمان.
+  const { data: invoicesPage, isLoading: loadingInvoices } = useInvoices(
+    clientName.trim() ? { search: clientName.trim(), pageSize: 200 } : {},
+  );
+  const clientInvoices = (invoicesPage?.data ?? []).filter((inv) => inv.party?.name === clientName.trim());
 
   // Auto-fill manifest number when clientName is set/changed (create mode only)
   useEffect(() => {
@@ -57,6 +67,9 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
   const [driverPhone, setDriverPhone] = useState(manifest?.driverPhone ?? '');
   const [vehL, setVehL] = useState(vehParsed.letters);
   const [vehNumbers, setVehNumbers] = useState(vehParsed.numbers);
+  // مسمّى العربية (عربية الزيتون / عربية ديدي) — بيتخزّن على الكشف والرحلة،
+  // وبيظهر في بيان «عطلة عربية» على كشف حساب العميل
+  const [vehicleLabel, setVehicleLabel] = useState(manifest?.vehicleLabel ?? '');
   const [trlL, setTrlL] = useState(trlParsed.letters);
   const [trlNumbers, setTrlNumbers] = useState(trlParsed.numbers);
   const [note, setNote] = useState(manifest?.note ?? initial?.note ?? '');
@@ -94,19 +107,21 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
       driverNID: driverNID.trim() || undefined,
       driverPhone: driverPhone.trim() || undefined,
       vehicleNo: buildPlate(vehL, vehNumbers),
+      vehicleLabel: vehicleLabel.trim() || undefined,
       trailerNo: buildPlate(trlL, trlNumbers),
       note: note.trim() || undefined,
       items: goods.map((it) => ({ name: it.name.trim(), qty: Number(it.qty) || 0 })),
     };
 
     if (isEdit) {
+      // سلسلة فاضية = فك الربط بالفاتورة (الباك بيفهمها كده) — عشان كده بنبعتها دايمًا.
       updateManifest.mutate(
-        { id: manifest!.id, dto: payload },
+        { id: manifest!.id, dto: { ...payload, invoiceId } },
         { onSuccess: onCreated, onError: (e: any) => setError(e.message) },
       );
     } else {
       createManifest.mutate(
-        { ...payload, no: no.trim() || undefined },
+        { ...payload, no: no.trim() || undefined, invoiceId: invoiceId || undefined },
         { onSuccess: (m) => setSaved(m), onError: (e: any) => setError(e.message) },
       );
     }
@@ -166,6 +181,25 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
               role="CLIENT"
             />
           </Field>
+          {/* الربط بالفاتورة: هو اللي بيخلّي العربية تظهر كتاب جوّه الفاتورة بأصنافها
+              ومصاريفها. بيتفعّل بعد اختيار العميل عشان نجيب فواتيره. */}
+          <Field label="الفاتورة المرتبطة" full>
+            <select
+              value={invoiceId}
+              onChange={(e) => setInvoiceId(e.target.value)}
+              disabled={!clientName.trim() || loadingInvoices}
+              style={{ width: '100%', padding: '11px 12px', border: '1.5px solid var(--line)', borderRadius: 10, background: '#fff' }}
+            >
+              <option value="">
+                {!clientName.trim() ? 'اختر العميل أولاً' : loadingInvoices ? 'بيحمّل…' : 'كشف مستقل — مش مربوط بفاتورة'}
+              </option>
+              {clientInvoices.map((inv) => (
+                <option key={inv.id} value={inv.id}>
+                  فاتورة {inv.kind === 'SALE' ? 'بيع' : 'شراء'} رقم {inv.no} — {fmtDate(inv.date)}
+                </option>
+              ))}
+            </select>
+          </Field>
           <Field label="اسم السائق">
             <DriverCombo
               value={driverName}
@@ -176,6 +210,7 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
                 if (d.phone) setDriverPhone(d.phone);
                 const veh = parsePlate(d.vehicleNo ?? '');
                 if (veh.letters.some(Boolean) || veh.numbers) { setVehL(veh.letters); setVehNumbers(veh.numbers); }
+                if (d.vehicleLabel) setVehicleLabel(d.vehicleLabel);
                 const trl = parsePlate(d.trailerNo ?? '');
                 if (trl.letters.some(Boolean) || trl.numbers) { setTrlL(trl.letters); setTrlNumbers(trl.numbers); }
                 if (d.note && !note) setNote(d.note);
@@ -184,6 +219,9 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
           </Field>
           <Field label="الرقم القومي للسائق"><input inputMode="numeric" value={driverNID} onChange={(e) => setDriverNID(e.target.value.replace(/\D/g, ''))} /></Field>
           <Field label="رقم تليفون السائق"><input inputMode="numeric" value={driverPhone} onChange={(e) => setDriverPhone(e.target.value.replace(/\D/g, ''))} /></Field>
+          <Field label="مسمّى العربية">
+            <input value={vehicleLabel} onChange={(e) => setVehicleLabel(e.target.value)} placeholder="عربية الزيتون / عربية ديدي" />
+          </Field>
           <Field label="رقم العربية (٣ حروف / أرقام)">
             <PlateInput letters={vehL} numbers={vehNumbers} onLettersChange={setVehL} onNumbersChange={setVehNumbers} numRef={vehNumRef} />
           </Field>

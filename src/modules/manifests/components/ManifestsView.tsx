@@ -44,9 +44,16 @@ export function ManifestsView() {
     { header: 'رقم', cell: (m) => m.no },
     { header: 'العميل', cell: (m) => m.clientName },
     { header: 'السائق', cell: (m) => m.driverName || '—' },
-    { header: 'العربية', cell: (m) => m.vehicleNo || '—', className: 'muted' },
+    { header: 'العربية', cell: (m) => m.vehicleLabel ? `${m.vehicleLabel}${m.vehicleNo ? ` — ${m.vehicleNo}` : ''}` : (m.vehicleNo || '—'), className: 'muted' },
     { header: 'المقطورة', cell: (m) => m.trailerNo || '—', className: 'muted' },
     { header: 'التاريخ', cell: (m) => fmtDate(m.date), className: 'muted' },
+    // الربط بالفاتورة — بيبيّن الكشوفات اللي لسه مستقلة وماتظهرش كتاب في أي فاتورة
+    {
+      header: 'الفاتورة',
+      cell: (m) => m.invoice
+        ? <span className="pill">فاتورة {m.invoice.no}</span>
+        : <span className="muted">مستقل</span>,
+    },
     {
       header: 'الحالة',
       cell: (m) => {

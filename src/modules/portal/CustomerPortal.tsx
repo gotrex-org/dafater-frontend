@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { fmtDate, fmtDateTime, EGP } from '@/lib/format';
+import { fmtDate, fmtDateTime, EGP, money } from '@/lib/format';
 import { downloadElementAsPdf, printElementOnePage } from '@/lib/pdf';
 
 // أول يوم في الشهر الحالي (توقيت محلي) — الكشف يبدأ منه افتراضيًا
@@ -32,7 +32,7 @@ interface MyOrder {
 interface ManifestItem { id?: string; name: string; qty: number }
 interface MyManifest {
   id: string; uid: string; no: string; date: string; clientName: string;
-  vehicleNo?: string | null; trailerNo?: string | null; driverName?: string | null;
+  vehicleNo?: string | null; vehicleLabel?: string | null; trailerNo?: string | null; driverName?: string | null;
   driverPhone?: string | null; driverNID?: string | null; note?: string | null;
   items: ManifestItem[];
   driverTrips?: { arrivalDate: string | null }[];
@@ -41,11 +41,31 @@ interface MyManifest {
 interface LedgerRow {
   id: string; date: string; type: string; note?: string | null;
   debit: number; credit: number; balance: number;
+  /** ترقيم مستندات العميل (فاتورة ١، ٢، ٣…) — مش الرقم الداخلي */
+  docNo?: number | null;
   invoiceUid?: string | null; dealUid?: string | null;
   invoiceItems?: { name: string; qty: number; price: number }[] | null;
 }
 
 interface LedgerResponse { opening: number; balance: number; rows: LedgerRow[] }
+
+// فاتورة العميل بشكل الشيت — GET /invoices/my/:uid
+interface MyInvoice {
+  date: string;
+  currency: 'EGP' | 'USD';
+  items: { name: string; qty: number; price: number }[];
+  /** إجمالي الأصناف بعد الخصم */
+  itemsTotal: number;
+  discount: number;
+  /** الحساب القديم: الباقي من الفاتورة اللي قبلها */
+  previousBalance: number;
+  /** رسوم نقل النقدية المتسجّلة مع الاستلامات في نفس الفترة */
+  cashTransfer: number;
+  payments: { id: string; date: string; amount: number; note: string }[];
+  paymentsTotal: number;
+  /** الباقي عليه بعد الفاتورة واستلاماتها */
+  remaining: number;
+}
 
 // ─── hooks ────────────────────────────────────────────────────────────────────
 
@@ -73,6 +93,45 @@ function useMyLedger(params: { from?: string; to?: string } = {}) {
   return useQuery<LedgerResponse>({
     queryKey: ['my-ledger', params.from, params.to],
     queryFn: () => api.get(`/parties/my/ledger${q ? '?' + q : ''}`),
+  });
+}
+
+// ---- تابات «فاتورة N / استلامات N» في البوابة ----
+
+interface MyInvoiceRow { id: string; no: string; date: string; currency: 'EGP' | 'USD' }
+
+interface MyManifestTab {
+  id: string;
+  no: string;
+  date: string;
+  vehicleLabel?: string | null;
+  vehicleNo?: string | null;
+  items: { id: string; name: string; qty: number; price: number | null; total: number | null }[];
+  itemsTotal: number;
+  expenses: { id: string; date: string; note: string | null; category: string | null; amount: number }[];
+  expensesTotal: number;
+}
+
+function useMyInvoiceList() {
+  return useQuery<MyInvoiceRow[]>({
+    queryKey: ['my-invoices'],
+    queryFn: () => api.get('/invoices/my'),
+  });
+}
+
+function useMyManifestTabs(uid: string | null) {
+  return useQuery<{ currency: 'EGP' | 'USD'; tabs: MyManifestTab[] }>({
+    queryKey: ['my-manifest-tabs', uid],
+    queryFn: () => api.get(`/invoices/my/${uid}/manifest-tabs`),
+    enabled: !!uid,
+  });
+}
+
+function useMyInvoice(uid: string | null) {
+  return useQuery<MyInvoice>({
+    queryKey: ['my-invoice', uid],
+    queryFn: () => api.get(`/invoices/my/${uid}`),
+    enabled: !!uid,
   });
 }
 
@@ -265,12 +324,161 @@ function OrdersTab({ products }: { products: CatalogProduct[] }) {
 
 type LedgerKind = 'all' | 'invoices' | 'collect';
 
+// فاتورة العميل بشكل الشيت: الأصناف على اليمين، ملخّص جنبها، والاستلامات تحتها.
+// مبنية للموبايل الأول — على الشاشة الصغيرة الجداول بتبقى كروت (شوف .portal-sheet في globals.css)،
+// وفي الـ PDF/الطباعة بترجع جداول لأن captureSheet بيثبّت العرض ويضيف .pdf-capture.
+function PortalInvoiceView({ uid, docNo, partyName, onBack }: {
+  uid: string; docNo: number | null; partyName?: string; onBack: () => void;
+}) {
+  const { data, isLoading } = useMyInvoice(uid);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const title = `فاتورة${docNo ? ` ${docNo}` : ''}`;
+
+  if (isLoading) return <div className="empty">جاري التحميل…</div>;
+  if (!data) return (
+    <>
+      <div className="toolbar no-print"><button className="btn btn-ghost btn-sm" onClick={onBack}>→ رجوع للكشف</button></div>
+      <div className="empty">الفاتورة مش متاحة</div>
+    </>
+  );
+
+  const m = (n: number) => money(n, data.currency);
+  // اجمالي الفاتورة شامل الحساب القديم — زي عمود «الاجمالي» في الشيت.
+  const sheetTotal = data.previousBalance + data.itemsTotal;
+  // أي حركة تانية في نفس الفترة (مرتجع/خصم/مصروف) بتفضل في كشف الحساب — بتتعرض هنا
+  // كسطر واحد بس عشان الورقة تقفل مع الرصيد.
+  const other = data.remaining - (sheetTotal + data.cashTransfer - data.paymentsTotal);
+
+  return (
+    <>
+      <div className="toolbar no-print" style={{ marginBottom: 12, flexWrap: 'wrap' }}>
+        <button className="btn btn-ghost btn-sm" onClick={onBack}>→ رجوع للكشف</button>
+        <div style={{ flex: 1 }} />
+        <button className="btn btn-ghost btn-sm" onClick={() => sheetRef.current && downloadElementAsPdf(sheetRef.current, title)}>⬇ PDF</button>
+        <button className="btn btn-primary btn-sm" onClick={() => sheetRef.current && printElementOnePage(sheetRef.current, title)}>🖨 طباعة</button>
+      </div>
+
+      <div ref={sheetRef} className="card print-sheet portal-sheet">
+        <div className="mf-logo">أبو شامة</div>
+        <div className="mf-head">
+          <h2 style={{ fontSize: 18 }}>{title}</h2>
+          <div className="mf-meta">
+            {partyName && <span>{partyName}</span>}
+            <span>التاريخ: <b>{fmtDate(data.date)}</b></span>
+          </div>
+        </div>
+
+        <div className="sh-body">
+          <div className="sh-items tbl-wrap">
+            <table className="inv-tbl">
+              <thead>
+                <tr>
+                  <th style={{ width: 80 }}>العدد</th>
+                  <th>الصنف</th>
+                  <th style={{ width: 100 }}>السعر</th>
+                  <th style={{ width: 120 }}>الاجمالي</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="sh-old">
+                  <td colSpan={3}>حــــســـــاب قــــديــــم</td>
+                  <td className="num">{m(data.previousBalance)}</td>
+                </tr>
+                {data.items.map((it, i) => (
+                  <tr key={i}>
+                    <td className="num" data-l="عدد">{it.qty}</td>
+                    <td>{it.name}</td>
+                    <td className="num" data-l="سعر">{m(it.price)}</td>
+                    <td className="num">{m(it.qty * it.price)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="mf-total">
+                  <td colSpan={3}>{data.discount > 0 ? 'إجمالي الأصناف بعد الخصم' : 'إجمالي الأصناف'}</td>
+                  <td className="num">{m(data.itemsTotal)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <aside className="sh-side">
+            <div className="sh-box">
+              <div className="sh-box-l">اجمالي الفاتورة</div>
+              <div className="sh-box-v num">{m(sheetTotal)}</div>
+            </div>
+            {data.cashTransfer !== 0 && (
+              <div className="sh-box">
+                <div className="sh-box-l">نقل نقدية</div>
+                <div className="sh-box-v num">{m(data.cashTransfer)}</div>
+              </div>
+            )}
+            <div className="sh-box">
+              <div className="sh-box-l">استلامات</div>
+              <div className="sh-box-v num">{m(data.paymentsTotal)}</div>
+            </div>
+            {Math.abs(other) > 0.005 && (
+              <div className="sh-box">
+                <div className="sh-box-l">حركات أخرى</div>
+                <div className="sh-box-v num">{m(other)}</div>
+              </div>
+            )}
+            <div className="sh-box sh-box-end">
+              <div className="sh-box-l">{data.remaining <= 0 ? 'الباقي لك' : 'الباقي عليك'}</div>
+              <div className="sh-box-v num">{m(Math.abs(data.remaining))}</div>
+            </div>
+          </aside>
+        </div>
+
+        {data.payments.length > 0 && (
+          <div className="sh-pay tbl-wrap">
+            <div className="sh-pay-title">الاستلامات بعد الفاتورة</div>
+            <table className="pay-tbl">
+              <thead>
+                <tr>
+                  <th style={{ width: 110 }}>التاريخ</th>
+                  <th>البيان</th>
+                  <th style={{ width: 130 }}>المبلغ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.payments.map((p) => (
+                  <tr key={p.id}>
+                    <td>{fmtDate(p.date)}</td>
+                    <td>{p.note}</td>
+                    <td className="num">{m(p.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="mf-total">
+                  <td colSpan={2}>الإجمالي</td>
+                  <td className="num">{m(data.paymentsTotal)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+
+        {Math.abs(other) > 0.005 && (
+          <div className="muted" style={{ marginTop: 10, fontSize: 12.5 }}>
+            «حركات أخرى» تفاصيلها في كشف الحساب.
+          </div>
+        )}
+        <div className="mf-grow" />
+      </div>
+    </>
+  );
+}
+
 function LedgerTab({ partyName }: { partyName?: string }) {
   // افتراضيًا من أول الشهر — قابل للتغيير من الفلتر
   const [from, setFrom] = useState(portalStartOfMonth());
   const [to, setTo] = useState('');
   const [kind, setKind] = useState<LedgerKind>('all');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // الفاتورة بتتفتح صفحة كاملة بشكل الشيت؛ البيع الخارجي (صفقة) لسه بينفتح تحت السطر.
+  const [openInvoice, setOpenInvoice] = useState<{ uid: string; docNo: number | null } | null>(null);
   const { data, isLoading } = useMyLedger({ from: from || undefined, to: to || undefined });
   const sheetRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -286,6 +494,17 @@ function LedgerTab({ partyName }: { partyName?: string }) {
 
   const toggle = (id: string) =>
     setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  if (openInvoice) {
+    return (
+      <PortalInvoiceView
+        uid={openInvoice.uid}
+        docNo={openInvoice.docNo}
+        partyName={partyName}
+        onBack={() => setOpenInvoice(null)}
+      />
+    );
+  }
 
   if (isLoading) return <div className="empty">جاري التحميل…</div>;
   if (!data) return null;
@@ -307,8 +526,8 @@ function LedgerTab({ partyName }: { partyName?: string }) {
   const net = totalDebit - totalCredit;
   const cols = kind === 'all' ? 5 : 4;
 
-  // زرار واحد يكشف/يخفي تفاصيل كل الفواتير مرة واحدة
-  const detailRowIds = visibleRows.filter((r) => r.invoiceItems?.length).map((r) => r.id);
+  // الفواتير بقت بتتفتح صفحة لوحدها — الكشف السريع ده بقى للصفقات (البيع الخارجي) بس
+  const detailRowIds = visibleRows.filter((r) => r.invoiceItems?.length && !r.invoiceUid).map((r) => r.id);
   const allExpanded = detailRowIds.length > 0 && detailRowIds.every((id) => expanded.has(id));
   const toggleAllDetails = () => setExpanded(allExpanded ? new Set() : new Set(detailRowIds));
 
@@ -331,12 +550,14 @@ function LedgerTab({ partyName }: { partyName?: string }) {
         ))}
         {detailRowIds.length > 0 && (
           <button className="btn btn-ghost btn-sm sp" onClick={toggleAllDetails}>
-            {allExpanded ? '▾ إخفاء تفاصيل الفواتير' : '▸ كشف كل الفواتير'}
+            {allExpanded ? '▾ إخفاء التفاصيل' : '▸ كشف كل التفاصيل'}
           </button>
         )}
       </div>
 
-      <div ref={sheetRef} className="card print-sheet ledger-sheet">
+      {/* portal-sheet: على الموبايل الصفوف بتتحوّل كروت بدل جدول — والـ PDF/الطباعة
+          بيرجّعوا شكل الجدول لأن captureSheet بيثبّت العرض على 794px ويضيف .pdf-capture */}
+      <div ref={sheetRef} className="card print-sheet ledger-sheet portal-sheet">
         <div className="mf-logo">أبو شامة</div>
         <div className="mf-head"><h2>كشف حساب{partyName ? ` — ${partyName}` : ''}</h2></div>
         <div className="muted" style={{ margin: '8px 4px' }}>
@@ -346,7 +567,7 @@ function LedgerTab({ partyName }: { partyName?: string }) {
         </div>
 
         <div className="tbl-wrap mf-grow">
-          <table>
+          <table className="pl-tbl">
             <thead>
               <tr>
                 <th>التاريخ</th><th>البيان</th><th>عليه</th><th>له</th>
@@ -355,45 +576,53 @@ function LedgerTab({ partyName }: { partyName?: string }) {
             </thead>
             <tbody>
               {opening !== 0 && (
-                <tr>
-                  <td className="muted" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>—</td>
-                  <td style={{ fontWeight: 700 }}>رصيد افتتاحي</td>
-                  <td className="num deb">{opening > 0 ? EGP(opening) : ''}</td>
-                  <td className="num cre">{opening < 0 ? EGP(-opening) : ''}</td>
+                <tr className="pl-row">
+                  <td className="muted pl-date" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>—</td>
+                  <td className="pl-note" style={{ fontWeight: 700 }}>رصيد افتتاحي</td>
+                  <td className="num deb pl-deb" data-l="عليه">{opening > 0 ? EGP(opening) : ''}</td>
+                  <td className="num cre pl-cre" data-l="له">{opening < 0 ? EGP(-opening) : ''}</td>
                   {kind === 'all' && (
-                    <td className="num" style={{ fontWeight: 700, color: opening <= 0 ? 'var(--credit)' : 'var(--debit)' }}>
+                    <td className="num pl-bal" style={{ fontWeight: 700, color: opening <= 0 ? 'var(--credit)' : 'var(--debit)' }}>
                       {EGP(Math.abs(opening))} {opening <= 0 ? 'له' : 'عليه'}
                     </td>
                   )}
                 </tr>
               )}
               {visibleRows.map((r) => {
-                const open = expanded.has(r.id) && !!r.invoiceItems?.length;
+                // الفاتورة بتفتح صفحة كاملة؛ الصفقة بس هي اللي لسه بتتفرد تحت السطر
+                const open = expanded.has(r.id) && !!r.invoiceItems?.length && !r.invoiceUid;
                 return (
                   <Fragment key={r.id}>
-                    <tr>
-                      <td className="muted" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(r.date)}</td>
-                      <td>
-                        {r.invoiceItems?.length
-                          ? <button className="btn btn-ghost btn-sm" onClick={() => toggle(r.id)}>{open ? '▾' : '▸'} {r.note || (r.invoiceUid ? 'فاتورة' : r.dealUid ? 'صفقة' : '—')}</button>
-                          : (r.note ?? '—')}
+                    <tr className="pl-row">
+                      <td className="muted pl-date" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(r.date)}</td>
+                      <td className="pl-note">
+                        {r.invoiceUid
+                          ? <button className="btn btn-ghost btn-sm" onClick={() => setOpenInvoice({ uid: r.invoiceUid!, docNo: r.docNo ?? null })}>📄 {r.note || 'فاتورة'}</button>
+                          : r.invoiceItems?.length
+                            ? <button className="btn btn-ghost btn-sm" onClick={() => toggle(r.id)}>{open ? '▾' : '▸'} {r.note || 'صفقة'}</button>
+                            : (r.note ?? '—')}
                       </td>
-                      <td className="num deb">{r.debit ? EGP(r.debit) : ''}</td>
-                      <td className="num cre">{r.credit ? EGP(r.credit) : ''}</td>
+                      <td className="num deb pl-deb" data-l="عليه">{r.debit ? EGP(r.debit) : ''}</td>
+                      <td className="num cre pl-cre" data-l="له">{r.credit ? EGP(r.credit) : ''}</td>
                       {kind === 'all' && (
-                        <td className="num" style={{ fontWeight: 700, color: r.balance <= 0 ? 'var(--credit)' : 'var(--debit)' }}>
+                        <td className="num pl-bal" style={{ fontWeight: 700, color: r.balance <= 0 ? 'var(--credit)' : 'var(--debit)' }}>
                           {EGP(Math.abs(r.balance))} {r.balance <= 0 ? 'له' : 'عليه'}
                         </td>
                       )}
                     </tr>
                     {open && (
-                      <tr>
+                      <tr className="pi-row">
                         <td colSpan={cols} style={{ background: '#eef4fa', borderInlineStart: '3px solid var(--blue, #2c5a86)', padding: '8px 16px' }}>
-                          <table style={{ width: '100%', color: 'var(--ink)' }}>
+                          <table className="pi-items" style={{ width: '100%', color: 'var(--ink)' }}>
                             <thead><tr><th>الكمية</th><th>الصنف</th><th>السعر</th><th>الإجمالي</th></tr></thead>
                             <tbody>
                               {r.invoiceItems!.map((it, j) => (
-                                <tr key={j}><td className="num">{it.qty}</td><td>{it.name}</td><td className="num">{EGP(it.price)}</td><td className="num">{EGP(it.qty * it.price)}</td></tr>
+                                <tr key={j}>
+                                  <td className="num" data-l="عدد">{it.qty}</td>
+                                  <td>{it.name}</td>
+                                  <td className="num" data-l="سعر">{EGP(it.price)}</td>
+                                  <td className="num">{EGP(it.qty * it.price)}</td>
+                                </tr>
                               ))}
                             </tbody>
                           </table>
@@ -443,6 +672,170 @@ function LedgerTab({ partyName }: { partyName?: string }) {
   );
 }
 
+// ─── invoices tab: تاب لكل فاتورة وجنبه تاب استلاماتها بنفس الرقم ──────────────
+
+/** عربيات الفاتورة في البوابة: أصناف بلون ومصاريف بلون تاني — نفس تلوين الداخلي. */
+function PortalManifestTabs({ invoiceUid, cur }: { invoiceUid: string; cur: 'EGP' | 'USD' }) {
+  const { data, isLoading } = useMyManifestTabs(invoiceUid);
+  const [active, setActive] = useState(0);
+
+  if (isLoading || !data || data.tabs.length === 0) return null;
+  const tab = data.tabs[Math.min(active, data.tabs.length - 1)];
+  const label = (t: MyManifestTab) => t.vehicleLabel || `عربية رقم ${t.no}`;
+
+  return (
+    <div className="mt-wrap">
+      <div className="mt-bar" role="tablist">
+        {data.tabs.map((t, i) => (
+          <button key={t.id} role="tab" aria-selected={i === active}
+            className={`mt-tab ${i === active ? 'is-active' : ''}`} onClick={() => setActive(i)}>
+            {label(t)}
+          </button>
+        ))}
+      </div>
+      <div className="mt-panel card">
+        <div className="mt-head">
+          <div>
+            <b>{label(tab)}</b>
+            <span className="muted" style={{ fontSize: 12, marginInlineStart: 8 }}>
+              {fmtDate(tab.date)}{tab.vehicleNo && <> · {tab.vehicleNo}</>}
+            </span>
+          </div>
+        </div>
+        <div className="tbl-wrap">
+          <table className="mt-tbl">
+            <thead>
+              <tr><th style={{ width: 100 }}>العدد</th><th>البيان</th><th style={{ width: 110 }}>السعر</th><th style={{ width: 130 }}>الاجمالي</th></tr>
+            </thead>
+            <tbody>
+              {tab.items.map((it) => (
+                <tr key={it.id} className="mt-goods">
+                  <td className="num">{it.qty}</td>
+                  <td>{it.name}</td>
+                  <td className="num">{it.price === null ? '—' : EGP(it.price)}</td>
+                  <td className="num">{it.total === null ? '—' : EGP(it.total)}</td>
+                </tr>
+              ))}
+              <tr className="mt-sub mt-goods">
+                <td colSpan={3}>إجمالي الأصناف</td><td className="num">{EGP(tab.itemsTotal)}</td>
+              </tr>
+              {tab.expenses.map((e) => (
+                <tr key={e.id} className="mt-exp">
+                  <td className="muted" style={{ fontSize: 12 }}>{fmtDate(e.date)}</td>
+                  <td>{e.note || e.category || 'مصروف'}</td>
+                  <td />
+                  <td className="num">{EGP(e.amount)}</td>
+                </tr>
+              ))}
+              {tab.expenses.length === 0 && (
+                <tr className="mt-exp"><td colSpan={4} className="empty">مفيش مصاريف</td></tr>
+              )}
+              <tr className="mt-sub mt-exp">
+                <td colSpan={3}>إجمالي المصاريف</td><td className="num">{EGP(tab.expensesTotal)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MyInvoiceTabs() {
+  const { data: invoices, isLoading } = useMyInvoiceList();
+  const [active, setActive] = useState(0);
+
+  const list = invoices ?? [];
+  // تاب الفاتورة وبعديه على طول تاب استلاماتها بنفس الرقم
+  const tabs = list.flatMap((inv) => [
+    { inv, kind: 'invoice' as const },
+    { inv, kind: 'receipts' as const },
+  ]);
+  const cursor = tabs.length ? tabs[Math.min(active, tabs.length - 1)] : null;
+  const { data: detail, isLoading: loadingDetail } = useMyInvoice(cursor?.inv.id ?? null);
+
+  if (isLoading) return <div className="card" style={{ padding: 22 }}><div className="empty">جارٍ التحميل…</div></div>;
+  if (!cursor) return <div className="card" style={{ padding: 22 }}><div className="empty">مفيش فواتير على حسابك</div></div>;
+
+  const inv = cursor.inv;
+  const cur = inv.currency ?? 'EGP';
+
+  return (
+    <div className="pit-wrap">
+      <div className="pit-bar" role="tablist">
+        {tabs.map((t, i) => (
+          <button key={`${t.inv.id}:${t.kind}`} role="tab" aria-selected={i === active}
+            className={`pit-tab ${t.kind === 'receipts' ? 'is-receipts' : ''} ${i === active ? 'is-active' : ''}`}
+            onClick={() => setActive(i)}>
+            <span>{t.kind === 'invoice' ? `فاتورة ${t.inv.no}` : `استلامات ${t.inv.no}`}</span>
+            <span className="pit-tab-date">{fmtDate(t.inv.date)}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className={`pit-panel card ${cursor.kind === 'receipts' ? 'is-receipts' : ''}`}>
+        {loadingDetail || !detail ? (
+          <div className="empty">جارٍ التحميل…</div>
+        ) : cursor.kind === 'invoice' ? (
+          <>
+            <div className="pit-head">
+              <div><b>فاتورة {inv.no}</b> <span className="muted" style={{ fontSize: 12 }}>{fmtDate(inv.date)}</span></div>
+              <span className="pill">الإجمالي {EGP(detail.itemsTotal)}</span>
+            </div>
+            <div className="tbl-wrap">
+              <table>
+                <thead><tr><th style={{ width: 90 }}>العدد</th><th>الصنف</th><th style={{ width: 110 }}>السعر</th><th style={{ width: 120 }}>الاجمالي</th></tr></thead>
+                <tbody>
+                  {detail.items.map((it, i) => (
+                    <tr key={i}>
+                      <td className="num">{it.qty}</td><td>{it.name}</td>
+                      <td className="num">{EGP(it.price)}</td><td className="num">{EGP(it.qty * it.price)}</td>
+                    </tr>
+                  ))}
+                  <tr className="mf-total">
+                    <td colSpan={3}>{detail.discount > 0 ? 'إجمالي الأصناف بعد الخصم' : 'إجمالي الأصناف'}</td>
+                    <td className="num">{EGP(detail.itemsTotal)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <PortalManifestTabs invoiceUid={inv.id} cur={cur} />
+          </>
+        ) : (
+          <>
+            <div className="pit-head">
+              <div>
+                <b>استلامات {inv.no}</b>
+                <span className="muted" style={{ fontSize: 12, marginInlineStart: 8 }}>من {fmtDate(inv.date)} لحد الفاتورة اللي بعدها</span>
+              </div>
+              <span className="pill">الإجمالي {EGP(detail.paymentsTotal)}</span>
+            </div>
+            <div className="tbl-wrap">
+              <table>
+                <thead><tr><th style={{ width: 110 }}>التاريخ</th><th>البيان</th><th style={{ width: 130 }}>المبلغ</th></tr></thead>
+                <tbody>
+                  {detail.payments.map((p) => (
+                    <tr key={p.id}>
+                      <td className="muted">{fmtDate(p.date)}</td><td>{p.note}</td>
+                      <td className="num cre">{EGP(p.amount)}</td>
+                    </tr>
+                  ))}
+                  {detail.payments.length === 0 && (
+                    <tr><td colSpan={3} className="empty">مفيش استلامات في الفترة دي</td></tr>
+                  )}
+                  <tr className="mf-total">
+                    <td colSpan={2}>الاجمالي</td><td className="num">{EGP(detail.paymentsTotal)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── manifests tab ────────────────────────────────────────────────────────────
 
 const DOTS = '..........................';
@@ -465,7 +858,7 @@ function ManifestReadView({ m, onBack }: { m: MyManifest; onBack: () => void }) 
           </div>
         </div>
         <div className="mf-grid">
-          {[['اسم العميل', m.clientName], ['اسم السائق', m.driverName], ['الرقم القومي', m.driverNID], ['التليفون', m.driverPhone], ['رقم العربية', m.vehicleNo], ['رقم المقطورة', m.trailerNo]].map(([l, v]) => (
+          {[['اسم العميل', m.clientName], ['اسم السائق', m.driverName], ['مسمّى العربية', m.vehicleLabel], ['الرقم القومي', m.driverNID], ['التليفون', m.driverPhone], ['رقم العربية', m.vehicleNo], ['رقم المقطورة', m.trailerNo]].map(([l, v]) => (
             <div key={l} className="mf-info"><span className="mf-info-l">{l}</span><span className="mf-info-v">{v || '—'}</span></div>
           ))}
         </div>
@@ -632,12 +1025,13 @@ function ManifestsTab() {
 
 // ─── main portal ──────────────────────────────────────────────────────────────
 
-type Tab = 'home' | 'orders' | 'ledger' | 'manifests';
+type Tab = 'home' | 'orders' | 'ledger' | 'invoices' | 'manifests';
 
 const NAV: { key: Tab; label: string }[] = [
   { key: 'home', label: 'الرئيسية' },
   { key: 'orders', label: 'طلبياتي' },
   { key: 'ledger', label: 'كشف الحساب' },
+  { key: 'invoices', label: 'فواتيري' },
   { key: 'manifests', label: 'كشف العربيات' },
 ];
 
@@ -724,6 +1118,9 @@ export function CustomerPortal({ user }: { user: AuthUser }) {
 
       {/* ledger */}
       {tab === 'ledger' && <LedgerTab partyName={user.partyName} />}
+
+      {/* فواتيري: تاب لكل فاتورة وجنبه تاب استلاماتها بنفس الرقم، وجوّه الفاتورة عربياتها */}
+      {tab === 'invoices' && <MyInvoiceTabs />}
 
       {/* manifests */}
       {tab === 'manifests' && <ManifestsTab />}

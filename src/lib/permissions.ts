@@ -48,6 +48,7 @@ export const PERMISSIONS: PermGroup[] = [
       { key: 'manifests.edit',        label: 'تعديل كشف' },
       { key: 'manifests.delete',      label: 'حذف كشف' },
       { key: 'manifests.print',       label: 'طباعة' },
+      { key: 'manifests.close',       label: 'قفل تاب العربية في الفاتورة' },
     ],
   },
   { page: 'driver-trips', label: 'كشف السائقين', actions: [] },

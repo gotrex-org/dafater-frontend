@@ -135,7 +135,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   const [saved, setSaved] = useState<Invoice | null>(null);
   const [makeManifest, setMakeManifest] = useState(false);
   const [menuFor, setMenuFor] = useState<number | null>(null); // زر الثلاث نقاط المفتوح (حسب _key)
-  const [showDiscount, setShowDiscount] = useState<boolean>(!!(d?.discount && Number(d.discount) > 0) || !!invoice?.discount);
+  const [showExtras, setShowExtras] = useState<boolean>(!!(d?.discount && Number(d.discount) > 0) || !!invoice?.discount);
 
   // prefill pinned lines for new invoices — which items pin depends on the invoice kind
   useEffect(() => {
@@ -248,6 +248,8 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
         onClose={onClose}
         onCreated={onClose}
         initial={{
+          // الربط بالفاتورة هو اللي بيخلّي العربية تظهر كتاب جوّاها (ManifestTabs)
+          invoiceId: saved.id,
           clientName: saved.party?.name ?? '',
           items: saved.items.filter((it) => !it.product?.service).map((it) => ({ name: it.product?.name ?? '', qty: it.qty })),
         }}
@@ -522,15 +524,15 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
                 className="btn btn-ghost btn-sm"
                 title="خصم على الفاتورة"
                 style={{ fontSize: 17, fontWeight: 800, lineHeight: 1, padding: '6px 8px' }}
-                onClick={() => setShowDiscount((s) => !s)}
+                onClick={() => setShowExtras((s) => !s)}
               >⋮</button>
             </div>
           </Field>
-          {showDiscount && (
+          {showExtras && (
             <Field label={`خصم على الفاتورة${isUSD ? ' ($)' : ' (ج.م)'}`}>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <MoneyInput value={discount} onChange={setDiscount} placeholder="0.00" />
-                <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--debit)' }} onClick={() => { setShowDiscount(false); setDiscount(''); }}>×</button>
+                <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--debit)' }} onClick={() => { setShowExtras(false); setDiscount(''); }}>×</button>
               </div>
             </Field>
           )}

@@ -201,6 +201,40 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 .mf-ack p { font-size: 15.5px; line-height: 2.1; text-align: justify; }
 .mf-sign { display: flex; justify-content: space-between; gap: 20px; margin-top: 26px; font-weight: 700; }
 
+/* ---- فاتورة على شكل شيت العميل (جوجل شيت) ---- */
+/* الأصناف على اليمين وعمود ملخّص مدمج على الشمال: اجمالي الفاتورة / نقل نقدية / سدادات / الباقي عليه */
+.sh-body { display: flex; align-items: flex-start; gap: 10px; margin-top: 4px; }
+.sh-items { flex: 1 1 auto; min-width: 0; }
+.sh-side { flex: 0 0 175px; display: flex; flex-direction: column; gap: 6px; }
+.sh-box { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; text-align: center; }
+.sh-box-l { background: var(--line-soft); border-bottom: 1px solid var(--line); padding: 5px 8px; font-size: 12.5px; font-weight: 800; }
+.sh-box-v { padding: 7px 8px; font-size: 14px; font-weight: 800; }
+/* الباقي عليه هو خلاصة الورقة — يتقرا من بعيد */
+.sh-box-end { border-color: var(--ink); }
+.sh-box-end .sh-box-l { background: var(--ink); color: #fff; border-bottom-color: var(--ink); }
+.sh-box-end .sh-box-v { font-size: 15.5px; }
+/* سطر الحساب القديم فوق الأصناف، مدمج زي الشيت */
+.print-sheet tr.sh-old td { background: var(--line-soft); font-weight: 800; text-align: center; letter-spacing: .5px; }
+.print-sheet tr.sh-old td.num { text-align: end; letter-spacing: 0; }
+.sh-pay { margin-top: 14px; }
+.sh-pay-title { font-weight: 800; font-size: 14px; margin-bottom: 5px; }
+/* على الموبايل الملخّص ينزل تحت الجدول ويتفرد صفّ */
+@media screen and (max-width: 700px) {
+  .print-sheet:not(.pdf-capture) .sh-body { flex-direction: column; }
+  .print-sheet:not(.pdf-capture) .sh-side { flex: 1 1 auto; width: 100%; flex-direction: row; flex-wrap: wrap; }
+  .print-sheet:not(.pdf-capture) .sh-side > .sh-box { flex: 1 1 130px; }
+}
+@media print {
+  .sh-body { gap: 6px; margin-top: 2px; }
+  .sh-side { flex-basis: 140px; gap: 4px; }
+  .sh-box-l { font-size: 10px; padding: 2px 4px; }
+  .sh-box-v { font-size: 11.5px; padding: 4px; }
+  .sh-box-end .sh-box-v { font-size: 12.5px; }
+  .sh-pay { margin-top: 8px; }
+  .sh-pay-title { font-size: 11.5px; margin-bottom: 3px; }
+  .sh-box, .sh-box-l { border-color: #999 !important; }
+}
+
 /* ── responsive utility grids ────────────────────────────────────── */
 /* 2 equal columns on ≥580 px, 1 column on mobile */
 .grid-2col { display: grid; gap: 14px; }
@@ -445,3 +479,264 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 .win-title { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .win-chrome .btn-ghost { background: rgba(255,255,255,.12); border-color: transparent; color: #fff; }
 .win-chrome .btn-ghost:hover { background: rgba(255,255,255,.22); color: #fff; }
+
+/* ===== كشف الحساب: الجدول نافذة بسكرول جوّه الكشف ===== */
+/* الجدول هو اللي بيسكرول — فوق وتحت بس، مافيش سكرول يمين وشمال — والتولبارات
+   (الفترة / كل الفترة / نوع الحركات) وترويسة الكشف والرصيد الجاري فاضلين في مكانهم.
+   الارتفاع نفسه بيتحسب من LedgerView (المساحة الفاضلة لحد آخر الشاشة). */
+@media screen {
+  /* على الشاشة الكشف مش ورقة A4 — هوامش الطباعة (14mm) واللوجو والعناوين الكبيرة
+     كانوا بياكلوا نص الشاشة قبل أول سطر. بنضغطهم هنا عشان المساحة كلها تروح للحركات،
+     وبيرجعوا زي ما هم في الـ PDF والطباعة (captureSheet بيضيف .pdf-capture). */
+  .ledger-sheet:not(.pdf-capture) { padding: 12px 14px; }
+  .ledger-sheet:not(.pdf-capture) .mf-logo { display: none; }
+  .ledger-sheet:not(.pdf-capture) .mf-head { padding-bottom: 8px; }
+  .ledger-sheet:not(.pdf-capture) .mf-head h2 { font-size: 18px; }
+  .ledger-sheet:not(.pdf-capture) .lg-running { font-size: 16px; margin-top: 8px !important; }
+  /* حشو أسفل الصفحة محجوز لشريط النوافذ المصغّرة — طول ما الكشف مفتوح هو مساحة ميتة
+     بتاكل من ارتفاع الجدول، فبنستعيدها (الشريط نفسه fixed فمابيتأثرش). */
+  body.ledger-fit main.page { padding-bottom: 14px; }
+
+  .ledger-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
+  /* رؤوس الأعمدة فاضلة ثابتة وانت طالع للحركات القديمة */
+  .ledger-scroll thead th { position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 var(--line); }
+
+  /* الجدول بيتقسّم على عرض الشاشة بدل ما يمدّ ويعمل سكرول أفقي: أعمدة التاريخ والنوع
+     والمبالغ بعرض ثابت، و«البيان» بياخد الباقي ويلتف. الأرقام بس هي اللي مابتتكسرش. */
+  .ledger-scroll > table { table-layout: fixed; width: 100%; }
+  .ledger-scroll > table > thead th:nth-child(1) { width: 15%; }
+  .ledger-scroll > table > thead th:nth-child(2) { width: 12%; }
+  .ledger-scroll > table > thead th:nth-child(n+4) { width: 15%; }
+  .ledger-scroll th, .ledger-scroll td { white-space: normal; overflow-wrap: anywhere; }
+  .ledger-scroll .num { white-space: nowrap; }
+  .ledger-scroll td .btn { white-space: normal; text-align: start; }
+}
+/* شاشات متوسطة: نضيّق الخط والحشو عشان أعمدة المبالغ تاخد راحتها من غير سكرول أفقي */
+@media screen and (max-width: 860px) {
+  .ledger-scroll table { font-size: 12px; }
+  .ledger-scroll th, .ledger-scroll td { padding: 6px 5px; }
+}
+/* وقت التقاط PDF / الطباعة لازم الجدول يتفرد بالكامل — من غير كده بيتقص عند حدود
+   النافذة ويطلع الكشف ناقص. الـ !important عشان يغلب الارتفاع المتحطّ inline من JS. */
+.pdf-capture .ledger-scroll { max-height: none !important; overflow: visible !important; }
+.pdf-capture .ledger-scroll thead th { position: static !important; box-shadow: none !important; }
+@media print {
+  .ledger-scroll { max-height: none !important; overflow: visible !important; }
+  .ledger-scroll thead th { position: static !important; box-shadow: none !important; }
+}
+
+/* ---- كشف الحساب على الموبايل: كل حركة كارت بدل صف جدول ---- */
+/* ٦ أعمدة فيهم مبالغ عمرها ما هتركب على عرض موبايل كجدول — فنفس أسلوب بوابة العميل
+   فوق. الحارس :not(.pdf-capture) مهم — وقت الـ PDF/الطباعة captureSheet بيثبّت عرض
+   العنصر على 794px وبيضيف الكلاس ده، فالورقة ترجع جدول حتى لو الشاشة موبايل. */
+@media screen and (max-width: 560px) {
+  .ledger-sheet:not(.pdf-capture) { padding: 10px; }
+  .ledger-sheet:not(.pdf-capture) .mf-logo { font-size: 20px; padding-bottom: 4px; }
+  .ledger-sheet:not(.pdf-capture) .mf-head { padding-bottom: 8px; }
+  .ledger-sheet:not(.pdf-capture) .mf-head h2 { font-size: 16px; }
+
+  /* الرأس يختفي، والجدول وصفوفه تبقى بلوكات */
+  .ledger-sheet:not(.pdf-capture) .lg-tbl,
+  .ledger-sheet:not(.pdf-capture) .lg-tbl > tbody,
+  .ledger-sheet:not(.pdf-capture) .lg-tbl > tbody > tr { display: block; width: 100%; }
+  .ledger-sheet:not(.pdf-capture) .lg-tbl > thead { display: none; }
+  .ledger-sheet:not(.pdf-capture) .lg-tbl td {
+    border: none !important; padding: 0 !important; white-space: normal; overflow-wrap: anywhere;
+  }
+  /* العنوان الصغير جنب الرقم بدل عمود الجدول اللي اتشال */
+  .ledger-sheet:not(.pdf-capture) .lg-tbl td[data-l]:not(:empty)::before {
+    content: attr(data-l) " "; color: var(--ink-soft); font-weight: 600; font-size: 11px;
+  }
+
+  /* البيان فوق، تحته التاريخ والنوع والرصيد، وتحتهم عليه/له */
+  .ledger-sheet:not(.pdf-capture) .lg-tbl > tbody > tr.lg-row {
+    display: grid; grid-template-columns: auto 1fr auto;
+    grid-template-areas: "note note note" "date type bal" "deb deb cre";
+    gap: 2px 10px; padding: 9px 2px; border-bottom: 1px solid var(--line-soft);
+  }
+  .ledger-sheet:not(.pdf-capture) .lg-note { grid-area: note; }
+  .ledger-sheet:not(.pdf-capture) .lg-note .btn { padding: 0; font-size: 13.5px; text-align: start; }
+  .ledger-sheet:not(.pdf-capture) .lg-date { grid-area: date; }
+  .ledger-sheet:not(.pdf-capture) .lg-type { grid-area: type; color: var(--ink-soft); font-size: 12px; }
+  .ledger-sheet:not(.pdf-capture) .lg-bal { grid-area: bal; text-align: end; }
+  .ledger-sheet:not(.pdf-capture) .lg-deb { grid-area: deb; text-align: start; }
+  .ledger-sheet:not(.pdf-capture) .lg-cre { grid-area: cre; text-align: end; }
+
+  .ledger-sheet:not(.pdf-capture) .lg-tbl > tbody > tr.mf-total {
+    display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 9px 2px;
+  }
+  .ledger-sheet:not(.pdf-capture) .lg-tbl > tbody > tr.mf-total > td { flex: 0 0 auto; }
+
+  /* صف تفاصيل الفاتورة اللي بيتفرد تحت السطر */
+  .ledger-sheet:not(.pdf-capture) .lg-items-row > td { display: block; padding: 6px 10px !important; }
+  .ledger-sheet:not(.pdf-capture) .lg-items,
+  .ledger-sheet:not(.pdf-capture) .lg-items > tbody { display: block; width: 100%; }
+  .ledger-sheet:not(.pdf-capture) .lg-items > thead { display: none; }
+  /* اسم الصنف سطر، وتحته العدد والسعر والإجمالي */
+  .ledger-sheet:not(.pdf-capture) .lg-items > tbody > tr {
+    display: grid; grid-template-columns: auto auto 1fr;
+    grid-template-areas: "nm nm nm" "qty price tot";
+    gap: 1px 12px; padding: 8px 2px; border-bottom: 1px solid var(--line-soft);
+  }
+  .ledger-sheet:not(.pdf-capture) .lg-items > tbody > tr > td:nth-child(1) { grid-area: qty; }
+  .ledger-sheet:not(.pdf-capture) .lg-items > tbody > tr > td:nth-child(2) { grid-area: nm; font-weight: 800; }
+  .ledger-sheet:not(.pdf-capture) .lg-items > tbody > tr > td:nth-child(3) { grid-area: price; }
+  .ledger-sheet:not(.pdf-capture) .lg-items > tbody > tr > td:nth-child(4) { grid-area: tot; text-align: end; font-weight: 800; }
+}
+
+/* ---- بوابة العميل على الموبايل: الجداول تبقى كروت ---- */
+/* الحارس :not(.pdf-capture) مهم — وقت تصدير PDF أو الطباعة، captureSheet بيثبّت عرض
+   العنصر على 794px وبيضيف الكلاس ده، فالورقة ترجع جداول حتى لو الشاشة موبايل. */
+@media screen and (max-width: 560px) {
+  .portal-sheet:not(.pdf-capture) { padding: 10px; }
+  .portal-sheet:not(.pdf-capture) .mf-logo { font-size: 20px; padding-bottom: 4px; }
+  .portal-sheet:not(.pdf-capture) .mf-head { padding-bottom: 8px; }
+  .portal-sheet:not(.pdf-capture) .mf-head h2 { font-size: 16px; }
+  .portal-sheet:not(.pdf-capture) .mf-meta { font-size: 12.5px; gap: 10px; flex-wrap: wrap; }
+  .portal-sheet:not(.pdf-capture) .sh-pay-title { font-size: 13px; }
+
+  /* الرأس يختفي، والجدول وصفوفه تبقى بلوكات */
+  .portal-sheet:not(.pdf-capture) .pl-tbl,
+  .portal-sheet:not(.pdf-capture) .inv-tbl,
+  .portal-sheet:not(.pdf-capture) .pi-items,
+  .portal-sheet:not(.pdf-capture) .pay-tbl,
+  .portal-sheet:not(.pdf-capture) .pl-tbl > tbody,
+  .portal-sheet:not(.pdf-capture) .inv-tbl > tbody,
+  .portal-sheet:not(.pdf-capture) .inv-tbl > tfoot,
+  .portal-sheet:not(.pdf-capture) .pi-items > tbody,
+  .portal-sheet:not(.pdf-capture) .pay-tbl > tbody,
+  .portal-sheet:not(.pdf-capture) .pay-tbl > tfoot { display: block; width: 100%; }
+  .portal-sheet:not(.pdf-capture) .pl-tbl > thead,
+  .portal-sheet:not(.pdf-capture) .inv-tbl > thead,
+  .portal-sheet:not(.pdf-capture) .pi-items > thead,
+  .portal-sheet:not(.pdf-capture) .pay-tbl > thead { display: none; }
+  .portal-sheet:not(.pdf-capture) .pl-tbl > tbody > tr,
+  .portal-sheet:not(.pdf-capture) .inv-tbl > tbody > tr,
+  .portal-sheet:not(.pdf-capture) .pi-items > tbody > tr { display: block; }
+
+  .portal-sheet:not(.pdf-capture) .pl-tbl td,
+  .portal-sheet:not(.pdf-capture) .inv-tbl td,
+  .portal-sheet:not(.pdf-capture) .pi-items td,
+  .portal-sheet:not(.pdf-capture) .pay-tbl td {
+    border: none !important; padding: 0 !important; white-space: normal; overflow-wrap: anywhere;
+  }
+  /* العنوان الصغير جنب الرقم بدل عمود الجدول اللي اتشال */
+  .portal-sheet:not(.pdf-capture) td[data-l]:not(:empty)::before {
+    content: attr(data-l) " "; color: var(--ink-soft); font-weight: 600; font-size: 11px;
+  }
+
+  /* كشف الحساب: البيان فوق، تحته التاريخ والرصيد، وتحتهم عليه/له */
+  .portal-sheet:not(.pdf-capture) .pl-tbl > tbody > tr.pl-row {
+    display: grid; grid-template-columns: 1fr auto;
+    grid-template-areas: "note note" "date bal" "deb cre";
+    gap: 2px 10px; padding: 9px 2px; border-bottom: 1px solid var(--line-soft);
+  }
+  .portal-sheet:not(.pdf-capture) .pl-note { grid-area: note; }
+  .portal-sheet:not(.pdf-capture) .pl-note .btn { padding: 0; font-size: 13.5px; text-align: start; }
+  .portal-sheet:not(.pdf-capture) .pl-date { grid-area: date; }
+  .portal-sheet:not(.pdf-capture) .pl-bal { grid-area: bal; text-align: end; }
+  .portal-sheet:not(.pdf-capture) .pl-deb { grid-area: deb; text-align: start; }
+  .portal-sheet:not(.pdf-capture) .pl-cre { grid-area: cre; text-align: end; }
+
+  .portal-sheet:not(.pdf-capture) .pl-tbl > tbody > tr.mf-total {
+    display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 9px 2px;
+  }
+  .portal-sheet:not(.pdf-capture) .pl-tbl > tbody > tr.mf-total > td { flex: 0 0 auto; }
+
+  /* صف تفاصيل الصفقة اللي بيتفرد تحت السطر */
+  .portal-sheet:not(.pdf-capture) .pl-tbl > tbody > tr.pi-row { display: block; }
+  .portal-sheet:not(.pdf-capture) .pi-row > td { display: block; padding: 6px 10px !important; }
+
+  /* بنود الفاتورة/الصفقة: اسم الصنف سطر، وتحته العدد والسعر والإجمالي */
+  .portal-sheet:not(.pdf-capture) .inv-tbl > tbody > tr,
+  .portal-sheet:not(.pdf-capture) .pi-items > tbody > tr {
+    display: grid; grid-template-columns: auto auto 1fr;
+    grid-template-areas: "nm nm nm" "qty price tot";
+    gap: 1px 12px; padding: 8px 2px; border-bottom: 1px solid var(--line-soft);
+  }
+  .portal-sheet:not(.pdf-capture) .inv-tbl > tbody > tr > td:nth-child(1),
+  .portal-sheet:not(.pdf-capture) .pi-items > tbody > tr > td:nth-child(1) { grid-area: qty; }
+  .portal-sheet:not(.pdf-capture) .inv-tbl > tbody > tr > td:nth-child(2),
+  .portal-sheet:not(.pdf-capture) .pi-items > tbody > tr > td:nth-child(2) { grid-area: nm; font-weight: 800; }
+  .portal-sheet:not(.pdf-capture) .inv-tbl > tbody > tr > td:nth-child(3),
+  .portal-sheet:not(.pdf-capture) .pi-items > tbody > tr > td:nth-child(3) { grid-area: price; }
+  .portal-sheet:not(.pdf-capture) .inv-tbl > tbody > tr > td:nth-child(4),
+  .portal-sheet:not(.pdf-capture) .pi-items > tbody > tr > td:nth-child(4) { grid-area: tot; text-align: end; font-weight: 800; }
+
+  /* الحساب القديم وإجمالي الأصناف: عنوان في أول السطر وقيمة في آخره */
+  .portal-sheet:not(.pdf-capture) .inv-tbl > tbody > tr.sh-old,
+  .portal-sheet:not(.pdf-capture) .inv-tbl > tfoot > tr {
+    display: grid; grid-template-columns: 1fr auto; grid-template-areas: none;
+    gap: 10px; padding: 9px 2px; border-block: 1px solid var(--line);
+  }
+  .portal-sheet:not(.pdf-capture) .inv-tbl > tbody > tr.sh-old > td:nth-child(1),
+  .portal-sheet:not(.pdf-capture) .inv-tbl > tfoot > tr > td:nth-child(1) {
+    grid-area: auto; font-weight: 800; text-align: start; letter-spacing: 0;
+  }
+  .portal-sheet:not(.pdf-capture) .inv-tbl > tbody > tr.sh-old > td:nth-child(2),
+  .portal-sheet:not(.pdf-capture) .inv-tbl > tfoot > tr > td:nth-child(2) {
+    grid-area: auto; text-align: end; font-weight: 800;
+  }
+
+  /* الاستلامات: التاريخ والمبلغ فوق، والبيان تحتهم */
+  .portal-sheet:not(.pdf-capture) .pay-tbl > tbody > tr,
+  .portal-sheet:not(.pdf-capture) .pay-tbl > tfoot > tr {
+    display: grid; grid-template-columns: auto 1fr; grid-template-areas: "date amt" "note note";
+    gap: 1px 10px; padding: 8px 2px; border-bottom: 1px solid var(--line-soft);
+  }
+  .portal-sheet:not(.pdf-capture) .pay-tbl > tbody > tr > td:nth-child(1) { grid-area: date; }
+  .portal-sheet:not(.pdf-capture) .pay-tbl > tbody > tr > td:nth-child(2) { grid-area: note; color: var(--ink-soft); font-size: 12px; }
+  .portal-sheet:not(.pdf-capture) .pay-tbl > tbody > tr > td:nth-child(3) { grid-area: amt; text-align: end; font-weight: 800; }
+  .portal-sheet:not(.pdf-capture) .pay-tbl > tfoot > tr > td:nth-child(1) { grid-area: date; font-weight: 800; }
+  .portal-sheet:not(.pdf-capture) .pay-tbl > tfoot > tr > td:nth-child(2) { grid-area: amt; text-align: end; font-weight: 800; }
+}
+
+/* ===== تابات العربيات جوّه الفاتورة ===== */
+/* تاب لكل عربية؛ جوّه التاب سطور البضاعة بلون وسطور المصاريف بلون تاني — زي تلوين
+   الشيتات. الألوان مشتقّة من ألوان النظام (accent للبضاعة، gold للمصاريف). */
+.mt-wrap { margin: 14px 0; }
+.mt-bar { display: flex; gap: 4px; flex-wrap: wrap; align-items: flex-end; }
+.mt-tab {
+  display: flex; align-items: center; gap: 6px; padding: 8px 14px; font-weight: 700; font-size: 13px;
+  background: var(--line-soft); color: var(--ink-soft); cursor: pointer;
+  border: 1px solid var(--line); border-bottom: none; border-radius: 10px 10px 0 0;
+}
+.mt-tab:hover { color: var(--ink); }
+.mt-tab.is-active { background: var(--surface); color: var(--ink); box-shadow: inset 0 3px 0 var(--accent); }
+.mt-tab.is-closed { opacity: .72; }
+.mt-lock { font-size: 11px; }
+.mt-panel { border-radius: 0 12px 12px 12px; padding: 12px 14px; }
+.mt-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.mt-head-end { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mt-pill-open { background: var(--accent-soft); color: var(--accent-d); }
+.mt-pill-closed { background: var(--line-soft); color: var(--ink-soft); }
+.mt-window { font-size: 12px; margin-bottom: 8px; }
+.mt-pin { background: var(--gold); color: #fff; font-size: 10px; margin-inline-start: 6px; }
+
+/* سطور البضاعة vs سطور المصاريف — الشريط الجانبي بيفصل المجموعتين بالعين بسرعة */
+.mt-tbl .mt-goods { background: rgba(15, 110, 92, .07); }
+.mt-tbl .mt-goods td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.mt-tbl .mt-exp { background: rgba(185, 138, 46, .10); }
+.mt-tbl .mt-exp td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
+.mt-tbl .mt-sub td { font-weight: 800; border-top: 1px solid var(--line); }
+.mt-tbl .empty { padding: 14px; }
+
+/* ===== تابات فواتير العميل (المستوى الأعلى: عميل ← فاتورة ← عربية) ===== */
+/* شكلها أعرض وأبرز من تابات العربيات اللي جوّاها عشان المستويين ما يتلخبطوش. */
+.pit-wrap { margin-top: 4px; }
+.pit-bar { display: flex; gap: 4px; flex-wrap: wrap; align-items: flex-end; }
+.pit-tab {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  padding: 8px 16px; font-weight: 800; font-size: 14px; cursor: pointer;
+  background: var(--line-soft); color: var(--ink-soft);
+  border: 1px solid var(--line); border-bottom: none; border-radius: 12px 12px 0 0;
+}
+.pit-tab:hover { color: var(--ink); }
+.pit-tab.is-active { background: var(--surface); color: var(--ink); box-shadow: inset 0 3px 0 var(--blue); }
+/* تاب الاستلامات جنب فاتورته بنفس الرقم — بلون التحصيل عشان يتفرق عنها بالعين */
+.pit-tab.is-receipts.is-active { box-shadow: inset 0 3px 0 var(--credit); }
+.pit-panel.is-receipts { border-color: color-mix(in srgb, var(--credit) 35%, var(--line)); }
+.pit-tab-date { font-size: 11px; font-weight: 600; color: var(--ink-soft); }
+.pit-panel { border-radius: 0 14px 14px 14px; padding: 14px 16px; }
+.pit-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.pit-head-end { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

@@ -6,12 +6,12 @@ import { downloadElementAsPdf } from '@/lib/pdf';
 import { PageTitle, Spinner, Field, MoneyInput } from '@/components/common';
 import { useAuth } from '@/lib/auth';
 import { useWindows } from '@/lib/windows';
-import { useParty } from '../../parties/hooks';
-import { useInvoice, useDeleteInvoice, useUpdateInvoiceCommission } from '../hooks';
+import { useInvoice, useInvoiceSheet, useDeleteInvoice, useUpdateInvoiceCommission } from '../hooks';
 import { confirmCascadeDelete } from '@/lib/cascadeDelete';
 import type { Invoice } from '../dtos';
 import { InvoiceEditor } from './InvoiceEditor';
 import { CommissionPicker } from './CommissionPicker';
+import { ManifestTabs } from './ManifestTabs';
 
 export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: () => void }) {
   const { can } = useAuth();
@@ -21,20 +21,30 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
   const discount = invoice.discount || 0;
   const netTotal = total - discount; // الصافي بعد الخصم
   const kindLabel = invoice.kind === 'SALE' ? 'بيع' : 'شراء';
+  const isSale = invoice.kind === 'SALE';
   const cur = invoice.currency ?? invoice.party?.currency ?? 'EGP';
 
-  const [showPrev, setShowPrev] = useState(false);
   const [showCommission, setShowCommission] = useState(false);
   const [commAmount, setCommAmount] = useState('');
   const [commPartyId, setCommPartyId] = useState('');
   const [commError, setCommError] = useState('');
-  const { data: party } = useParty(showPrev ? (invoice.party?.id ?? null) : null);
+  // فاتورة وهمية مالهاش حركات في الكشف — فأرقام الشيت (حساب قديم/سدادات/الباقي) متنطبقش عليها.
+  const { data: sheet } = useInvoiceSheet(invoice.fake ? null : invoice.id);
   const deleteInvoice = useDeleteInvoice();
   const updateCommission = useUpdateInvoiceCommission();
 
-  const net = invoice.kind === 'SALE' ? netTotal - invoice.paid : -(netTotal - invoice.paid);
-  const current = party?.balance ?? 0;
-  const prev = current - net;
+  // الباقي عليه (بيع) / الباقي له (شراء) — بنقلب الإشارة في الشراء عشان يقرأ موجب لما نبقى مدينين.
+  const sign = isSale ? 1 : -1;
+  const remaining = sheet ? sign * sheet.remaining : null;
+  const previousBalance = sheet ? sign * sheet.previousBalance : null;
+  const cashTransfer = sheet ? sign * sheet.cashTransfer : 0;
+  // اجمالي الفاتورة في الشيت شامل الحساب القديم (مجموع عمود «الاجمالي» كله).
+  const sheetTotal = previousBalance !== null ? previousBalance + netTotal : null;
+  // أي حركة تانية وقعت في نفس الفترة (مرتجع/خصم/مصروف على العميل) — بتفضل في كشف الحساب،
+  // وبتتعرض هنا كسطر واحد عشان حسبة الورقة تقفل.
+  const other = sheet && sheetTotal !== null && remaining !== null
+    ? remaining - (sheetTotal + cashTransfer - sheet.paymentsTotal)
+    : 0;
 
   const saveCommission = () => {
     setCommError('');
@@ -64,7 +74,6 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
       <div className="toolbar no-print" style={{ flexWrap: 'wrap' }}>
         <button className="btn btn-ghost btn-sm" onClick={onBack}>→ رجوع</button>
         {invoice.fake && <span className="pill" style={{ background: 'var(--debit)', color: '#fff' }}>⚠️ فاتورة وهمية — مش مسجّلة في الحسابات</span>}
-        <button className="btn btn-ghost btn-sm" onClick={() => setShowPrev((v) => !v)}>{showPrev ? 'إخفاء الرصيد السابق' : 'إظهار الرصيد السابق'}</button>
         {can('invoices.edit') && (
           <button className="btn btn-ghost btn-sm" onClick={openEdit}>تعديل</button>
         )}
@@ -99,6 +108,9 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
         </div>
       )}
 
+      {/* تابات العربيات — بره ورقة الفاتورة عشان ما تدخلش في الـ PDF/الطباعة */}
+      <ManifestTabs invoiceId={invoice.id} />
+
       <div ref={sheetRef} className="card print-sheet">
         <div className="mf-logo">أبو شامة</div>
         <div className="mf-head">
@@ -111,38 +123,116 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
 
         <div className="mf-grid">
           {invoice.warehouse?.name && <div className="mf-info"><span className="mf-info-l">المخزن</span><span className="mf-info-v">{invoice.warehouse.name}</span></div>}
-          {invoice.paid > 0 && <div className="mf-info"><span className="mf-info-l">المدفوع</span><span className="mf-info-v">{money(invoice.paid, cur)}</span></div>}
           {cur === 'USD' && <div className="mf-info"><span className="mf-info-l">العملة</span><span className="mf-info-v" style={{ fontWeight: 700, color: 'var(--debit)' }}>دولار $</span></div>}
         </div>
 
-        <div className="tbl-wrap">
-          <table>
-            <thead><tr><th style={{ width: 90 }}>الكمية</th><th>الصنف</th><th style={{ width: 110 }}>السعر {cur === 'USD' ? '($)' : '(ج.م)'}</th><th style={{ width: 120 }}>الإجمالي</th></tr></thead>
-            <tbody>
-              {invoice.items.map((it, i) => (
-                <tr key={it.id ?? i}>
-                  <td className="num">{it.qty}</td>
-                  <td>{it.product?.name ?? '—'}</td>
-                  <td className="num">{money(it.price, cur)}</td>
-                  <td className="num">{money(it.qty * it.price, cur)}</td>
+        {/* جسم الفاتورة زي الشيت: جدول الأصناف على اليمين وعمود الملخّص على الشمال */}
+        <div className="sh-body">
+          <div className="sh-items tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: 90 }}>العدد</th>
+                  <th>الصنف</th>
+                  <th style={{ width: 110 }}>السعر {cur === 'USD' ? '($)' : '(ج.م)'}</th>
+                  <th style={{ width: 120 }}>الاجمالي</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {previousBalance !== null && (
+                  <tr className="sh-old">
+                    <td colSpan={3}>حــــســـــاب قــــديــــم</td>
+                    <td className="num">{money(previousBalance, cur)}</td>
+                  </tr>
+                )}
+                {invoice.items.map((it, i) => (
+                  <tr key={it.id ?? i}>
+                    <td className="num">{it.qty}</td>
+                    <td>{it.product?.name ?? '—'}</td>
+                    <td className="num">{money(it.price, cur)}</td>
+                    <td className="num">{money(it.qty * it.price, cur)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="mf-total">
+                  <td colSpan={3}>{discount > 0 ? 'إجمالي الأصناف بعد الخصم' : 'إجمالي الأصناف'}</td>
+                  <td className="num">{money(netTotal, cur)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <aside className="sh-side">
+            <div className="sh-box">
+              <div className="sh-box-l">اجمالي الفاتورة</div>
+              <div className="sh-box-v num">{money(sheetTotal ?? netTotal, cur)}</div>
+            </div>
+            {cashTransfer !== 0 && (
+              <div className="sh-box">
+                <div className="sh-box-l">نقل نقدية</div>
+                <div className="sh-box-v num">{money(cashTransfer, cur)}</div>
+              </div>
+            )}
+            {sheet && (
+              <>
+                <div className="sh-box">
+                  <div className="sh-box-l">سدادات</div>
+                  <div className="sh-box-v num">{money(sheet.paymentsTotal, cur)}</div>
+                </div>
+                {Math.abs(other) > 0.005 && (
+                  <div className="sh-box">
+                    <div className="sh-box-l">حركات أخرى</div>
+                    <div className="sh-box-v num">{money(other, cur)}</div>
+                  </div>
+                )}
+                <div className="sh-box sh-box-end">
+                  <div className="sh-box-l">{isSale ? 'الباقي عليه' : 'الباقي له'}</div>
+                  <div className="sh-box-v num">{money(remaining ?? 0, cur)}</div>
+                </div>
+              </>
+            )}
+          </aside>
         </div>
 
-        {showPrev && party && (
-          <div className="num" style={{ marginTop: 8, textAlign: 'left', fontWeight: 700 }}>
-            الرصيد السابق: {money(prev, cur)} · الرصيد بعد الفاتورة: {money(current, cur)}
+        {sheet && sheet.payments.length > 0 && (
+          <div className="sh-pay tbl-wrap">
+            <div className="sh-pay-title">
+              سدادات فاتورة {invoice.no}
+              {sheet.nextInvoiceNo && <span className="muted"> — لحد فاتورة {sheet.nextInvoiceNo}</span>}
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: 110 }}>التاريخ.</th>
+                  <th>البيان</th>
+                  <th style={{ width: 130 }}>المبلغ.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sheet.payments.map((p) => (
+                  <tr key={p.id}>
+                    <td>{fmtDate(p.date)}</td>
+                    <td>{p.note || p.type}</td>
+                    <td className="num">{money(p.amount, cur)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="mf-total">
+                  <td colSpan={2}>الاجمالي.</td>
+                  <td className="num">{money(sheet.paymentsTotal, cur)}</td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         )}
 
         {discount > 0 && (
-          <div className="num" style={{ textAlign: 'left', fontWeight: 700 }}>
-            الإجمالي: {money(total, cur)} · خصم: {money(discount, cur)}
+          <div className="num" style={{ marginTop: 8, textAlign: 'left', fontWeight: 700 }}>
+            الأصناف قبل الخصم: {money(total, cur)} · خصم: {money(discount, cur)}
           </div>
         )}
-        <div className="page-title num" style={{ marginTop: discount > 0 ? 2 : 12, textAlign: 'left' }}>{discount > 0 ? 'صافي الفاتورة' : 'إجمالي الفاتورة'}: {money(netTotal, cur)}</div>
         {cur === 'USD' && !!invoice.exchangeRate && (
           <div className="num" style={{ textAlign: 'left', fontWeight: 700, color: 'var(--debit)' }}>
             بالمصري (سعر {EGP(invoice.exchangeRate)}): {EGP(total * invoice.exchangeRate)} ج.م

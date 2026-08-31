@@ -77,3 +77,29 @@ export function useDeleteInvoice() {
     },
   });
 }
+
+// أرقام شكل الشيت (حساب قديم / سدادات / الباقي عليه) لفاتورة واحدة
+export function useInvoiceSheet(id: string | null) {
+  return useQuery({
+    queryKey: ['invoices', 'sheet', id],
+    queryFn: () => invoicesApi.sheet(id as string),
+    enabled: !!id,
+  });
+}
+
+// تابات العربيات جوّه الفاتورة
+export function useManifestTabs(id: string | null) {
+  return useQuery({
+    queryKey: ['invoices', 'manifest-tabs', id],
+    queryFn: () => invoicesApi.manifestTabs(id as string),
+    enabled: !!id,
+  });
+}
+
+export function useSetManifestTabClosed() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ uid, closed }: { uid: string; closed: boolean }) => invoicesApi.setManifestTabClosed(uid, closed),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices', 'manifest-tabs'] }),
+  });
+}

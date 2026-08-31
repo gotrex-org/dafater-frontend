@@ -11,6 +11,7 @@ import { DealDetailById } from '../../deals/components/DealsView';
 import { usePostEntry, useUpdateTransaction, useDeleteTransaction } from '../../transactions/hooks';
 import { useParties, useParty, usePartyLedger } from '../hooks';
 import { PartiesRegistry } from './PartiesRegistry';
+import { PartyInvoiceTabs } from './PartyInvoiceTabs';
 import { TrialBalance } from './TrialBalance';
 import type { Party, PartyRole, LedgerRow } from '../dtos';
 
@@ -25,6 +26,8 @@ export function LedgerDetailById({ uid, onBack }: { uid: string; onBack: () => v
 type SortKey = 'name' | 'balance' | 'activity';
 type LedgerKind = 'all' | 'invoices' | 'collect' | 'commission' | 'withdraw';
 type MainTab = 'ledger' | 'mizan' | 'registry';
+// شاشة الطرف الواحد: كشف الحساب، ولا تابات فواتيره (وجوّه كل فاتورة عربياتها)
+type PartyView = 'ledger' | 'invoices';
 
 // USD accounts show the dollar figure as-is; the EGP equivalent (at the party's
 // weighted-average rate) is shown in parentheses beside it. EGP accounts show plainly.
@@ -132,6 +135,10 @@ function LedgerTab() {
   );
 }
 
+// أقل ارتفاع لنافذة الجدول — لو الشاشة قصيرة أوي بنسمح للصفحة تسكرول شوية بدل ما
+// الكشف يبقى شقّ ما ينفعش يتقرا.
+const MIN_BOX = 260;
+
 // أول يوم في الشهر الحالي بصيغة YYYY-MM-DD (توقيت محلي)
 function startOfMonthISO() {
   const d = new Date();
@@ -145,6 +152,8 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const [from, setFrom] = useState(startOfMonthISO());
   const [to, setTo] = useState('');
   const [kind, setKind] = useState<LedgerKind>('all');
+  // كشف الحساب ولا تابات فواتير العميل
+  const [view, setView] = useState<PartyView>('ledger');
   const { data, isLoading } = usePartyLedger(party.id, { from: from || undefined, to: to || undefined });
   const [sel, setSel] = useState<LedgerRow | null>(null);
   const [selEditing, setSelEditing] = useState(false);
@@ -173,9 +182,9 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const [dealUid, setDealUid] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const sheetRef = useRef<HTMLDivElement>(null);
-  // الكشف بيفتح على آخر معاملة (تحت)؛ نسكرول للأسفل أول ما البيانات تحمّل، والمستخدم يسكرول فوق للأقدم.
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const scrolledParty = useRef<string | null>(null);
+  // نافذة الجدول اللي بتسكرول جوّه الكشف (شوف الـ effect تحت).
+  const scrollBoxRef = useRef<HTMLDivElement>(null);
+  const scrolledKey = useRef<string | null>(null);
   const [showSettle, setShowSettle] = useState(false);
   const [wDate, setWDate] = useState(() => todayISO());
   const [wAmount, setWAmount] = useState('');
@@ -185,16 +194,83 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const [wMsg, setWMsg] = useState('');
   const postEntry = usePostEntry();
 
-  // أول ما بيانات الطرف تحمّل، انزل لآخر الكشف (أحدث معاملة) — مرة واحدة لكل طرف.
+  // الجدول بيشتغل كنافذة جوّه الكشف: بياخد المساحة الفاضلة لحد آخر الشاشة وبيسكرول
+  // لوحده، فالصفحة نفسها ما بتتحركش — التولبارات (الفترة / كل الفترة / نوع الحركات)
+  // وترويسة الكشف والرصيد الجاري فاضلين في مكانهم. والنافذة بتفتح على آخر معاملة
+  // (تحت) والمستخدم يطلع فوق للأقدم.
+  //
+  // scrollKey بيحدد إمتى نرجع ننزل تحت: تغيير الطرف أو الفترة أو نوع الحركات —
+  // ومش بينزل مع إعادة الرسم العادية (فتح تفاصيل صف / نافذة تعديل) عشان ما ينطّش
+  // من تحت إيد المستخدم وهو بيشتغل.
+  const scrollKey = `${party.id}|${from}|${to}|${kind}`;
+  // بنستعيد حشو أسفل الصفحة (المحجوز لشريط النوافذ المصغّرة) طول ما الكشف مفتوح —
+  // مساحة ميتة تحت الكشف كانت بتاكل من ارتفاع الجدول من غير أي فايدة.
   useEffect(() => {
-    if (data && scrolledParty.current !== party.id && bottomRef.current) {
-      bottomRef.current.scrollIntoView({ block: 'end' });
-      scrolledParty.current = party.id;
+    document.body.classList.add('ledger-fit');
+    return () => document.body.classList.remove('ledger-fit');
+  }, []);
+
+  useEffect(() => {
+    const el = scrollBoxRef.current;
+    if (isLoading || !data || !el) return;
+
+    // الارتفاع متحسب من مكان الجدول الفعلي على الشاشة ناقص اللي تحته جوّه الكشف
+    // (سطر الرصيد الجاري + padding الكارت) — مش رقم ثابت، عشان يظبط لو التولبارات
+    // لفّت سطرين على شاشة صغيرة أو الويندو اتغيّر حجمها.
+    const fit = () => {
+      let below = 0;
+      for (let n = el.nextElementSibling; n; n = n.nextElementSibling) below += (n as HTMLElement).offsetHeight;
+      const sheet = el.parentElement;
+      if (sheet) below += parseFloat(getComputedStyle(sheet).paddingBottom) || 0;
+      const avail = window.innerHeight - el.getBoundingClientRect().top - below - 12;
+      el.style.maxHeight = `${Math.max(MIN_BOX, Math.round(avail))}px`;
+      // لو فضل أي فايض بيخلّي الصفحة نفسها تسكرول (حشو أسفل الصفحة مثلًا) نقصّه —
+      // عشان التولبارات ما تطلعش فوق خالص والسكرول يفضل جوّه الجدول بس.
+      const over = document.documentElement.scrollHeight - window.innerHeight;
+      if (over > 0) el.style.maxHeight = `${Math.max(MIN_BOX, Math.round(avail - over))}px`;
+    };
+
+    const jump = scrolledKey.current !== scrollKey;
+    if (jump) {
+      scrolledKey.current = scrollKey;
+      window.scrollTo({ top: 0 }); // نرجّع الصفحة فوق الأول عشان القياس يطلع صح
     }
-  }, [data, party.id]);
+    // rAF مزدوج: نستنى الصفوف الجديدة تترسم فعلًا قبل ما نقيس وننزل لآخر سطر — من
+    // غير كده بنحسب على ارتفاع الجدول القديم فبنقف في النص.
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => {
+        fit();
+        if (jump) el.scrollTop = el.scrollHeight;
+      });
+    });
+    window.addEventListener('resize', fit);
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+      window.removeEventListener('resize', fit);
+    };
+  }, [data, isLoading, scrollKey]);
 
   if (invoiceUid) return <InvoiceDetailById uid={invoiceUid} onBack={() => setInvoiceUid(null)} />;
   if (dealUid) return <DealDetailById uid={dealUid} onBack={() => setDealUid(null)} />;
+
+  // عرض «فواتير العميل»: تاب لكل فاتورة، وجوّه كل فاتورة تابات عربياتها.
+  if (view === 'invoices') {
+    return (
+      <>
+        <div className="toolbar no-print">
+          <button className="btn btn-ghost btn-sm" onClick={onBack}>→ رجوع للقائمة</button>
+          <SegmentedControl
+            value={view}
+            onChange={(v) => setView(v as PartyView)}
+            options={[{ value: 'ledger', label: 'كشف الحساب' }, { value: 'invoices', label: 'فواتير العميل' }]}
+          />
+        </div>
+        <PartyInvoiceTabs party={party} onOpenInvoice={setInvoiceUid} />
+      </>
+    );
+  }
 
   const toggle = (id: string) => setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
@@ -223,6 +299,11 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
     <>
       <div className="toolbar no-print">
         <button className="btn btn-ghost btn-sm" onClick={onBack}>→ رجوع للقائمة</button>
+        <SegmentedControl
+          value={view}
+          onChange={(v) => setView(v as PartyView)}
+          options={[{ value: 'ledger', label: 'كشف الحساب' }, { value: 'invoices', label: 'فواتير العميل' }]}
+        />
         <span style={{ fontSize: 13 }}>من</span>
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ padding: '8px 10px', border: '1.5px solid var(--line)', borderRadius: 10 }} />
         <span style={{ fontSize: 13 }}>إلى</span>
@@ -318,8 +399,8 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
             رصيد افتتاحي: <span className="num">{amtWithEgp(data.opening, cur, party.avgExchangeRate)}</span>
             {(from || to) && <span> · الفترة: {from ? fmtDate(from) : '…'} ← {to ? fmtDate(to) : '…'}</span>}
           </div>
-          <div className="tbl-wrap mf-grow">
-            <table>
+          <div ref={scrollBoxRef} className="tbl-wrap mf-grow ledger-scroll">
+            <table className="lg-tbl">
               <thead>
                 <tr>
                   <th>التاريخ</th><th>النوع</th><th>البيان</th><th>عليه</th><th>له</th>
@@ -332,6 +413,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                   return (
                     <Fragment key={r.id}>
                       <tr
+                        className="lg-row"
                         style={{
                           cursor: 'pointer',
                           ...(r.manifestDate && r.manifestArrived === true
@@ -354,7 +436,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                           syncedAmt.current = Number(r.debit || r.credit) || 0;
                         }}
                       >
-                        <td>
+                        <td className="lg-date">
                           {r.manifestDate ? (
                             <span>
                               {fmtDate(r.manifestDate)}
@@ -362,8 +444,8 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                             </span>
                           ) : fmtDate(r.date)}
                         </td>
-                        <td>{r.type}</td>
-                        <td style={{ color: 'var(--ink)', fontWeight: 400 }}>
+                        <td className="lg-type">{r.type}</td>
+                        <td className="lg-note" style={{ color: 'var(--ink)', fontWeight: 400 }}>
                           {data.linkedParty && r.partyRole && (
                             <span className="pill" style={{ fontSize: 10, marginInlineEnd: 4, opacity: 0.75 }}>
                               {r.partyRole === 'SUPPLIER' ? 'مورد' : 'عميل'}
@@ -373,14 +455,14 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                             ? <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); toggle(r.id); }}>{open ? '▾' : '▸'} {r.note || 'تفاصيل الفاتورة'}</button>
                             : r.note}
                         </td>
-                        <td className="num deb">{r.debit ? money(r.debit, cur) : ''}</td>
-                        <td className="num cre">{r.credit ? money(r.credit, cur) : ''}</td>
-                        {kind === 'all' && <td className="num">{money(r.balance, cur)}</td>}
+                        <td className="num deb lg-deb" data-l="عليه">{r.debit ? money(r.debit, cur) : ''}</td>
+                        <td className="num cre lg-cre" data-l="له">{r.credit ? money(r.credit, cur) : ''}</td>
+                        {kind === 'all' && <td className="num lg-bal" data-l="الرصيد">{money(r.balance, cur)}</td>}
                       </tr>
                       {open && (
-                        <tr>
+                        <tr className="lg-items-row">
                           <td colSpan={6} style={{ background: '#f3ecda', borderInlineStart: '3px solid var(--gold, #b98a2e)', padding: '8px 16px' }}>
-                            <table style={{ width: '100%', color: 'var(--ink)' }}>
+                            <table className="lg-items" style={{ width: '100%', color: 'var(--ink)' }}>
                               <thead><tr><th>الكمية</th><th>الصنف</th><th>السعر</th><th>الإجمالي</th></tr></thead>
                               <tbody>
                                 {r.invoiceItems!.map((it, j) => (
@@ -406,8 +488,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
               </tbody>
             </table>
           </div>
-          <div className="page-title num" style={{ marginTop: 14, textAlign: 'left' }}>الرصيد الجاري: {amtWithEgp(data.balance, cur, party.avgExchangeRate)}</div>
-          <div ref={bottomRef} />
+          <div className="page-title num lg-running" style={{ marginTop: 14, textAlign: 'left' }}>الرصيد الجاري: {amtWithEgp(data.balance, cur, party.avgExchangeRate)}</div>
         </div>
       )}
 
