@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { EGP, fmtDate, todayISO } from '@/lib/format';
 import { Field, Combobox, MoneyInput, PlateInput, parsePlate, buildPlate } from '@/components/common';
+import { PartyCombobox } from '../../invoices/components/PartyCombobox';
 import { useAllParties } from '../../parties/hooks';
 import { useAllTreasury } from '../../treasury/hooks';
 import { useConfig } from '../../config/hooks';
@@ -229,7 +230,7 @@ export function DriverTripDetail({ trip, onBack }: Props) {
                 <input value={editName} onChange={(e) => setEditName(e.target.value)} />
               </Field>
               <Field label="العميل (حساب)">
-                <Combobox options={allClients} value={editPartyId} onChange={(id) => { setEditPartyId(id); setEditClientName(allClients.find((c) => c.id === id)?.name ?? editClientName); }} placeholder="اختر أو اتركه…" />
+                <PartyCombobox parties={allClients} value={editPartyId} onChange={(id, p) => { setEditPartyId(id); setEditClientName(p?.name ?? allClients.find((c) => c.id === id)?.name ?? editClientName); }} role="CLIENT" />
               </Field>
               <Field label="رقم العربية">
                 <PlateInput letters={editVehL} numbers={editVehNums} onLettersChange={setEditVehL} onNumbersChange={setEditVehNums} numRef={{ current: null } as any} />

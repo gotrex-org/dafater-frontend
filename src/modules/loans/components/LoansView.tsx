@@ -3,13 +3,23 @@
 import { useState } from 'react';
 import { fmtDate, EGP, todayISO, QTY } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
-import { Field, Combobox, MoneyInput } from '@/components/common';
+import { Field, Combobox, MoneyInput, withAdded } from '@/components/common';
 import { useAllWarehouses } from '../../warehouses/hooks';
 import { useAllProducts } from '../../products/hooks';
 import { useAllTreasury } from '../../treasury/hooks';
 import { useAllParties } from '../../parties/hooks';
+import { NewPartyModal } from '../../parties/components/NewPartyModal';
+import { NewProductModal } from '../../products/components/NewProductModal';
 import { useLoans, useCreateLoan, useReturnLoan, useDeleteLoan } from '../hooks';
 import type { Loan, LoanReturn } from '../dtos';
+import type { Party } from '../../parties/dtos';
+import type { Product } from '../../products/dtos';
+
+// The pickers here decorate their options (role suffix on a party, unit on a product) and
+// filter them (no service items), so they stay on the generic Combobox and wire the "add
+// new" button to the shared forms instead of switching to Party/ProductCombobox.
+const partyOpt = (p: Party) => ({ id: p.id, name: `${p.name} (${p.role === 'SUPPLIER' ? 'مورد' : 'عميل'})` });
+const productOpt = (p: Product) => ({ id: p.id, name: p.name + (p.unit ? ` (${p.unit})` : '') });
 
 function borrowerLabel(loan: Loan) {
   return loan.party?.name ?? loan.borrowerName ?? '—';
@@ -29,10 +39,20 @@ function LoanForm({ defaultWarehouseId, onClose }: { defaultWarehouseId: string;
   const [note, setNote] = useState('');
   const [err, setErr] = useState('');
 
-  const allParties = [
-    ...(parties?.data?.filter((p: any) => p.role === 'CLIENT') ?? []).map((p: any) => ({ id: p.id, name: p.name + ' (عميل)' })),
-    ...(parties?.data?.filter((p: any) => p.role === 'SUPPLIER') ?? []).map((p: any) => ({ id: p.id, name: p.name + ' (مورد)' })),
-  ];
+  const [newParty, setNewParty] = useState<Party | null>(null);
+  const [newProduct, setNewProduct] = useState<Product | null>(null);
+  const [creatingParty, setCreatingParty] = useState<string | null>(null);
+  const [creatingProduct, setCreatingProduct] = useState<string | null>(null);
+
+  const allParties = withAdded([
+    ...(parties?.data?.filter((p: any) => p.role === 'CLIENT') ?? []).map(partyOpt),
+    ...(parties?.data?.filter((p: any) => p.role === 'SUPPLIER') ?? []).map(partyOpt),
+  ], newParty && partyOpt(newParty));
+
+  const allProducts = withAdded(
+    (products?.data ?? []).filter((p) => !p.service).map(productOpt),
+    newProduct && productOpt(newProduct),
+  );
 
   const save = () => {
     setErr('');
@@ -52,17 +72,19 @@ function LoanForm({ defaultWarehouseId, onClose }: { defaultWarehouseId: string;
       <div className="form-grid">
         <Field label="التاريخ"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
         <Field label="المستعير (عميل / مورد)">
-          <Combobox options={allParties} value={partyId} onChange={setPartyId} placeholder="اختر…" />
+          <Combobox options={allParties} value={partyId} onChange={setPartyId} placeholder="اختر…" onCreate={setCreatingParty} createLabel="كعميل جديد" />
         </Field>
         <Field label="المخزن">
           <Combobox options={warehouses?.data ?? []} value={whId} onChange={setWhId} />
         </Field>
         <Field label="الصنف">
           <Combobox
-            options={(products?.data ?? []).filter((p) => !(p as any).service).map((p) => ({ id: p.id, name: p.name + ((p as any).unit ? ' (' + (p as any).unit + ')' : '') }))}
+            options={allProducts}
             value={productId}
             onChange={setProductId}
             placeholder="اختر الصنف…"
+            onCreate={setCreatingProduct}
+            createLabel="كصنف جديد"
           />
         </Field>
         <Field label="الكمية"><MoneyInput value={qty} onChange={setQty} placeholder="0" /></Field>
@@ -73,6 +95,20 @@ function LoanForm({ defaultWarehouseId, onClose }: { defaultWarehouseId: string;
         <button className="btn btn-primary btn-sm" onClick={save} disabled={createLoan.isPending}>حفظ</button>
         <button className="btn btn-ghost btn-sm" onClick={onClose}>إلغاء</button>
       </div>
+      {creatingParty !== null && (
+        <NewPartyModal
+          initialName={creatingParty} role="CLIENT" label="عميل"
+          onCreated={(p) => { setNewParty(p); setPartyId(p.id); setCreatingParty(null); }}
+          onClose={() => setCreatingParty(null)}
+        />
+      )}
+      {creatingProduct !== null && (
+        <NewProductModal
+          initialName={creatingProduct}
+          onCreated={(p) => { setNewProduct(p); setProductId(p.id); setCreatingProduct(null); }}
+          onClose={() => setCreatingProduct(null)}
+        />
+      )}
     </div>
   );
 }
@@ -118,10 +154,13 @@ function ReturnPanel({ loan, onClose }: { loan: Loan; onClose: () => void }) {
   const priceNum = Number(pricePerUnit) || 0;
   const total = (returnType !== 'GOODS' && priceNum > 0) ? rQtyNum * priceNum : 0;
 
-  const allParties = [
-    ...(parties?.data?.filter((p: any) => p.role === 'CLIENT') ?? []).map((p: any) => ({ id: p.id, name: p.name + ' (عميل)' })),
-    ...(parties?.data?.filter((p: any) => p.role === 'SUPPLIER') ?? []).map((p: any) => ({ id: p.id, name: p.name + ' (مورد)' })),
-  ];
+  const [newParty, setNewParty] = useState<Party | null>(null);
+  const [creatingParty, setCreatingParty] = useState<string | null>(null);
+
+  const allParties = withAdded([
+    ...(parties?.data?.filter((p: any) => p.role === 'CLIENT') ?? []).map(partyOpt),
+    ...(parties?.data?.filter((p: any) => p.role === 'SUPPLIER') ?? []).map(partyOpt),
+  ], newParty && partyOpt(newParty));
 
   const handleTypeChange = (t: typeof returnType) => {
     setReturnType(t); setReturnedQty(String(remaining)); setErr('');
@@ -225,7 +264,7 @@ function ReturnPanel({ loan, onClose }: { loan: Loan; onClose: () => void }) {
         {returnType === 'DEBT' && !hasParty && (
           <Field label="العميل / المورد *">
             <div style={{ minWidth: 200 }}>
-              <Combobox options={allParties} value={debtPartyId} onChange={setDebtPartyId} placeholder="اختر…" />
+              <Combobox options={allParties} value={debtPartyId} onChange={setDebtPartyId} placeholder="اختر…" onCreate={setCreatingParty} createLabel="كعميل جديد" />
             </div>
           </Field>
         )}
@@ -254,6 +293,13 @@ function ReturnPanel({ loan, onClose }: { loan: Loan; onClose: () => void }) {
         </button>
         <button className="btn btn-ghost btn-sm" onClick={onClose}>إلغاء</button>
       </div>
+      {creatingParty !== null && (
+        <NewPartyModal
+          initialName={creatingParty} role="CLIENT" label="عميل"
+          onCreated={(p) => { setNewParty(p); setDebtPartyId(p.id); setCreatingParty(null); }}
+          onClose={() => setCreatingParty(null)}
+        />
+      )}
     </div>
   );
 }

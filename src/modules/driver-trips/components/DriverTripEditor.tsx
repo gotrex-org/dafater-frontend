@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { todayISO } from '@/lib/format';
 import { Field, Combobox, MoneyInput, PageTitle, PlateInput, parsePlate, buildPlate } from '@/components/common';
+import { PartyCombobox } from '../../invoices/components/PartyCombobox';
 import { useAllParties } from '../../parties/hooks';
 import { useAllTreasury } from '../../treasury/hooks';
 import { useCreateDriverTrip } from '../hooks';
@@ -91,7 +92,7 @@ export function DriverTripEditor({ manifest, onSaved, onSkip }: Props) {
             />
           </Field>
           <Field label="العميل">
-            <Combobox options={allClients} value={partyId} onChange={setPartyId} placeholder="اختر العميل…" />
+            <PartyCombobox parties={allClients} value={partyId} onChange={setPartyId} role="CLIENT" />
           </Field>
           <Field label="رقم العربية (٣ حروف / أرقام)">
             <PlateInput letters={vehL} numbers={vehNumbers} onLettersChange={setVehL} onNumbersChange={setVehNumbers} numRef={vehNumRef} />

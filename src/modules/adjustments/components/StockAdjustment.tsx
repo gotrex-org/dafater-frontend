@@ -2,12 +2,14 @@
 
 import { useState } from 'react';
 import { QTY, fmtDate, todayISO } from '@/lib/format';
-import { Field, Combobox, DataTable, type Column } from '@/components/common';
+import { Field, Combobox, DataTable, withAdded, type Column } from '@/components/common';
+import { NewProductModal } from '../../products/components/NewProductModal';
 import { useAuth } from '@/lib/auth';
 import { useWarehouseStock } from '../../warehouses/hooks';
 import { useAdjustments, useCreateAdjustment, useDeleteAdjustment } from '../hooks';
 import type { Adjustment } from '../dtos';
 import type { StockRow } from '../../warehouses/dtos';
+import type { Product } from '../../products/dtos';
 
 export function StockAdjustment({ warehouseId }: { warehouseId: string }) {
   const { user } = useAuth();
@@ -23,6 +25,8 @@ export function StockAdjustment({ warehouseId }: { warehouseId: string }) {
   const [date, setDate] = useState(todayISO());
   const [note, setNote] = useState('');
   const [err, setErr] = useState('');
+  const [newProduct, setNewProduct] = useState<Product | null>(null);
+  const [creatingProduct, setCreatingProduct] = useState<string | null>(null);
 
   const selectedRow = stockRows.find((r) => r.productId === productId);
   const currentQty = selectedRow?.qty ?? 0;
@@ -77,7 +81,13 @@ export function StockAdjustment({ warehouseId }: { warehouseId: string }) {
     },
   ];
 
-  const productOptions = stockRows.map((r) => ({ id: r.productId, name: r.name }));
+  // Options are what this warehouse actually holds, not the whole catalog — a product
+  // added from here simply starts at zero, which is exactly the "found goods that aren't
+  // on the system" case a stocktake runs into.
+  const productOptions = withAdded(
+    stockRows.map((r) => ({ id: r.productId, name: r.name })),
+    newProduct && { id: newProduct.id, name: newProduct.name },
+  );
 
   return (
     <div>
@@ -106,6 +116,8 @@ export function StockAdjustment({ warehouseId }: { warehouseId: string }) {
               value={productId}
               onChange={(v) => { setProductId(v); setActualQty(''); setDeltaQty(''); }}
               placeholder="اختر الصنف…"
+              onCreate={setCreatingProduct}
+              createLabel="كصنف جديد"
             />
           </Field>
 
@@ -162,6 +174,13 @@ export function StockAdjustment({ warehouseId }: { warehouseId: string }) {
           </button>
           <button className="btn btn-ghost btn-sm" onClick={reset}>مسح</button>
         </div>
+        {creatingProduct !== null && (
+          <NewProductModal
+            initialName={creatingProduct}
+            onCreated={(p) => { setNewProduct(p); setProductId(p.id); setActualQty(''); setDeltaQty(''); setCreatingProduct(null); }}
+            onClose={() => setCreatingProduct(null)}
+          />
+        )}
       </div>
 
       {/* History */}

@@ -6,6 +6,7 @@ import { useNavigationGuard } from '@/lib/useNavigationGuard';
 import { fieldNavKeyDown } from '@/lib/field-nav';
 import { PageTitle, Field, Combobox, MoneyInput, PlateInput, parsePlate, buildPlate } from '@/components/common';
 import { ProductCombobox } from '../../products/components/ProductCombobox';
+import { PartyCombobox } from '../../invoices/components/PartyCombobox';
 import { useAllProducts } from '../../products/hooks';
 import { useAllParties } from '../../parties/hooks';
 import { useCreateManifest, useUpdateManifest } from '../hooks';
@@ -153,15 +154,16 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
           {!isEdit && <Field label="رقم الكشف"><input value={no} onChange={(e) => setNo(e.target.value)} placeholder={clientName ? '…' : 'اختر العميل أولاً'} style={no ? { fontWeight: 700 } : {}} /></Field>}
           <Field label="التاريخ"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
           <Field label="اسم العميل" full>
-            <Combobox
-              options={parties?.data ?? []}
+            <PartyCombobox
+              parties={parties?.data ?? []}
               value={partyId}
-              onChange={(id) => {
+              onChange={(id, p) => {
                 setPartyId(id);
-                const p = (parties?.data ?? []).find((x) => x.id === id);
-                if (p) setClientName(p.name);
+                // `p` covers a client created right here, which isn't in the list yet
+                const picked = p ?? (parties?.data ?? []).find((x) => x.id === id);
+                if (picked) setClientName(picked.name);
               }}
-              placeholder="اختر عميل…"
+              role="CLIENT"
             />
           </Field>
           <Field label="اسم السائق">

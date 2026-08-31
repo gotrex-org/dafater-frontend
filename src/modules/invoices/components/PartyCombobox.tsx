@@ -2,79 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { normalizeAr } from '@/lib/arabicSearch';
-import { Field } from '@/components/common';
-import { useCreateParty } from '../../parties/hooks';
+import { NewPartyModal } from '../../parties/components/NewPartyModal';
 import type { Party, PartyRole } from '../../parties/dtos';
-
-/**
- * The couple of details worth capturing while a party is being born mid-invoice.
- * Everything else (رصيد افتتاحي، العملة، …) stays on the الأطراف page.
- */
-function NewPartyModal({
-  initialName,
-  role,
-  label,
-  onCreated,
-  onClose,
-}: {
-  initialName: string;
-  role: PartyRole;
-  label: string;
-  onCreated: (p: Party) => void;
-  onClose: () => void;
-}) {
-  const createParty = useCreateParty();
-  const [name, setName] = useState(initialName);
-  const [phone, setPhone] = useState('');
-  const [error, setError] = useState('');
-
-  const save = () => {
-    const n = name.trim();
-    if (!n) return setError('اكتب الاسم');
-    setError('');
-    createParty.mutate(
-      { name: n, role, type: 'INVOICE', phone: phone.trim() || undefined },
-      { onSuccess: onCreated, onError: (e: any) => setError(e.message ?? 'حدث خطأ') },
-    );
-  };
-
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); save(); }
-    else if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
-  };
-
-  return (
-    // The modal renders inside the combobox, which may sit in a clickable table row —
-    // stop the events there rather than letting them bubble into it.
-    <div
-      className="modal-overlay"
-      onMouseDown={(e) => e.stopPropagation()}
-      onClick={(e) => { e.stopPropagation(); onClose(); }}
-    >
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <b>{label} جديد</b>
-          <button className="btn btn-ghost btn-sm" onClick={onClose}>×</button>
-        </div>
-        <div className="modal-body">
-          <Field label="الاسم">
-            <input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={onKeyDown} />
-          </Field>
-          <Field label="التليفون">
-            <input value={phone} inputMode="tel" placeholder="اختياري" onChange={(e) => setPhone(e.target.value)} onKeyDown={onKeyDown} />
-          </Field>
-          {error && <div className="err-text">{error}</div>}
-        </div>
-        <div className="toolbar" style={{ padding: '12px 16px' }}>
-          <button className="btn btn-primary btn-sm" onClick={save} disabled={createParty.isPending}>
-            {createParty.isPending ? '...' : 'حفظ'}
-          </button>
-          <button className="btn btn-ghost btn-sm" onClick={onClose}>إلغاء</button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /**
  * Searchable party picker with inline "create new" — type to filter clients/
@@ -88,7 +17,9 @@ export function PartyCombobox({
 }: {
   parties: Party[];
   value: string;
-  onChange: (id: string) => void;
+  // The picked party comes along so callers that mirror its name (كشف العربية، رحلة السائق)
+  // can read it even for one just created, before the server list refetches.
+  onChange: (id: string, party?: Party) => void;
   role: PartyRole;
 }) {
   const label = role === 'CLIENT' ? 'عميل' : role === 'SUPPLIER' ? 'مورد' : 'طرف';
@@ -120,7 +51,7 @@ export function PartyCombobox({
   const hasExact = !!q && all.some((p) => normalizeAr(p.name) === q);
   const canCreate = !!q && !hasExact;
 
-  const pick = (party: Party) => { onChange(party.id); setQuery(party.name); setOpen(false); setSearching(false); };
+  const pick = (party: Party) => { onChange(party.id, party); setQuery(party.name); setOpen(false); setSearching(false); };
 
   const openCreate = () => { setCreatingName(query.trim()); setOpen(false); };
 
@@ -174,7 +105,7 @@ export function PartyCombobox({
           initialName={creatingName}
           role={role}
           label={label}
-          onCreated={(p) => { setAdded((a) => [...a, p]); onChange(p.id); setQuery(p.name); setCreatingName(null); setOpen(false); setSearching(false); }}
+          onCreated={(p) => { setAdded((a) => [...a, p]); onChange(p.id, p); setQuery(p.name); setCreatingName(null); setOpen(false); setSearching(false); }}
           // Hand focus back to the field, otherwise the sync effect sees an unfocused
           // combobox with no pick and clears the name that was just typed. Re-arm
           // `searching` after onFocus resets it, so the filter and the button survive too.
