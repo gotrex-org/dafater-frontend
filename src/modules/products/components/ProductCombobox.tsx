@@ -1,10 +1,75 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Field } from '@/components/common';
 import { useCreateProduct } from '../hooks';
 import type { Product } from '../dtos';
 
-type Opt = { kind: 'product'; product: Product } | { kind: 'create'; name: string };
+/**
+ * The couple of details worth capturing while a product is being born mid-invoice.
+ * Everything else (السعر، التثبيت، بند خدمة، …) stays on the الأصناف page.
+ */
+function NewProductModal({
+  initialName,
+  onCreated,
+  onClose,
+}: {
+  initialName: string;
+  onCreated: (p: Product) => void;
+  onClose: () => void;
+}) {
+  const createProduct = useCreateProduct();
+  const [name, setName] = useState(initialName);
+  const [unit, setUnit] = useState('');
+  const [error, setError] = useState('');
+
+  const save = () => {
+    const n = name.trim();
+    if (!n) return setError('اكتب اسم الصنف');
+    setError('');
+    createProduct.mutate(
+      { name: n, unit: unit.trim() || undefined },
+      { onSuccess: onCreated, onError: (e: any) => setError(e.message ?? 'حدث خطأ') },
+    );
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); save(); }
+    else if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
+  };
+
+  return (
+    // The modal renders inside the combobox, which sits in an invoice-item table row —
+    // stop the events there rather than letting them bubble into it.
+    <div
+      className="modal-overlay"
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => { e.stopPropagation(); onClose(); }}
+    >
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <b>صنف جديد</b>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body">
+          <Field label="الاسم">
+            <input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={onKeyDown} />
+          </Field>
+          <Field label="الوحدة">
+            <input value={unit} placeholder="اختياري — طن، شيكارة، كرتونة…" onChange={(e) => setUnit(e.target.value)} onKeyDown={onKeyDown} />
+          </Field>
+          {error && <div className="err-text">{error}</div>}
+        </div>
+        <div className="toolbar" style={{ padding: '12px 16px' }}>
+          <button className="btn btn-primary btn-sm" onClick={save} disabled={createProduct.isPending}>
+            {createProduct.isPending ? '...' : 'حفظ'}
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>إلغاء</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Type-ahead product picker. Filters products as you type and shows matches in a
@@ -16,7 +81,8 @@ type Opt = { kind: 'product'; product: Product } | { kind: 'create'; name: strin
  *
  * Auto-create on blur: in id mode, if the user types a name and moves away without
  * picking from the dropdown, the component auto-selects an exact match or creates a
- * new product — no manual "add" click required.
+ * new product — no manual "add" click required. It stands down while the new-product
+ * form is open, and for a name the user explicitly cancelled out of.
  *
  * allowCreate=false (freeText mode only): no "add new" suggestion is shown at all —
  * the dropdown is purely a filtered list of real catalog matches to help autofill,
@@ -46,6 +112,11 @@ export function ProductCombobox({
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
   const [pendingCreate, setPendingCreate] = useState(false);
+  const [creatingName, setCreatingName] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Read from inside the blur timeout, which closes over stale state — refs stay current.
+  const modalOpen = useRef(false);
+  const declined = useRef<string | null>(null);
 
   // في وضع الـid: لو الأصناف اتحمّلت بعد الفتح (تعديل فاتورة)، الاسم المعروض كان بيفضل فاضي
   // لأنه بيتحسب مرة واحدة. نزامنه لما القيمة/الأصناف تجهز (والمستخدم مش بيكتب — القيمة موجودة).
@@ -59,29 +130,15 @@ export function ProductCombobox({
   const q = query.trim().toLowerCase();
   const matches = (q ? products.filter((p) => p.name.toLowerCase().includes(q)) : products).slice(0, 100);
   const exactProduct = q ? products.find((p) => p.name.toLowerCase() === q) : undefined;
-  const hasExact = !!exactProduct;
+  const canCreate = !!q && !exactProduct && allowCreate;
 
-  const options: Opt[] = [
-    ...matches.map((product) => ({ kind: 'product' as const, product })),
-    ...(q && !hasExact && allowCreate ? [{ kind: 'create' as const, name: query.trim() }] : []),
-  ];
-
-  const commit = (opt: Opt) => {
-    if (opt.kind === 'product') {
-      onChange(freeText ? opt.product.name : opt.product.id);
-      setQuery(opt.product.name);
-      setOpen(false);
-    } else {
-      setPendingCreate(true);
-      createProduct.mutate(
-        { name: opt.name },
-        {
-          onSuccess: (p) => { onChange(freeText ? p.name : p.id); setQuery(p.name); setOpen(false); setPendingCreate(false); },
-          onError: () => setPendingCreate(false),
-        },
-      );
-    }
+  const pick = (product: Product) => {
+    onChange(freeText ? product.name : product.id);
+    setQuery(product.name);
+    setOpen(false);
   };
+
+  const openCreate = () => { modalOpen.current = true; setCreatingName(query.trim()); setOpen(false); };
 
   const onInput = (v: string) => {
     setQuery(v);
@@ -94,13 +151,17 @@ export function ProductCombobox({
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault(); e.stopPropagation();
-      if (!open) setOpen(true); else setHi((h) => Math.min(h + 1, options.length - 1));
+      if (!open) setOpen(true); else setHi((h) => Math.min(h + 1, matches.length - 1));
     } else if (e.key === 'ArrowUp') {
       if (open) { e.preventDefault(); e.stopPropagation(); setHi((h) => Math.max(h - 1, 0)); }
     } else if (e.key === 'Enter') {
-      if (open && options.length) {
+      // Enter picks the highlighted match; with nothing to pick it opens the new-product form.
+      if (open && matches.length) {
         e.preventDefault(); e.stopPropagation();
-        commit(options[Math.min(hi, options.length - 1)]);
+        pick(matches[Math.min(hi, matches.length - 1)]);
+      } else if (canCreate) {
+        e.preventDefault(); e.stopPropagation();
+        openCreate();
       } else if (freeText && query.trim()) {
         onChange(query.trim()); setOpen(false);
       }
@@ -114,6 +175,8 @@ export function ProductCombobox({
       setOpen(false);
       // id mode only — nothing to do in freeText mode
       if (freeText || !query.trim() || value || pendingCreate) return;
+      // the form is holding this name, or the user just backed out of creating it
+      if (modalOpen.current || declined.current === query.trim()) return;
       if (exactProduct) {
         // exact name match → auto-select without creating
         onChange(exactProduct.id);
@@ -134,6 +197,7 @@ export function ProductCombobox({
   return (
     <div className="combo">
       <input
+        ref={inputRef}
         value={query}
         placeholder={placeholder}
         onChange={(e) => onInput(e.target.value)}
@@ -141,21 +205,50 @@ export function ProductCombobox({
         onBlur={onBlur}
         onKeyDown={onKeyDown}
       />
-      {open && options.length > 0 && (
-        <ul className="combo-list">
-          {options.map((opt, i) => (
+      {canCreate && (
+        <button
+          type="button"
+          className="combo-create"
+          // preventDefault keeps the field focused, so the query survives until the modal reads it
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={openCreate}
+        >
+          ➕ <span>إضافة «{query.trim()}» كصنف جديد</span>
+        </button>
+      )}
+      {open && matches.length > 0 && (
+        <ul className={`combo-list${canCreate ? ' with-create' : ''}`}>
+          {matches.map((product, i) => (
             <li
-              key={opt.kind === 'product' ? opt.product.id : '__create__'}
+              key={product.id}
               className={i === hi ? 'hi' : ''}
               onMouseEnter={() => setHi(i)}
-              onMouseDown={(e) => { e.preventDefault(); commit(opt); }}
+              onMouseDown={(e) => { e.preventDefault(); pick(product); }}
             >
-              {opt.kind === 'product'
-                ? opt.product.name
-                : <span className="muted">➕ إضافة «{opt.name}» كصنف جديد</span>}
+              {product.name}
             </li>
           ))}
         </ul>
+      )}
+      {creatingName !== null && (
+        <NewProductModal
+          initialName={creatingName}
+          onCreated={(p) => {
+            modalOpen.current = false;
+            declined.current = null;
+            onChange(freeText ? p.name : p.id);
+            setQuery(p.name);
+            setCreatingName(null);
+            setOpen(false);
+          }}
+          onClose={() => {
+            modalOpen.current = false;
+            // don't let the blur handler silently create what was just cancelled
+            declined.current = creatingName;
+            setCreatingName(null);
+            inputRef.current?.focus();
+          }}
+        />
       )}
     </div>
   );
