@@ -5,6 +5,8 @@ export interface Driver {
   phone?: string | null;
   phone2?: string | null;
   vehicleNo?: string | null;
+  /** مسمّى العربية (عربية الزيتون / عربية ديدي) */
+  vehicleLabel?: string | null;
   trailerNo?: string | null;
   note?: string | null;
   createdAt: string;
@@ -36,6 +38,7 @@ export interface UpdateDriverDto {
   phone?: string;
   phone2?: string;
   vehicleNo?: string;
+  vehicleLabel?: string;
   trailerNo?: string;
   note?: string;
 }
