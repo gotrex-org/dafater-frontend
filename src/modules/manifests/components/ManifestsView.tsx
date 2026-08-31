@@ -34,9 +34,11 @@ export function ManifestsView() {
     return trips.some((t) => t.arrivalDate) ? 'arrived' : 'pending';
   };
 
+  // خلفية السطر بس — الشريط الجانبي اتشال لأن شبكة حدود الجدول (mf-lines/mf-list)
+  // بتغطّي عليه؛ اللون بقى باين من خلفية السطر + بادچ الحالة الملوّن.
   const STATUS_STYLE: Record<string, React.CSSProperties> = {
-    arrived: { background: 'rgba(178,58,46,0.10)', borderRight: '3px solid var(--debit)' },
-    pending: { background: 'rgba(15,110,92,0.10)', borderRight: '3px solid var(--credit)' },
+    arrived: { background: 'rgba(178,58,46,0.12)' },
+    pending: { background: 'rgba(15,110,92,0.12)' },
     none: {},
   };
 
@@ -57,10 +59,12 @@ export function ManifestsView() {
     {
       header: 'الحالة',
       cell: (m) => {
+        // نفس ألوان تابات العربيات في الفاتورة (mt-status) عشان الحالة تتقرا بنفس
+        // اللون في كل مكان — بادچ ملوّن بدل نص عادي.
         const s = manifestStatus(m);
-        if (s === 'arrived') return <span className="deb" style={{ fontWeight: 700, fontSize: 12 }}>وصلت ✓</span>;
-        if (s === 'pending') return <span className="cre" style={{ fontWeight: 700, fontSize: 12 }}>في الطريق</span>;
-        return <span className="muted" style={{ fontSize: 12 }}>—</span>;
+        if (s === 'arrived') return <span className="pill mt-status st-arrived">وصلت ✓</span>;
+        if (s === 'pending') return <span className="pill mt-status st-pending">في الطريق</span>;
+        return <span className="pill mt-status st-none">—</span>;
       },
     },
   ];
@@ -79,6 +83,8 @@ export function ManifestsView() {
         <input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} style={{ padding: '7px 10px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 13 }} />
         {(search || from || to) && <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(''); setFrom(''); setTo(''); setPage(1); }}>× مسح</button>}
       </div>
+      {/* mf-list = شبكة حدود كاملة زي الشيت (DataTable مابيمرّرش كلاس) */}
+      <div className="mf-list">
       <DataTable
         columns={columns}
         rows={data?.data ?? []}
@@ -92,6 +98,7 @@ export function ManifestsView() {
         pageSize={pageSize}
         onPageSize={setPageSize}
       />
+      </div>
     </>
   );
 }

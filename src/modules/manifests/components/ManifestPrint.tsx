@@ -71,7 +71,7 @@ export function ManifestPrint({ id, onClose }: { id: string; onClose: () => void
       </div>
 
       <div className="print-scale" ref={outerRef}>
-        <div className="card print-sheet" ref={innerRef}>
+        <div className="card print-sheet mf-lines" ref={innerRef}>
           <div className="mf-logo">أبو شامة</div>
           <div className="mf-head">
             <h2>كشف استلام بضاعة</h2>
@@ -86,6 +86,7 @@ export function ManifestPrint({ id, onClose }: { id: string; onClose: () => void
             <Info label="اسم السائق" value={m.driverName} />
             <Info label="الرقم القومي للسائق" value={m.driverNID} />
             <Info label="رقم تليفون السائق" value={m.driverPhone} />
+            <Info label="مسمّى العربية" value={m.vehicleLabel} />
             <Info label="رقم العربية" value={m.vehicleNo} />
             <Info label="رقم المقطورة" value={m.trailerNo} />
           </div>

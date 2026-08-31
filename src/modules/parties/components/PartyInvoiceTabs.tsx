@@ -5,6 +5,7 @@ import { money, fmtDate } from '@/lib/format';
 import { Spinner } from '@/components/common';
 import { useInvoices, useInvoiceSheet } from '../../invoices/hooks';
 import { ManifestTabs } from '../../invoices/components/ManifestTabs';
+import { InvoiceSheetBody, InvoiceSheetPayments } from '../../invoices/components/InvoiceSheet';
 import type { Invoice } from '../../invoices/dtos';
 import type { Party } from '../dtos';
 
@@ -45,6 +46,16 @@ export function PartyInvoiceTabs({ party, onOpenInvoice }: { party: Party; onOpe
   const cur = inv.currency ?? party.currency ?? 'EGP';
   const total = inv.items.reduce((s, it) => s + it.qty * it.price, 0);
   const netTotal = total - (inv.discount || 0);
+  // نفس حسبة صفحة الفاتورة بالظبط — الشراء بنقلب إشارته عشان «الباقي له» يقرا موجب.
+  const isSale = inv.kind === 'SALE';
+  const sign = isSale ? 1 : -1;
+  const remaining = sheet ? sign * sheet.remaining : null;
+  const previousBalance = sheet ? sign * sheet.previousBalance : null;
+  const cashTransfer = sheet ? sign * sheet.cashTransfer : 0;
+  const sheetTotal = previousBalance !== null ? previousBalance + netTotal : null;
+  const other = sheet && sheetTotal !== null && remaining !== null
+    ? remaining - (sheetTotal + cashTransfer - sheet.paymentsTotal)
+    : 0;
 
   return (
     <div className="pit-wrap">
@@ -75,90 +86,44 @@ export function PartyInvoiceTabs({ party, onOpenInvoice }: { party: Party; onOpe
                 </span>
               </div>
               <div className="pit-head-end">
-                <span className="pill">الإجمالي {money(netTotal, cur)}</span>
                 <button className="btn btn-ghost btn-sm" onClick={() => onOpenInvoice(inv.id)}>فتح الفاتورة كاملة →</button>
               </div>
             </div>
 
-            <div className="tbl-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th style={{ width: 90 }}>العدد</th>
-                    <th>الصنف</th>
-                    <th style={{ width: 110 }}>السعر</th>
-                    <th style={{ width: 120 }}>الاجمالي</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inv.items.map((it, i) => (
-                    <tr key={it.id ?? i}>
-                      <td className="num">{it.qty}</td>
-                      <td>{it.product?.name ?? '—'}</td>
-                      <td className="num">{money(it.price, cur)}</td>
-                      <td className="num">{money(it.qty * it.price, cur)}</td>
-                    </tr>
-                  ))}
-                  <tr className="mf-total">
-                    <td colSpan={3}>{(inv.discount || 0) > 0 ? 'إجمالي الأصناف بعد الخصم' : 'إجمالي الأصناف'}</td>
-                    <td className="num">{money(netTotal, cur)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            {/* نفس جسم ورقة الفاتورة بالحرف (المكوّن المشترك مع صفحة الفاتورة) */}
+            <InvoiceSheetBody
+              items={inv.items.map((it) => ({ name: it.product?.name ?? '—', qty: it.qty, price: it.price }))}
+              cur={cur as 'EGP' | 'USD'}
+              netTotal={netTotal}
+              discount={inv.discount || 0}
+              previousBalance={previousBalance}
+              cashTransfer={cashTransfer}
+              paymentsTotal={sheet ? sheet.paymentsTotal : null}
+              other={other}
+              remaining={remaining}
+              isSale={isSale}
+            />
 
             {/* عربيات الفاتورة دي — تاب لكل عربية بأصنافها ومصاريفها */}
             <ManifestTabs invoiceId={inv.id} />
           </>
+        ) : inv.fake ? (
+          <div className="empty">فاتورة وهمية — مالهاش حركات في الكشف</div>
+        ) : loadingSheet ? (
+          <Spinner />
         ) : (
-          <>
-            <div className="pit-head">
-              <div>
-                <b>استلامات {inv.no}</b>
-                <span className="muted" style={{ fontSize: 12, marginInlineStart: 8 }}>
-                  من {fmtDate(inv.date)}{' '}
-                  {sheet?.nextInvoiceNo ? <>لحد فاتورة {sheet.nextInvoiceNo}</> : <>لحد دلوقتي</>}
-                </span>
-              </div>
-              <div className="pit-head-end">
-                <span className="pill">الإجمالي {money(sheet?.paymentsTotal ?? 0, cur)}</span>
-              </div>
-            </div>
-
-            {inv.fake ? (
-              <div className="empty">فاتورة وهمية — مالهاش حركات في الكشف</div>
-            ) : loadingSheet ? (
-              <Spinner />
-            ) : (
-              <div className="tbl-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th style={{ width: 110 }}>التاريخ</th>
-                      <th>البيان</th>
-                      <th style={{ width: 130 }}>المبلغ</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(sheet?.payments ?? []).map((p) => (
-                      <tr key={p.id}>
-                        <td className="muted">{fmtDate(p.date)}</td>
-                        <td>{p.note || p.type}</td>
-                        <td className="num cre">{money(p.amount, cur)}</td>
-                      </tr>
-                    ))}
-                    {(sheet?.payments?.length ?? 0) === 0 && (
-                      <tr><td colSpan={3} className="empty">مفيش استلامات في الفترة دي</td></tr>
-                    )}
-                    <tr className="mf-total">
-                      <td colSpan={2}>الاجمالي</td>
-                      <td className="num">{money(sheet?.paymentsTotal ?? 0, cur)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
+          <InvoiceSheetPayments
+            cur={cur as 'EGP' | 'USD'}
+            payments={(sheet?.payments ?? []).map((p) => ({ id: p.id, date: p.date, note: p.note || p.type, amount: p.amount }))}
+            total={sheet?.paymentsTotal ?? 0}
+            title={<>
+              استلامات {inv.no}
+              <span className="muted">
+                {' — '}من {fmtDate(inv.date)}{' '}
+                {sheet?.nextInvoiceNo ? <>لحد فاتورة {sheet.nextInvoiceNo}</> : <>لحد دلوقتي</>}
+              </span>
+            </>}
+          />
         )}
       </div>
     </div>

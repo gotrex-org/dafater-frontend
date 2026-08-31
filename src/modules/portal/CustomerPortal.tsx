@@ -12,6 +12,7 @@ function portalStartOfMonth() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 }
 import { ProductCombobox } from '../products/components/ProductCombobox';
+import { InvoiceSheetBody, InvoiceSheetPayments } from '../invoices/components/InvoiceSheet';
 import type { AuthUser, Paginated } from '@/lib/types';
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -104,13 +105,38 @@ interface MyManifestTab {
   id: string;
   no: string;
   date: string;
+  clientName: string;
   vehicleLabel?: string | null;
   vehicleNo?: string | null;
+  trailerNo?: string | null;
+  driverName?: string | null;
+  /** وصلت / في الطريق — منها لون التاب والكشف */
+  status: 'arrived' | 'pending' | 'none';
+  note?: string | null;
   items: { id: string; name: string; qty: number; price: number | null; total: number | null }[];
   itemsTotal: number;
   expenses: { id: string; date: string; note: string | null; category: string | null; amount: number }[];
   expensesTotal: number;
 }
+
+const MT_STATUS_LABEL: Record<MyManifestTab['status'], string> = {
+  arrived: 'وصلت ✓',
+  pending: 'في الطريق',
+  none: 'مافيش رحلة متسجّلة',
+};
+
+/** حالة العربية من رحلات السائق — نفس قاعدة السيستم الداخلي بالظبط. */
+function manifestTripStatus(trips?: { arrivalDate: string | null }[]): MyManifestTab['status'] {
+  if (!trips?.length) return 'none';
+  return trips.some((t) => t.arrivalDate) ? 'arrived' : 'pending';
+}
+
+/** خلفية سطر الكشف حسب حالته — نفس ألوان قايمة الكشوفات الداخلية. */
+const MT_ROW_TINT: Record<MyManifestTab['status'], React.CSSProperties> = {
+  arrived: { background: 'rgba(178,58,46,0.12)' },
+  pending: { background: 'rgba(15,110,92,0.12)' },
+  none: {},
+};
 
 function useMyInvoiceList() {
   return useQuery<MyInvoiceRow[]>({
@@ -674,7 +700,11 @@ function LedgerTab({ partyName }: { partyName?: string }) {
 
 // ─── invoices tab: تاب لكل فاتورة وجنبه تاب استلاماتها بنفس الرقم ──────────────
 
-/** عربيات الفاتورة في البوابة: أصناف بلون ومصاريف بلون تاني — نفس تلوين الداخلي. */
+/**
+ * عربيات الفاتورة في البوابة — نفس شكل كشف الاستلام بالحرف زي السيستم الداخلي:
+ * ترويسة أبو شامة، خانات العميل والسائق والعربية، جدول الأصناف، ثم المصاريف بلون
+ * مختلف، والإقرار. ولون التاب والكشف حسب وصلت / في الطريق.
+ */
 function PortalManifestTabs({ invoiceUid, cur }: { invoiceUid: string; cur: 'EGP' | 'USD' }) {
   const { data, isLoading } = useMyManifestTabs(invoiceUid);
   const [active, setActive] = useState(0);
@@ -682,59 +712,101 @@ function PortalManifestTabs({ invoiceUid, cur }: { invoiceUid: string; cur: 'EGP
   if (isLoading || !data || data.tabs.length === 0) return null;
   const tab = data.tabs[Math.min(active, data.tabs.length - 1)];
   const label = (t: MyManifestTab) => t.vehicleLabel || `عربية رقم ${t.no}`;
+  const totalQty = tab.items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
 
   return (
     <div className="mt-wrap">
       <div className="mt-bar" role="tablist">
         {data.tabs.map((t, i) => (
           <button key={t.id} role="tab" aria-selected={i === active}
-            className={`mt-tab ${i === active ? 'is-active' : ''}`} onClick={() => setActive(i)}>
+            className={`mt-tab st-${t.status} ${i === active ? 'is-active' : ''}`} onClick={() => setActive(i)}>
+            <span className="mt-dot" aria-hidden />
             {label(t)}
           </button>
         ))}
       </div>
-      <div className="mt-panel card">
+
+      <div className={`mt-panel card st-${tab.status}`}>
         <div className="mt-head">
-          <div>
-            <b>{label(tab)}</b>
-            <span className="muted" style={{ fontSize: 12, marginInlineStart: 8 }}>
-              {fmtDate(tab.date)}{tab.vehicleNo && <> · {tab.vehicleNo}</>}
-            </span>
-          </div>
+          <span className={`pill mt-status st-${tab.status}`}>{MT_STATUS_LABEL[tab.status]}</span>
         </div>
-        <div className="tbl-wrap">
-          <table className="mt-tbl">
-            <thead>
-              <tr><th style={{ width: 100 }}>العدد</th><th>البيان</th><th style={{ width: 110 }}>السعر</th><th style={{ width: 130 }}>الاجمالي</th></tr>
-            </thead>
-            <tbody>
-              {tab.items.map((it) => (
-                <tr key={it.id} className="mt-goods">
-                  <td className="num">{it.qty}</td>
-                  <td>{it.name}</td>
-                  <td className="num">{it.price === null ? '—' : EGP(it.price)}</td>
-                  <td className="num">{it.total === null ? '—' : EGP(it.total)}</td>
+
+        <div className="card print-sheet mf-sheet">
+          <div className="mf-logo">أبو شامة</div>
+          <div className="mf-head">
+            <h2>كشف استلام بضاعة</h2>
+            <div className="mf-meta">
+              <span>رقم: <b>{tab.no}</b></span>
+              <span>التاريخ: <b>{fmtDate(tab.date)}</b></span>
+            </div>
+          </div>
+
+          <div className="mf-grid">
+            {[['اسم العميل', tab.clientName], ['اسم السائق', tab.driverName],
+              ['مسمّى العربية', tab.vehicleLabel], ['رقم العربية', tab.vehicleNo],
+              ['رقم المقطورة', tab.trailerNo]].map(([l, v]) => (
+              <div key={l as string} className="mf-info">
+                <span className="mf-info-l">{l}</span>
+                <span className="mf-info-v">{v || '—'}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="tbl-wrap mf-grow">
+            <table className="mt-tbl">
+              <thead>
+                <tr>
+                  <th style={{ width: 110 }}>الكمية</th>
+                  <th>الصنف</th>
+                  <th style={{ width: 110 }}>السعر</th>
+                  <th style={{ width: 130 }}>الاجمالي</th>
                 </tr>
-              ))}
-              <tr className="mt-sub mt-goods">
-                <td colSpan={3}>إجمالي الأصناف</td><td className="num">{EGP(tab.itemsTotal)}</td>
-              </tr>
-              {tab.expenses.map((e) => (
-                <tr key={e.id} className="mt-exp">
-                  <td className="muted" style={{ fontSize: 12 }}>{fmtDate(e.date)}</td>
-                  <td>{e.note || e.category || 'مصروف'}</td>
+              </thead>
+              <tbody>
+                {tab.items.map((it) => (
+                  <tr key={it.id} className="mt-goods">
+                    <td className="num">{it.qty}</td>
+                    <td>{it.name}</td>
+                    <td className="num">{it.price === null ? '—' : money(it.price, cur)}</td>
+                    <td className="num">{it.total === null ? '—' : money(it.total, cur)}</td>
+                  </tr>
+                ))}
+                {tab.items.length === 0 && (
+                  <tr className="mt-goods"><td colSpan={4} className="empty">مفيش أصناف في الكشف</td></tr>
+                )}
+                <tr className="mt-sub mt-goods">
+                  <td className="num"><b>{totalQty}</b></td>
+                  <td><b>إجمالي العدد</b></td>
                   <td />
-                  <td className="num">{EGP(e.amount)}</td>
+                  <td className="num">{money(tab.itemsTotal, cur)}</td>
                 </tr>
-              ))}
-              {tab.expenses.length === 0 && (
-                <tr className="mt-exp"><td colSpan={4} className="empty">مفيش مصاريف</td></tr>
-              )}
-              <tr className="mt-sub mt-exp">
-                <td colSpan={3}>إجمالي المصاريف</td><td className="num">{EGP(tab.expensesTotal)}</td>
-              </tr>
-            </tbody>
-          </table>
+
+                <tr className="mt-split"><td colSpan={4}>مصاريف العربية</td></tr>
+                {tab.expenses.map((e) => (
+                  <tr key={e.id} className="mt-exp">
+                    <td className="muted" style={{ fontSize: 12 }}>{fmtDate(e.date)}</td>
+                    <td>{e.note || e.category || 'مصروف'}</td>
+                    <td />
+                    <td className="num">{money(e.amount, cur)}</td>
+                  </tr>
+                ))}
+                {tab.expenses.length === 0 && (
+                  <tr className="mt-exp"><td colSpan={4} className="empty">مفيش مصاريف</td></tr>
+                )}
+                <tr className="mt-sub mt-exp">
+                  <td colSpan={3}>إجمالي المصاريف</td>
+                  <td className="num">{money(tab.expensesTotal, cur)}</td>
+                </tr>
+
+                <tr className="mf-total">
+                  <td colSpan={3}>إجمالي العربية</td>
+                  <td className="num">{money(tab.itemsTotal + tab.expensesTotal, cur)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {tab.note && <p className="mf-note">ملاحظات: {tab.note}</p>}
         </div>
       </div>
     </div>
@@ -791,54 +863,31 @@ function MyInvoiceTabs() {
               <div><b>فاتورة {inv.no}</b> <span className="muted" style={{ fontSize: 12 }}>{fmtDate(inv.date)}</span></div>
               <span className="pill">الإجمالي {EGP(detail.itemsTotal)}</span>
             </div>
-            <div className="tbl-wrap">
-              <table>
-                <thead><tr><th style={{ width: 90 }}>العدد</th><th>الصنف</th><th style={{ width: 110 }}>السعر</th><th style={{ width: 120 }}>الاجمالي</th></tr></thead>
-                <tbody>
-                  {detail.items.map((it, i) => (
-                    <tr key={i}>
-                      <td className="num">{it.qty}</td><td>{it.name}</td>
-                      <td className="num">{EGP(it.price)}</td><td className="num">{EGP(it.qty * it.price)}</td>
-                    </tr>
-                  ))}
-                  <tr className="mf-total">
-                    <td colSpan={3}>{detail.discount > 0 ? 'إجمالي الأصناف بعد الخصم' : 'إجمالي الأصناف'}</td>
-                    <td className="num">{EGP(detail.itemsTotal)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            {/* نفس جسم ورقة الفاتورة المستخدَم في السيستم الداخلي بالحرف */}
+            <InvoiceSheetBody
+              items={detail.items}
+              cur={cur}
+              netTotal={detail.itemsTotal}
+              discount={detail.discount}
+              previousBalance={detail.previousBalance}
+              cashTransfer={detail.cashTransfer}
+              paymentsTotal={detail.paymentsTotal}
+              other={0}
+              remaining={detail.remaining}
+              isSale
+            />
             <PortalManifestTabs invoiceUid={inv.id} cur={cur} />
           </>
         ) : (
-          <>
-            <div className="pit-head">
-              <div>
-                <b>استلامات {inv.no}</b>
-                <span className="muted" style={{ fontSize: 12, marginInlineStart: 8 }}>من {fmtDate(inv.date)} لحد الفاتورة اللي بعدها</span>
-              </div>
-              <span className="pill">الإجمالي {EGP(detail.paymentsTotal)}</span>
-            </div>
-            <div className="tbl-wrap">
-              <table>
-                <thead><tr><th style={{ width: 110 }}>التاريخ</th><th>البيان</th><th style={{ width: 130 }}>المبلغ</th></tr></thead>
-                <tbody>
-                  {detail.payments.map((p) => (
-                    <tr key={p.id}>
-                      <td className="muted">{fmtDate(p.date)}</td><td>{p.note}</td>
-                      <td className="num cre">{EGP(p.amount)}</td>
-                    </tr>
-                  ))}
-                  {detail.payments.length === 0 && (
-                    <tr><td colSpan={3} className="empty">مفيش استلامات في الفترة دي</td></tr>
-                  )}
-                  <tr className="mf-total">
-                    <td colSpan={2}>الاجمالي</td><td className="num">{EGP(detail.paymentsTotal)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </>
+          <InvoiceSheetPayments
+            cur={cur}
+            payments={detail.payments}
+            total={detail.paymentsTotal}
+            title={<>
+              استلامات {inv.no}
+              <span className="muted">{' — '}من {fmtDate(inv.date)} لحد الفاتورة اللي بعدها</span>
+            </>}
+          />
         )}
       </div>
     </div>
@@ -857,7 +906,7 @@ function ManifestReadView({ m, onBack }: { m: MyManifest; onBack: () => void }) 
         <button className="btn btn-ghost btn-sm" onClick={onBack}>→ رجوع</button>
         <button className="btn btn-primary btn-sm" onClick={() => window.print()}>🖨 طباعة</button>
       </div>
-      <div className="card print-sheet">
+      <div className="card print-sheet mf-lines">
         <div className="mf-logo">أبو شامة</div>
         <div className="mf-head">
           <h2>كشف استلام بضاعة</h2>
@@ -909,11 +958,14 @@ function ManifestRow({ m, expanded, onToggle, onArchive, archiveLabel, onPrint }
   m: MyManifest; expanded: boolean; onToggle: () => void; onArchive: () => void; archiveLabel: string; onPrint: () => void;
 }) {
   const totalQty = m.items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
+  // نفس قاعدة السيستم الداخلي: فيه رحلة وصلت = وصلت؛ فيه رحلة لسه = في الطريق.
+  const status = manifestTripStatus(m.driverTrips);
   return (
     <>
-      <tr style={{ cursor: 'pointer' }} onClick={onToggle}>
+      <tr style={{ cursor: 'pointer', ...MT_ROW_TINT[status] }} onClick={onToggle}>
         <td><b>{m.no}</b></td>
         <td className="muted">{fmtDate(m.date)}</td>
+        <td><span className={`pill mt-status st-${status}`}>{MT_STATUS_LABEL[status]}</span></td>
         <td>{m.driverName || '—'}</td>
         <td className="muted">{m.vehicleNo || '—'}</td>
         <td className="muted">{m.trailerNo || '—'}</td>
@@ -929,7 +981,7 @@ function ManifestRow({ m, expanded, onToggle, onArchive, archiveLabel, onPrint }
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={6} style={{ padding: 0, background: 'var(--bg-soft)' }}>
+          <td colSpan={7} style={{ padding: 0, background: 'var(--bg-soft)' }}>
             <div style={{ padding: '10px 16px' }}>
               <table style={{ width: '100%', fontSize: 13.5 }}>
                 <thead>
@@ -967,19 +1019,19 @@ function ManifestsTab() {
   const archiveList = data.filter((m) => archived.has(m.id)).sort(byDate);
 
   const thead = (
-    <thead><tr><th>رقم</th><th>التاريخ</th><th>السائق</th><th>العربية</th><th>المقطورة</th><th></th></tr></thead>
+    <thead><tr><th>رقم</th><th>التاريخ</th><th>الحالة</th><th>السائق</th><th>العربية</th><th>المقطورة</th><th></th></tr></thead>
   );
 
   const toggleExpanded = (id: string) => setExpandedId((cur) => (cur === id ? null : id));
 
   return (
     <>
-      <div className="tbl-wrap">
+      <div className="tbl-wrap mf-list">
         <table>
           {thead}
           <tbody>
             {active.length === 0 && (
-              <tr><td colSpan={6} className="empty">لا توجد كشوفات نشطة</td></tr>
+              <tr><td colSpan={7} className="empty">لا توجد كشوفات نشطة</td></tr>
             )}
             {active.map((m) => (
               <ManifestRow
@@ -1008,7 +1060,7 @@ function ManifestsTab() {
           archiveList.length === 0
             ? <div className="empty" style={{ fontSize: 13 }}>الأرشيف فارغ</div>
             : (
-              <div className="tbl-wrap">
+              <div className="tbl-wrap mf-list">
                 <table style={{ opacity: 0.75 }}>
                   {thead}
                   <tbody>

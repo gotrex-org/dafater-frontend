@@ -12,6 +12,7 @@ import type { Invoice } from '../dtos';
 import { InvoiceEditor } from './InvoiceEditor';
 import { CommissionPicker } from './CommissionPicker';
 import { ManifestTabs } from './ManifestTabs';
+import { InvoiceSheetBody, InvoiceSheetPayments } from './InvoiceSheet';
 
 export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: () => void }) {
   const { can } = useAuth();
@@ -126,106 +127,31 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
           {cur === 'USD' && <div className="mf-info"><span className="mf-info-l">العملة</span><span className="mf-info-v" style={{ fontWeight: 700, color: 'var(--debit)' }}>دولار $</span></div>}
         </div>
 
-        {/* جسم الفاتورة زي الشيت: جدول الأصناف على اليمين وعمود الملخّص على الشمال */}
-        <div className="sh-body">
-          <div className="sh-items tbl-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th style={{ width: 90 }}>العدد</th>
-                  <th>الصنف</th>
-                  <th style={{ width: 110 }}>السعر {cur === 'USD' ? '($)' : '(ج.م)'}</th>
-                  <th style={{ width: 120 }}>الاجمالي</th>
-                </tr>
-              </thead>
-              <tbody>
-                {previousBalance !== null && (
-                  <tr className="sh-old">
-                    <td colSpan={3}>حــــســـــاب قــــديــــم</td>
-                    <td className="num">{money(previousBalance, cur)}</td>
-                  </tr>
-                )}
-                {invoice.items.map((it, i) => (
-                  <tr key={it.id ?? i}>
-                    <td className="num">{it.qty}</td>
-                    <td>{it.product?.name ?? '—'}</td>
-                    <td className="num">{money(it.price, cur)}</td>
-                    <td className="num">{money(it.qty * it.price, cur)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="mf-total">
-                  <td colSpan={3}>{discount > 0 ? 'إجمالي الأصناف بعد الخصم' : 'إجمالي الأصناف'}</td>
-                  <td className="num">{money(netTotal, cur)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-
-          <aside className="sh-side">
-            <div className="sh-box">
-              <div className="sh-box-l">اجمالي الفاتورة</div>
-              <div className="sh-box-v num">{money(sheetTotal ?? netTotal, cur)}</div>
-            </div>
-            {cashTransfer !== 0 && (
-              <div className="sh-box">
-                <div className="sh-box-l">نقل نقدية</div>
-                <div className="sh-box-v num">{money(cashTransfer, cur)}</div>
-              </div>
-            )}
-            {sheet && (
-              <>
-                <div className="sh-box">
-                  <div className="sh-box-l">سدادات</div>
-                  <div className="sh-box-v num">{money(sheet.paymentsTotal, cur)}</div>
-                </div>
-                {Math.abs(other) > 0.005 && (
-                  <div className="sh-box">
-                    <div className="sh-box-l">حركات أخرى</div>
-                    <div className="sh-box-v num">{money(other, cur)}</div>
-                  </div>
-                )}
-                <div className="sh-box sh-box-end">
-                  <div className="sh-box-l">{isSale ? 'الباقي عليه' : 'الباقي له'}</div>
-                  <div className="sh-box-v num">{money(remaining ?? 0, cur)}</div>
-                </div>
-              </>
-            )}
-          </aside>
-        </div>
+        {/* جسم الفاتورة زي الشيت — مكوّن مشترك، عشان نفس الشكل بالحرف في تابات
+            فواتير العميل وبوابة العميل كمان */}
+        <InvoiceSheetBody
+          items={invoice.items.map((it) => ({ name: it.product?.name ?? '—', qty: it.qty, price: it.price }))}
+          cur={cur as 'EGP' | 'USD'}
+          netTotal={netTotal}
+          discount={discount}
+          previousBalance={previousBalance}
+          cashTransfer={cashTransfer}
+          paymentsTotal={sheet ? sheet.paymentsTotal : null}
+          other={other}
+          remaining={remaining}
+          isSale={isSale}
+        />
 
         {sheet && sheet.payments.length > 0 && (
-          <div className="sh-pay tbl-wrap">
-            <div className="sh-pay-title">
+          <InvoiceSheetPayments
+            cur={cur as 'EGP' | 'USD'}
+            payments={sheet.payments.map((p) => ({ id: p.id, date: p.date, note: p.note || p.type, amount: p.amount }))}
+            total={sheet.paymentsTotal}
+            title={<>
               سدادات فاتورة {invoice.no}
               {sheet.nextInvoiceNo && <span className="muted"> — لحد فاتورة {sheet.nextInvoiceNo}</span>}
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th style={{ width: 110 }}>التاريخ.</th>
-                  <th>البيان</th>
-                  <th style={{ width: 130 }}>المبلغ.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sheet.payments.map((p) => (
-                  <tr key={p.id}>
-                    <td>{fmtDate(p.date)}</td>
-                    <td>{p.note || p.type}</td>
-                    <td className="num">{money(p.amount, cur)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="mf-total">
-                  <td colSpan={2}>الاجمالي.</td>
-                  <td className="num">{money(sheet.paymentsTotal, cur)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+            </>}
+          />
         )}
 
         {discount > 0 && (

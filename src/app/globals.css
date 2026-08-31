@@ -218,6 +218,11 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 .print-sheet tr.sh-old td.num { text-align: end; letter-spacing: 0; }
 .sh-pay { margin-top: 14px; }
 .sh-pay-title { font-weight: 800; font-size: 14px; margin-bottom: 5px; }
+/* خط رأسي باين بين أعمدة الاستلامات (تاريخ الاستلام / البيان / المبلغ).
+   بيتحطّ هنا مش على .print-sheet لأن الجدول بيتعرض كمان بره ورقة الفاتورة —
+   في تاب «استلامات N» وفي بوابة العميل — وساعتها مكانش بيورّث أي حدود. */
+.sh-pay table th, .sh-pay table td { border-inline-end: 1px solid var(--ink-soft); }
+.sh-pay table th:last-child, .sh-pay table td:last-child { border-inline-end: none; }
 /* على الموبايل الملخّص ينزل تحت الجدول ويتفرد صفّ */
 @media screen and (max-width: 700px) {
   .print-sheet:not(.pdf-capture) .sh-body { flex-direction: column; }
@@ -718,8 +723,50 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 .mt-tbl .mt-goods td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .mt-tbl .mt-exp { background: rgba(185, 138, 46, .10); }
 .mt-tbl .mt-exp td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
-.mt-tbl .mt-sub td { font-weight: 800; border-top: 1px solid var(--line); }
+.mt-tbl .mt-sub td { font-weight: 800; }
 .mt-tbl .empty { padding: 14px; }
+/* فاصل بين قسم البضاعة وقسم المصاريف جوّه نفس الجدول */
+.mt-tbl .mt-split td {
+  background: var(--ink); color: #fff; font-weight: 800; font-size: 12px;
+  text-align: center; letter-spacing: .5px; padding: 5px;
+}
+
+/* ---- borders باينة على كشف العربية ---- */
+/* الكشف جوّه التاب ورقة كاملة العرض، مش عرض A4 الضيّق، وحدود الجدول أغمق عشان
+   يقرا زي الشيت. الطباعة والـ PDF بيرجعوا A4 عبر .print-sheet الأصلية. */
+@media screen { .mf-sheet { width: 100%; min-height: auto; padding: 16px; margin-top: 10px; } }
+
+/* شبكة خطوط كشف العربية — نفس لون خطوط الاستلامات (--ink-soft) عشان الشكل واحد
+   في كل الكشوفات. .mf-lines بتتحط على كشف العربية المستقل (ManifestPrint) عشان
+   ياخد نفس الخطوط من غير ما ياخد عرض الشاشة الكامل بتاع .mf-sheet. */
+/* الإطار الخارجي بنفس خط الخلايا الداخلي — شبكة واحدة متساوية، من غير إطار أتخن. */
+.mf-sheet table, .mf-lines table { border: 1px solid var(--ink-soft); }
+.mf-sheet table th, .mf-sheet table td,
+.mf-lines table th, .mf-lines table td { border: 1px solid var(--ink-soft); }
+/* صف العناوين بالحدود بس — من غير أي تظليل غامق */
+.mf-sheet thead th, .mf-lines thead th { background: transparent; color: inherit; }
+.mf-sheet .mf-total td, .mf-lines .mf-total td { border-top: 2px solid var(--ink); }
+/* جدول بيانات السائق والعربية: نفس الخط برضه */
+.mf-sheet .mf-grid, .mf-lines .mf-grid { border: 1px solid var(--ink-soft); }
+.mf-sheet .mf-info, .mf-lines .mf-info { border-bottom: 1px solid var(--ink-soft); }
+@media (min-width: 620px) {
+  .mf-sheet .mf-info:nth-child(even), .mf-lines .mf-info:nth-child(even) {
+    border-inline-start: 1px solid var(--ink-soft);
+  }
+}
+
+/* ---- ألوان الحالة: وصلت / في الطريق ---- */
+/* نفس ألوان قايمة كشوفات العربيات بالظبط عشان الحالة تتقرا بنفس اللون في كل مكان. */
+.mt-tab .mt-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-soft); flex: none; }
+.mt-tab.st-arrived .mt-dot { background: var(--debit); }
+.mt-tab.st-pending .mt-dot { background: var(--credit); }
+.mt-tab.st-arrived.is-active { box-shadow: inset 0 3px 0 var(--debit); }
+.mt-tab.st-pending.is-active { box-shadow: inset 0 3px 0 var(--credit); }
+.mt-panel.st-arrived { border-color: var(--debit); border-inline-start-width: 4px; }
+.mt-panel.st-pending { border-color: var(--credit); border-inline-start-width: 4px; }
+.mt-status.st-arrived { background: rgba(178, 58, 46, .12); color: var(--debit); }
+.mt-status.st-pending { background: rgba(15, 110, 92, .12); color: var(--credit); }
+.mt-status.st-none { background: var(--line-soft); color: var(--ink-soft); }
 
 /* ===== تابات فواتير العميل (المستوى الأعلى: عميل ← فاتورة ← عربية) ===== */
 /* شكلها أعرض وأبرز من تابات العربيات اللي جوّاها عشان المستويين ما يتلخبطوش. */
@@ -748,3 +795,11 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
   .pt-home-top { flex-direction: column; }
   .pt-home-links { flex-direction: row; flex-wrap: wrap; }
 }
+
+/* ---- قايمة كشوفات العربيات: حدود باينة زي الشيت ---- */
+/* الجدول العام حدوده خفيفة (سطر فاصل بس)؛ هنا عايزينها شبكة كاملة واضحة. */
+.mf-list table { border: 1px solid var(--ink-soft); }
+.mf-list th, .mf-list td { border: 1px solid var(--ink-soft); }
+.mf-list thead th { background: transparent; color: inherit; }
+/* الشريط الجانبي بيفضل باين فوق حدود الخلية */
+.mf-list tbody tr:hover { background: rgba(0,0,0,.03); }

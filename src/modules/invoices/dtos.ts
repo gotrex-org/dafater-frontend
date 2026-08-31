@@ -137,9 +137,15 @@ export interface ManifestTab {
   id: string;
   no: string;
   date: string;
+  clientName: string;
   vehicleNo?: string | null;
   vehicleLabel?: string | null;
+  trailerNo?: string | null;
   driverName?: string | null;
+  driverNID?: string | null;
+  driverPhone?: string | null;
+  /** وصلت / لسه في الطريق / مافيش رحلة متسجّلة — منها لون التاب والكشف */
+  status: 'arrived' | 'pending' | 'none';
   note?: string | null;
   closedAt: string | null;
   closedBy: string | null;
