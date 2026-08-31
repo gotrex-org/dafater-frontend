@@ -5,7 +5,7 @@ import { EGP } from '@/lib/format';
 import { SearchInput, MoneyInput } from '@/components/common';
 import { useAuth } from '@/lib/auth';
 import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from '../hooks';
-import { confirmCascadeDelete } from '@/lib/cascadeDelete';
+import { useDeleteWithRelated } from '@/lib/deleteWithRelated';
 import type { Product } from '../dtos';
 
 function ProductRow({ product, canManage }: { product: Product; canManage: boolean }) {
@@ -26,9 +26,14 @@ function ProductRow({ product, canManage }: { product: Product; canManage: boole
     );
   };
 
+  // A product nothing points at just goes. One with history asks what to do with it first.
+  const { start: startDelete, modal: deleteModal } = useDeleteWithRelated(del, {
+    onError: (e) => setMsg(e.message),
+  });
+
   const remove = () => {
-    if (!confirm(`حذف ${product.name}؟ لا يمكن التراجع.`)) return;
-    confirmCascadeDelete(del, product.id, { onOtherError: (e) => setMsg(e.message) });
+    if (!confirm(`حذف ${product.name}؟`)) return;
+    startDelete(product.id, product.name);
   };
 
   return (
@@ -57,6 +62,8 @@ function ProductRow({ product, canManage }: { product: Product; canManage: boole
           {msg && <span className="muted">{msg}</span>}
         </div>
       )}
+      {!open && msg && <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>{msg}</div>}
+      {deleteModal}
     </div>
   );
 }

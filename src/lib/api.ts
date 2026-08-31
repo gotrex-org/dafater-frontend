@@ -71,9 +71,13 @@ http.interceptors.response.use(
       return Promise.reject(err);
     }
 
-    toast.error(message);
-    const err = new Error(message) as Error & { status?: number };
+    // A 409 on a delete isn't a failure — it's the backend asking which kind of delete
+    // this should be. The caller opts out of the red toast and puts the question on
+    // screen itself (see lib/cascadeDelete.tsx).
+    if (!(status === 409 && (error.config as any)?.quietConflict)) toast.error(message);
+    const err = new Error(message) as Error & { status?: number; body?: any };
     err.status = status;
+    err.body = body;
     return Promise.reject(err);
   },
 );
@@ -81,7 +85,7 @@ http.interceptors.response.use(
 // Per-request options for writes. `silent: true` suppresses the success toast —
 // used by background writes like the heartbeat. Extends AxiosRequestConfig so it
 // can be passed straight through as the request config.
-type WriteOpts = AxiosRequestConfig & { silent?: boolean };
+type WriteOpts = AxiosRequestConfig & { silent?: boolean; quietConflict?: boolean };
 
 export const api = {
   get: <T>(path: string) => http.get<T>(path).then((r) => r.data),

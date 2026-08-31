@@ -55,7 +55,7 @@ export function useUpdateProduct() {
 export function useDeleteProduct() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, cascade }: { id: string; cascade?: boolean }) => productsApi.remove(id, cascade),
+    mutationFn: ({ id, ...opts }: { id: string; cascade?: boolean; archive?: boolean }) => productsApi.remove(id, opts),
     onSuccess: () => qc.invalidateQueries({ queryKey: productKeys.all }),
   });
 }

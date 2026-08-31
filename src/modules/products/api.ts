@@ -11,5 +11,6 @@ export const productsApi = {
   lastPrices: (kind: 'SALE' | 'PURCHASE') => api.get<LastPrice[]>(`/products/last-prices?kind=${kind}`),
   create: (dto: CreateProductDto) => api.post<Product>('/products', dto),
   update: (id: string, dto: UpdateProductDto) => api.patch<Product>(`/products/${id}`, dto),
-  remove: (id: string, cascade?: boolean) => api.del<void>(`/products/${id}${cascade ? '?cascade=true' : ''}`),
+  remove: (id: string, opts: { cascade?: boolean; archive?: boolean } = {}) =>
+    api.del<void>(`/products/${id}${opts.archive ? '?archive=true' : opts.cascade ? '?cascade=true' : ''}`, { quietConflict: true }),
 };

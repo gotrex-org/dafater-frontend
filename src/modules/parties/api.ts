@@ -15,7 +15,8 @@ export const partiesApi = {
   ledger: (id: string, params: { from?: string; to?: string } = {}) => api.get<LedgerStatement>(`/parties/${id}/ledger${toQuery(params)}`),
   create: (dto: CreatePartyDto) => api.post<Party>('/parties', dto),
   update: (id: string, dto: UpdatePartyDto) => api.patch<Party>(`/parties/${id}`, dto),
-  remove: (id: string, cascade?: boolean) => api.del<void>(`/parties/${id}${cascade ? '?cascade=true' : ''}`),
+  remove: (id: string, opts: { cascade?: boolean; archive?: boolean } = {}) =>
+    api.del<void>(`/parties/${id}${opts.archive ? '?archive=true' : opts.cascade ? '?cascade=true' : ''}`, { quietConflict: true }),
   linkParty: (id: string, linkedPartyUid: string) => api.patch<Party>(`/parties/${id}/link`, { linkedPartyUid }),
   unlinkParty: (id: string) => api.del<Party>(`/parties/${id}/link`),
 };

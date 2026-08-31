@@ -6,7 +6,7 @@ import { useTableState } from '@/lib/useTableState';
 import { SegmentedControl, SearchInput, MoneyInput } from '@/components/common';
 import { useAuth } from '@/lib/auth';
 import { useParties, useCreateParty, useUpdateParty, useDeleteParty, useLinkParty, useUnlinkParty, useAllParties } from '../hooks';
-import { confirmCascadeDelete } from '@/lib/cascadeDelete';
+import { useDeleteWithRelated } from '@/lib/deleteWithRelated';
 import type { Party } from '../dtos';
 
 function LinkPanel({ party, canManage, otherRole }: { party: Party; canManage: boolean; otherRole: 'CLIENT' | 'SUPPLIER' }) {
@@ -101,9 +101,14 @@ function PartyRow({ party, canDelete, canManage }: { party: Party; canDelete: bo
     );
   };
 
+  // A party nothing points at just goes. One with a ledger asks what to do with it first.
+  const { start: startDelete, modal: deleteModal } = useDeleteWithRelated(del, {
+    onError: (e) => setMsg(e.message),
+  });
+
   const remove = () => {
-    if (!confirm(`حذف ${party.name}؟ لا يمكن التراجع.`)) return;
-    confirmCascadeDelete(del, party.id, { onOtherError: (e) => setMsg(e.message) });
+    if (!confirm(`حذف ${party.name}؟`)) return;
+    startDelete(party.id, party.name);
   };
 
   const otherRole: 'CLIENT' | 'SUPPLIER' = party.role === 'CLIENT' ? 'SUPPLIER' : 'CLIENT';
@@ -139,6 +144,8 @@ function PartyRow({ party, canDelete, canManage }: { party: Party; canDelete: bo
           {msg && <span className="muted">{msg}</span>}
         </div>
       )}
+      {!open && msg && <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>{msg}</div>}
+      {deleteModal}
     </div>
   );
 }
