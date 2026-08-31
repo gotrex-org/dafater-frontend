@@ -6,10 +6,63 @@ import { useTableState } from '@/lib/useTableState';
 import { useAuth } from '@/lib/auth';
 import { useWindows } from '@/lib/windows';
 import { PageTitle, DataTable, SearchInput, type Column } from '@/components/common';
-import { useManifests } from '../hooks';
+import { useManifests, useUpdateManifest } from '../hooks';
 import type { Manifest } from '../dtos';
 import { ManifestEditor } from './ManifestEditor';
 import { ManifestPrint } from './ManifestPrint';
+
+/**
+ * تعديل «مسمّى العربية» من القايمة على طول — العمود اتضاف بعد ما الكشوفات القديمة
+ * اتسجّلت، فكلها من غير مسمّى. فتح المحرر الكامل لكل واحدة تقيل (وبيعيد كتابة كل
+ * أصنافها)، فده PATCH بحقل واحد بس ما بيلمسش الأصناف.
+ */
+function VehicleLabelCell({ m, canEdit }: { m: Manifest; canEdit: boolean }) {
+  const update = useUpdateManifest();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(m.vehicleLabel ?? '');
+
+  const save = () => {
+    const next = value.trim();
+    if (next === (m.vehicleLabel ?? '')) return setEditing(false);
+    update.mutate(
+      { id: m.id, dto: { vehicleLabel: next } },
+      { onSuccess: () => setEditing(false) },
+    );
+  };
+
+  if (editing) {
+    return (
+      <div style={{ display: 'flex', gap: 4 }} onClick={(e) => e.stopPropagation()}>
+        <input
+          autoFocus
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') save();
+            if (e.key === 'Escape') { setValue(m.vehicleLabel ?? ''); setEditing(false); }
+          }}
+          placeholder="عربية الزيتون"
+          style={{ width: 130, padding: '4px 7px', border: '1.5px solid var(--accent)', borderRadius: 7, fontSize: 12 }}
+        />
+        <button className="btn btn-primary btn-sm" style={{ padding: '3px 8px', fontSize: 11 }} onClick={save} disabled={update.isPending}>
+          {update.isPending ? '…' : '✓'}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <span
+      onClick={canEdit ? (e) => { e.stopPropagation(); setEditing(true); } : undefined}
+      title={canEdit ? 'اضغط لتعديل مسمّى العربية' : undefined}
+      style={canEdit ? { cursor: 'text', borderBottom: '1px dashed var(--line)' } : undefined}
+    >
+      {m.vehicleLabel
+        ? <><b>{m.vehicleLabel}</b>{m.vehicleNo ? ` — ${m.vehicleNo}` : ''}</>
+        : <>{m.vehicleNo || '—'}{canEdit && <span className="muted" style={{ fontSize: 11 }}> · + مسمّى</span>}</>}
+    </span>
+  );
+}
 
 export function ManifestsView() {
   const { can } = useAuth();
@@ -46,7 +99,7 @@ export function ManifestsView() {
     { header: 'رقم', cell: (m) => m.no },
     { header: 'العميل', cell: (m) => m.clientName },
     { header: 'السائق', cell: (m) => m.driverName || '—' },
-    { header: 'العربية', cell: (m) => m.vehicleLabel ? `${m.vehicleLabel}${m.vehicleNo ? ` — ${m.vehicleNo}` : ''}` : (m.vehicleNo || '—'), className: 'muted' },
+    { header: 'العربية', cell: (m) => <VehicleLabelCell m={m} canEdit={can('manifests.edit')} /> },
     { header: 'المقطورة', cell: (m) => m.trailerNo || '—', className: 'muted' },
     { header: 'التاريخ', cell: (m) => fmtDate(m.date), className: 'muted' },
     // الربط بالفاتورة — بيبيّن الكشوفات اللي لسه مستقلة وماتظهرش كتاب في أي فاتورة

@@ -34,6 +34,8 @@ export interface Invoice {
   paid: number;
   discount?: number;
   fake?: boolean;
+  /** مؤرشفة: مختفية من القوايم والتابات والبوابة — الحركات زي ما هي */
+  hidden?: boolean;
   note?: string | null;
   party?: Party;
   warehouse?: Warehouse;

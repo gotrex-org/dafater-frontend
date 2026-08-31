@@ -5,6 +5,8 @@ import type { Invoice, CreateInvoiceDto, UpdateInvoiceDto, InvoiceKind, InvoiceS
 
 export interface InvoiceListParams extends ListParams {
   kind?: InvoiceKind;
+  /** true = هات المؤرشفة كمان (شاشة الأرشيف). الافتراضي بيستبعدها. */
+  includeHidden?: boolean;
 }
 
 export const invoicesApi = {
@@ -12,6 +14,7 @@ export const invoicesApi = {
   get: (id: string) => api.get<Invoice>(`/invoices/${id}`),
   sheet: (id: string) => api.get<InvoiceSheet>(`/invoices/${id}/sheet`),
   manifestTabs: (id: string) => api.get<ManifestTabs>(`/invoices/${id}/manifest-tabs`),
+  setArchived: (id: string, archived: boolean) => api.patch<void>(`/invoices/${id}/archived`, { archived }),
   setManifestTabClosed: (uid: string, closed: boolean) =>
     api.patch<void>(`/invoices/manifest-tabs/${uid}/closed`, { closed }),
   nextNo: (partyId: string) => api.get<{ no: string }>(`/invoices/next-no?partyId=${encodeURIComponent(partyId)}`),

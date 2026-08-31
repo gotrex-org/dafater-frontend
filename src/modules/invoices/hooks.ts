@@ -103,3 +103,12 @@ export function useSetManifestTabClosed() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices', 'manifest-tabs'] }),
   });
 }
+
+// أرشفة/استعادة فاتورة — إخفاء من القوايم بس، الحركات ما بتتلمسش
+export function useSetInvoiceArchived() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, archived }: { id: string; archived: boolean }) => invoicesApi.setArchived(id, archived),
+    onSuccess: () => qc.invalidateQueries({ queryKey: invoiceKeys.all }),
+  });
+}

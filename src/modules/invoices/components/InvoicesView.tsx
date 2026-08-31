@@ -6,7 +6,7 @@ import { useTableState } from '@/lib/useTableState';
 import { useAuth } from '@/lib/auth';
 import { useWindows } from '@/lib/windows';
 import { PageTitle, DataTable, SegmentedControl, SearchInput, type Column } from '@/components/common';
-import { useInvoices } from '../hooks';
+import { useInvoices, useSetInvoiceArchived } from '../hooks';
 import type { Invoice, InvoiceKind } from '../dtos';
 import { InvoiceEditor } from './InvoiceEditor';
 import { InvoiceDetail } from './InvoiceDetail';
@@ -25,9 +25,16 @@ export function InvoicesView() {
   const [search, setSearch] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  // عرض الأرشيف: بيجيب المؤرشفة كمان وبيفلترها هنا، عشان الشاشة تبقى الأرشيف وحده.
+  const [showArchive, setShowArchive] = useState(false);
   const canCreate = kind === 'SALE' ? can('invoices.createSale') : can('invoices.createPurchase');
+  const setArchived = useSetInvoiceArchived();
   const { page, setPage, pageSize, setPageSize } = useTableState();
-  const { data, isLoading } = useInvoices({ kind, page, pageSize, search: search || undefined, from: from || undefined, to: to || undefined });
+  const { data, isLoading } = useInvoices({
+    kind, page, pageSize, search: search || undefined, from: from || undefined, to: to || undefined,
+    includeHidden: showArchive || undefined,
+  });
+  const rows = (data?.data ?? []).filter((inv) => !!inv.hidden === showArchive);
 
   const openNew = () => open({
     title: kind === 'SALE' ? 'فاتورة بيع جديدة' : 'فاتورة شراء جديدة',
@@ -68,6 +75,21 @@ export function InvoicesView() {
     { header: 'المخزن', cell: (inv) => inv.warehouse?.name, className: 'muted' },
     { header: 'الإجمالي', cell: (inv) => EGP(invoiceTotal(inv)), className: 'num' },
     { header: 'مدفوع', cell: (inv) => EGP(inv.paid), className: 'num cre' },
+    // أرشفة/استعادة — إخفاء من القوايم وتابات العميل والبوابة بس، الحركات وأرقام
+    // كشف الحساب والتقارير ما بتتلمسش.
+    ...(can('invoices.edit') ? [{
+      header: '',
+      cell: (inv: Invoice) => (
+        <button
+          className="btn btn-ghost btn-sm"
+          style={{ fontSize: 11, whiteSpace: 'nowrap' }}
+          disabled={setArchived.isPending}
+          onClick={(e) => { e.stopPropagation(); setArchived.mutate({ id: inv.id, archived: !showArchive }); }}
+        >
+          {showArchive ? '↑ استعادة' : 'أرشفة ↓'}
+        </button>
+      ),
+    }] : []),
   ];
 
   return (
@@ -83,7 +105,10 @@ export function InvoicesView() {
             { value: 'PURCHASE', label: 'فواتير شراء' },
           ]}
         />
-        {canCreate && <button className="btn btn-primary btn-sm sp" onClick={openNew}>+ فاتورة جديدة</button>}
+        <button className={`btn btn-sm ${showArchive ? 'btn-primary' : 'btn-ghost'}`} onClick={() => { setShowArchive((v) => !v); setPage(1); }}>
+          {showArchive ? '← رجوع للفواتير' : 'الأرشيف'}
+        </button>
+        {canCreate && !showArchive && <button className="btn btn-primary btn-sm sp" onClick={openNew}>+ فاتورة جديدة</button>}
       </div>
       <div className="toolbar" style={{ marginTop: 6, flexWrap: 'wrap' }}>
         <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="بحث باسم العميل أو رقم الفاتورة…" />
@@ -95,7 +120,7 @@ export function InvoicesView() {
       </div>
       <DataTable
         columns={columns}
-        rows={data?.data ?? []}
+        rows={rows}
         rowKey={(inv) => inv.id}
         onRowClick={setSelected}
         loading={isLoading}
