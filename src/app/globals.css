@@ -740,3 +740,11 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 .pit-panel { border-radius: 0 14px 14px 14px; padding: 14px 16px; }
 .pit-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .pit-head-end { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* رأس رئيسية بوابة العميل: الرصيد وروابط سريعة في سطر، وتحتهم تابات الفواتير */
+.pt-home-top { display: flex; gap: 12px; align-items: stretch; flex-wrap: wrap; margin-bottom: 14px; }
+.pt-home-links { display: flex; flex-direction: column; gap: 8px; justify-content: center; }
+@media (max-width: 560px) {
+  .pt-home-top { flex-direction: column; }
+  .pt-home-links { flex-direction: row; flex-wrap: wrap; }
+}

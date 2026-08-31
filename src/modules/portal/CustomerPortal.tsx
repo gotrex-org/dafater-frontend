@@ -755,7 +755,16 @@ function MyInvoiceTabs() {
   const { data: detail, isLoading: loadingDetail } = useMyInvoice(cursor?.inv.id ?? null);
 
   if (isLoading) return <div className="card" style={{ padding: 22 }}><div className="empty">جارٍ التحميل…</div></div>;
-  if (!cursor) return <div className="card" style={{ padding: 22 }}><div className="empty">مفيش فواتير على حسابك</div></div>;
+  if (!cursor) {
+    return (
+      <div className="card" style={{ padding: 22 }}>
+        <div className="empty">
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>لسه مفيش فواتير على حسابك</div>
+          <div style={{ fontSize: 13 }}>أول ما تتسجّل لك فاتورة هتلاقيها هنا هي واستلاماتها.</div>
+        </div>
+      </div>
+    );
+  }
 
   const inv = cursor.inv;
   const cur = inv.currency ?? 'EGP';
@@ -1025,13 +1034,12 @@ function ManifestsTab() {
 
 // ─── main portal ──────────────────────────────────────────────────────────────
 
-type Tab = 'home' | 'orders' | 'ledger' | 'invoices' | 'manifests';
+type Tab = 'home' | 'orders' | 'ledger' | 'manifests';
 
 const NAV: { key: Tab; label: string }[] = [
   { key: 'home', label: 'الرئيسية' },
   { key: 'orders', label: 'طلبياتي' },
   { key: 'ledger', label: 'كشف الحساب' },
-  { key: 'invoices', label: 'فواتيري' },
   { key: 'manifests', label: 'كشف العربيات' },
 ];
 
@@ -1074,14 +1082,14 @@ export function CustomerPortal({ user }: { user: AuthUser }) {
         ))}
       </nav>
 
-      {/* home */}
+      {/* home: الرصيد فوق، وتحته فواتير العميل بشكل التابات — ده اللي بيفتح عليه
+          العميل حسابه على طول. الطلبيات اتشالت من هنا وفضلت في تاب «طلبياتي». */}
       {tab === 'home' && (
-        <div className="grid-sidebar">
-          {/* left: balance + quick stats */}
-          <div style={{ display: 'grid', gap: 12 }}>
-            <div className="card" style={{ padding: 20, textAlign: 'center' }}>
+        <>
+          <div className="pt-home-top">
+            <div className="card" style={{ padding: 16, textAlign: 'center', minWidth: 190 }}>
               <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>الرصيد الحالي</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: ledger && ledger.balance <= 0 ? 'var(--credit)' : 'var(--debit)', direction: 'ltr' }}>
+              <div style={{ fontSize: 24, fontWeight: 800, color: ledger && ledger.balance <= 0 ? 'var(--credit)' : 'var(--debit)', direction: 'ltr' }}>
                 {ledger ? EGP(Math.abs(ledger.balance)) : '…'}
               </div>
               {ledger && (
@@ -1090,27 +1098,14 @@ export function CustomerPortal({ user }: { user: AuthUser }) {
                 </div>
               )}
             </div>
-
-            <div
-              className="card card-link"
-              style={{ padding: 16 }}
-              onClick={() => setTab('orders')}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 13, color: 'var(--muted)' }}>طلبيات نشطة</span>
-                <b style={{ fontSize: 18 }}>{activeOrders.length}</b>
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gap: 8 }}>
-              <button className="btn btn-ghost btn-sm" onClick={() => setTab('ledger')} style={{ textAlign: 'right' }}>← كشف الحساب الكامل</button>
-              <button className="btn btn-ghost btn-sm" onClick={() => setTab('manifests')} style={{ textAlign: 'right' }}>← كشف العربيات</button>
+            <div className="pt-home-links">
+              <button className="btn btn-ghost btn-sm" onClick={() => setTab('ledger')}>← كشف الحساب الكامل</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setTab('manifests')}>← كشف العربيات</button>
             </div>
           </div>
 
-          {/* right: new order form */}
-          <OrderForm products={products} />
-        </div>
+          <MyInvoiceTabs />
+        </>
       )}
 
       {/* orders */}
@@ -1118,9 +1113,6 @@ export function CustomerPortal({ user }: { user: AuthUser }) {
 
       {/* ledger */}
       {tab === 'ledger' && <LedgerTab partyName={user.partyName} />}
-
-      {/* فواتيري: تاب لكل فاتورة وجنبه تاب استلاماتها بنفس الرقم، وجوّه الفاتورة عربياتها */}
-      {tab === 'invoices' && <MyInvoiceTabs />}
 
       {/* manifests */}
       {tab === 'manifests' && <ManifestsTab />}
