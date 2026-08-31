@@ -39,12 +39,13 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
   const remaining = sheet ? sign * sheet.remaining : null;
   const previousBalance = sheet ? sign * sheet.previousBalance : null;
   const cashTransfer = sheet ? sign * sheet.cashTransfer : 0;
+  const expensesTotal = sheet ? sign * sheet.expensesTotal : 0;
   // اجمالي الفاتورة في الشيت شامل الحساب القديم (مجموع عمود «الاجمالي» كله).
   const sheetTotal = previousBalance !== null ? previousBalance + netTotal : null;
   // أي حركة تانية وقعت في نفس الفترة (مرتجع/خصم/مصروف على العميل) — بتفضل في كشف الحساب،
   // وبتتعرض هنا كسطر واحد عشان حسبة الورقة تقفل.
   const other = sheet && sheetTotal !== null && remaining !== null
-    ? remaining - (sheetTotal + cashTransfer - sheet.paymentsTotal)
+    ? remaining - (sheetTotal + cashTransfer + expensesTotal - sheet.paymentsTotal)
     : 0;
 
   const saveCommission = () => {
@@ -136,6 +137,7 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
           discount={discount}
           previousBalance={previousBalance}
           cashTransfer={cashTransfer}
+          expensesTotal={expensesTotal}
           paymentsTotal={sheet ? sheet.paymentsTotal : null}
           other={other}
           remaining={remaining}

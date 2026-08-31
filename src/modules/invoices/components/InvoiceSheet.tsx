@@ -25,6 +25,8 @@ export interface InvoiceSheetBodyProps {
   /** الحساب القديم — null يعني مش متاح (فاتورة وهمية مثلاً) فالسطر ما بيظهرش */
   previousBalance: number | null;
   cashTransfer: number;
+  /** مصاريف الفترة: المصاريف على الطرف بره الفاتورة، من الفاتورة دي لحد اللي بعدها */
+  expensesTotal: number;
   paymentsTotal: number | null;
   /** حركات أخرى في نفس الفترة (مرتجع/خصم) — بتظهر لو مش صفر */
   other: number;
@@ -33,7 +35,7 @@ export interface InvoiceSheetBodyProps {
 }
 
 export function InvoiceSheetBody({
-  items, cur, netTotal, discount, previousBalance, cashTransfer, paymentsTotal, other, remaining, isSale,
+  items, cur, netTotal, discount, previousBalance, cashTransfer, expensesTotal, paymentsTotal, other, remaining, isSale,
 }: InvoiceSheetBodyProps) {
   // اجمالي الفاتورة في الشيت شامل الحساب القديم (مجموع عمود «الاجمالي» كله).
   const sheetTotal = previousBalance !== null ? previousBalance + netTotal : null;
@@ -84,6 +86,14 @@ export function InvoiceSheetBody({
           <div className="sh-box">
             <div className="sh-box-l">نقل نقدية</div>
             <div className="sh-box-v num">{money(cashTransfer, cur)}</div>
+          </div>
+        )}
+        {/* مصاريف الفترة — المصاريف اللي اتسجّلت على الطرف بره الفاتورة، من الفاتورة
+            دي لحد اللي بعدها (نفس نافذة السدادات). */}
+        {expensesTotal !== 0 && (
+          <div className="sh-box">
+            <div className="sh-box-l">مصاريف الفترة</div>
+            <div className="sh-box-v num">{money(expensesTotal, cur)}</div>
           </div>
         )}
         {paymentsTotal !== null && (

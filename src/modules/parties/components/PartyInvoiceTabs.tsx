@@ -52,9 +52,10 @@ export function PartyInvoiceTabs({ party, onOpenInvoice }: { party: Party; onOpe
   const remaining = sheet ? sign * sheet.remaining : null;
   const previousBalance = sheet ? sign * sheet.previousBalance : null;
   const cashTransfer = sheet ? sign * sheet.cashTransfer : 0;
+  const expensesTotal = sheet ? sign * sheet.expensesTotal : 0;
   const sheetTotal = previousBalance !== null ? previousBalance + netTotal : null;
   const other = sheet && sheetTotal !== null && remaining !== null
-    ? remaining - (sheetTotal + cashTransfer - sheet.paymentsTotal)
+    ? remaining - (sheetTotal + cashTransfer + expensesTotal - sheet.paymentsTotal)
     : 0;
 
   return (
@@ -98,6 +99,7 @@ export function PartyInvoiceTabs({ party, onOpenInvoice }: { party: Party; onOpe
               discount={inv.discount || 0}
               previousBalance={previousBalance}
               cashTransfer={cashTransfer}
+              expensesTotal={expensesTotal}
               paymentsTotal={sheet ? sheet.paymentsTotal : null}
               other={other}
               remaining={remaining}

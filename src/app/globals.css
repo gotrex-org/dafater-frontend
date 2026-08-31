@@ -218,11 +218,17 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 .print-sheet tr.sh-old td.num { text-align: end; letter-spacing: 0; }
 .sh-pay { margin-top: 14px; }
 .sh-pay-title { font-weight: 800; font-size: 14px; margin-bottom: 5px; }
-/* خط رأسي باين بين أعمدة الاستلامات (تاريخ الاستلام / البيان / المبلغ).
-   بيتحطّ هنا مش على .print-sheet لأن الجدول بيتعرض كمان بره ورقة الفاتورة —
-   في تاب «استلامات N» وفي بوابة العميل — وساعتها مكانش بيورّث أي حدود. */
-.sh-pay table th, .sh-pay table td { border-inline-end: 1px solid var(--ink-soft); }
-.sh-pay table th:last-child, .sh-pay table td:last-child { border-inline-end: none; }
+/* خطوط رأسية باينة بين الأعمدة — في جدول الأصناف (العدد/الصنف/السعر/الاجمالي)
+   وجدول الاستلامات (التاريخ/البيان/المبلغ). بتتحطّ هنا مش على .print-sheet لأن
+   الجدولين بيتعرضوا كمان بره ورقة الفاتورة — في التابات وفي بوابة العميل —
+   وساعتها مكانوش بيورّثوا أي حدود. */
+.sh-pay table th, .sh-pay table td,
+.sh-items table th, .sh-items table td { border-inline-end: 1px solid var(--ink-soft); }
+.sh-pay table th:last-child, .sh-pay table td:last-child,
+.sh-items table th:last-child, .sh-items table td:last-child { border-inline-end: none; }
+/* سطر «حساب قديم» مدموج على تلات أعمدة — الخطوط الرأسية جوّاه متلغبطة، فبنشيلها */
+.sh-items table tr.sh-old td { border-inline-end-color: transparent; }
+.sh-items table tr.sh-old td:last-child { border-inline-start: 1px solid var(--ink-soft); }
 /* على الموبايل الملخّص ينزل تحت الجدول ويتفرد صفّ */
 @media screen and (max-width: 700px) {
   .print-sheet:not(.pdf-capture) .sh-body { flex-direction: column; }
@@ -500,7 +506,9 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
   .ledger-sheet:not(.pdf-capture) .lg-running { font-size: 16px; margin-top: 8px !important; }
   /* حشو أسفل الصفحة محجوز لشريط النوافذ المصغّرة — طول ما الكشف مفتوح هو مساحة ميتة
      بتاكل من ارتفاع الجدول، فبنستعيدها (الشريط نفسه fixed فمابيتأثرش). */
-  body.ledger-fit main.page { padding-bottom: 14px; }
+  /* وكمان الكشف بياخد عرض الشاشة كله — سقف الصفحة (1400px) كان بيسيب هوامش فاضية
+     على الجانبين وبيضغط عمود «البيان». الاتنين بيرجعوا أول ما تسيب الكشف. */
+  body.ledger-fit main.page { padding-bottom: 14px; max-width: none; padding-inline: 14px; }
 
   .ledger-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
   /* رؤوس الأعمدة فاضلة ثابتة وانت طالع للحركات القديمة */

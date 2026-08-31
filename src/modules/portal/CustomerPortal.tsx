@@ -62,6 +62,8 @@ interface MyInvoice {
   previousBalance: number;
   /** رسوم نقل النقدية المتسجّلة مع الاستلامات في نفس الفترة */
   cashTransfer: number;
+  /** مصاريف الفترة — من الفاتورة دي لحد اللي بعدها */
+  expensesTotal: number;
   payments: { id: string; date: string; amount: number; note: string }[];
   paymentsTotal: number;
   /** الباقي عليه بعد الفاتورة واستلاماتها */
@@ -871,6 +873,7 @@ function MyInvoiceTabs() {
               discount={detail.discount}
               previousBalance={detail.previousBalance}
               cashTransfer={detail.cashTransfer}
+              expensesTotal={detail.expensesTotal}
               paymentsTotal={detail.paymentsTotal}
               other={0}
               remaining={detail.remaining}
