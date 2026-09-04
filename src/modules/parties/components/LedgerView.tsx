@@ -11,7 +11,6 @@ import { DealDetailById } from '../../deals/components/DealsView';
 import { usePostEntry, useUpdateTransaction, useDeleteTransaction } from '../../transactions/hooks';
 import { useParties, useParty, usePartyLedger } from '../hooks';
 import { PartiesRegistry } from './PartiesRegistry';
-import { PartyInvoiceTabs } from './PartyInvoiceTabs';
 import { TrialBalance } from './TrialBalance';
 import type { Party, PartyRole, LedgerRow } from '../dtos';
 
@@ -26,8 +25,6 @@ export function LedgerDetailById({ uid, onBack }: { uid: string; onBack: () => v
 type SortKey = 'name' | 'balance' | 'activity';
 type LedgerKind = 'all' | 'invoices' | 'collect' | 'commission' | 'withdraw';
 type MainTab = 'ledger' | 'mizan' | 'registry';
-// شاشة الطرف الواحد: كشف الحساب، ولا تابات فواتيره (وجوّه كل فاتورة عربياتها)
-type PartyView = 'ledger' | 'invoices';
 
 // USD accounts show the dollar figure as-is; the EGP equivalent (at the party's
 // weighted-average rate) is shown in parentheses beside it. EGP accounts show plainly.
@@ -152,8 +149,6 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const [from, setFrom] = useState(startOfMonthISO());
   const [to, setTo] = useState('');
   const [kind, setKind] = useState<LedgerKind>('all');
-  // كشف الحساب ولا تابات فواتير العميل
-  const [view, setView] = useState<PartyView>('ledger');
   const { data, isLoading } = usePartyLedger(party.id, { from: from || undefined, to: to || undefined });
   const [sel, setSel] = useState<LedgerRow | null>(null);
   const [selEditing, setSelEditing] = useState(false);
@@ -255,23 +250,6 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   if (invoiceUid) return <InvoiceDetailById uid={invoiceUid} onBack={() => setInvoiceUid(null)} />;
   if (dealUid) return <DealDetailById uid={dealUid} onBack={() => setDealUid(null)} />;
 
-  // عرض «فواتير العميل»: تاب لكل فاتورة، وجوّه كل فاتورة تابات عربياتها.
-  if (view === 'invoices') {
-    return (
-      <>
-        <div className="toolbar no-print">
-          <button className="btn btn-ghost btn-sm" onClick={onBack}>→ رجوع للقائمة</button>
-          <SegmentedControl
-            value={view}
-            onChange={(v) => setView(v as PartyView)}
-            options={[{ value: 'ledger', label: 'كشف الحساب' }, { value: 'invoices', label: 'فواتير العميل' }]}
-          />
-        </div>
-        <PartyInvoiceTabs party={party} onOpenInvoice={setInvoiceUid} />
-      </>
-    );
-  }
-
   const toggle = (id: string) => setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const filteredRows = (data?.rows ?? []).filter((r) => {
@@ -299,11 +277,6 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
     <>
       <div className="toolbar no-print">
         <button className="btn btn-ghost btn-sm" onClick={onBack}>→ رجوع للقائمة</button>
-        <SegmentedControl
-          value={view}
-          onChange={(v) => setView(v as PartyView)}
-          options={[{ value: 'ledger', label: 'كشف الحساب' }, { value: 'invoices', label: 'فواتير العميل' }]}
-        />
         <span style={{ fontSize: 13 }}>من</span>
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ padding: '8px 10px', border: '1.5px solid var(--line)', borderRadius: 10 }} />
         <span style={{ fontSize: 13 }}>إلى</span>

@@ -11,7 +11,6 @@ import { confirmCascadeDelete } from '@/lib/cascadeDelete';
 import type { Invoice } from '../dtos';
 import { InvoiceEditor } from './InvoiceEditor';
 import { CommissionPicker } from './CommissionPicker';
-import { ManifestTabs } from './ManifestTabs';
 import { InvoiceSheetBody, InvoiceSheetPayments } from './InvoiceSheet';
 
 export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: () => void }) {
@@ -39,13 +38,12 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
   const remaining = sheet ? sign * sheet.remaining : null;
   const previousBalance = sheet ? sign * sheet.previousBalance : null;
   const cashTransfer = sheet ? sign * sheet.cashTransfer : 0;
-  const expensesTotal = sheet ? sign * sheet.expensesTotal : 0;
   // اجمالي الفاتورة في الشيت شامل الحساب القديم (مجموع عمود «الاجمالي» كله).
   const sheetTotal = previousBalance !== null ? previousBalance + netTotal : null;
   // أي حركة تانية وقعت في نفس الفترة (مرتجع/خصم/مصروف على العميل) — بتفضل في كشف الحساب،
   // وبتتعرض هنا كسطر واحد عشان حسبة الورقة تقفل.
   const other = sheet && sheetTotal !== null && remaining !== null
-    ? remaining - (sheetTotal + cashTransfer + expensesTotal - sheet.paymentsTotal)
+    ? remaining - (sheetTotal + cashTransfer - sheet.paymentsTotal)
     : 0;
 
   const saveCommission = () => {
@@ -110,8 +108,6 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
         </div>
       )}
 
-      {/* تابات العربيات — بره ورقة الفاتورة عشان ما تدخلش في الـ PDF/الطباعة */}
-      <ManifestTabs invoiceId={invoice.id} />
 
       <div ref={sheetRef} className="card print-sheet">
         <div className="mf-logo">أبو شامة</div>
@@ -137,7 +133,7 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
           discount={discount}
           previousBalance={previousBalance}
           cashTransfer={cashTransfer}
-          expensesTotal={expensesTotal}
+          expensesTotal={0}   /* شاشة العاملين: مصاريف الفترة تخص بوابة العميل بس */
           paymentsTotal={sheet ? sheet.paymentsTotal : null}
           other={other}
           remaining={remaining}

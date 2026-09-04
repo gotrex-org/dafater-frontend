@@ -219,16 +219,16 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 .sh-pay { margin-top: 14px; }
 .sh-pay-title { font-weight: 800; font-size: 14px; margin-bottom: 5px; }
 /* خطوط رأسية باينة بين الأعمدة — في جدول الأصناف (العدد/الصنف/السعر/الاجمالي)
-   وجدول الاستلامات (التاريخ/البيان/المبلغ). بتتحطّ هنا مش على .print-sheet لأن
-   الجدولين بيتعرضوا كمان بره ورقة الفاتورة — في التابات وفي بوابة العميل —
-   وساعتها مكانوش بيورّثوا أي حدود. */
-.sh-pay table th, .sh-pay table td,
-.sh-items table th, .sh-items table td { border-inline-end: 1px solid var(--ink-soft); }
-.sh-pay table th:last-child, .sh-pay table td:last-child,
-.sh-items table th:last-child, .sh-items table td:last-child { border-inline-end: none; }
+   وجدول الاستلامات (التاريخ/البيان/المبلغ).
+   مقصورة على بوابة العميل (.pit-panel) بطلب صريح: شاشة الفاتورة عند العاملين
+   بتفضل بشكلها الأصلي من غير خطوط. */
+.pit-panel .sh-pay table th, .pit-panel .sh-pay table td,
+.pit-panel .sh-items table th, .pit-panel .sh-items table td { border-inline-end: 1px solid var(--ink-soft); }
+.pit-panel .sh-pay table th:last-child, .pit-panel .sh-pay table td:last-child,
+.pit-panel .sh-items table th:last-child, .pit-panel .sh-items table td:last-child { border-inline-end: none; }
 /* سطر «حساب قديم» مدموج على تلات أعمدة — الخطوط الرأسية جوّاه متلغبطة، فبنشيلها */
-.sh-items table tr.sh-old td { border-inline-end-color: transparent; }
-.sh-items table tr.sh-old td:last-child { border-inline-start: 1px solid var(--ink-soft); }
+.pit-panel .sh-items table tr.sh-old td { border-inline-end-color: transparent; }
+.pit-panel .sh-items table tr.sh-old td:last-child { border-inline-start: 1px solid var(--ink-soft); }
 /* على الموبايل الملخّص ينزل تحت الجدول ويتفرد صفّ */
 @media screen and (max-width: 700px) {
   .print-sheet:not(.pdf-capture) .sh-body { flex-direction: column; }
