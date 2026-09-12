@@ -218,6 +218,32 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 .print-sheet tr.sh-old td.num { text-align: end; letter-spacing: 0; }
 .sh-pay { margin-top: 14px; }
 .sh-pay-title { font-weight: 800; font-size: 14px; margin-bottom: 5px; }
+
+/* ===== الفاتورة: جدول واحد — أصناف ثم بنود ثم الإجمالي ===== */
+/* «البند» = منتج معلَّم service (نولون / عمولة دلالة / تحميل). بيتميّز بخلفية أفتح
+   وتاج صغير، وكل قسم بإجماليه الفرعي. الحسبة تحت الجدول ناحية الشمال. */
+.print-sheet tr.inv-sub td { background: var(--line-soft); font-weight: 800; }
+.print-sheet tr.inv-bnd td { background: #fbf9f3; }
+.inv-bnd-tag {
+  background: var(--line-soft); color: var(--ink-soft); border-radius: 5px;
+  padding: 1px 7px; font-size: 11px; font-weight: 800; margin-inline-end: 7px;
+}
+.inv-totals { width: 330px; max-width: 100%; margin-inline-start: auto; margin-top: 12px; }
+.inv-totals .r {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 7px 2px; font-weight: 800; font-size: 13.5px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.inv-totals .r.end {
+  background: var(--ink); color: #fff; border: none; border-radius: 10px;
+  margin-top: 9px; padding: 11px 14px; font-size: 17px;
+  font-family: "Cairo", sans-serif; font-weight: 900;
+}
+@media print {
+  .inv-totals { width: 300px; margin-top: 8px; }
+  .inv-totals .r { padding: 5px 2px; font-size: 12.5px; }
+  .inv-totals .r.end { padding: 8px 12px; font-size: 15px; }
+}
 /* خطوط رأسية باينة بين الأعمدة — في جدول الأصناف (العدد/الصنف/السعر/الاجمالي)
    وجدول الاستلامات (التاريخ/البيان/المبلغ).
    مقصورة على بوابة العميل (.pit-panel) بطلب صريح: شاشة الفاتورة عند العاملين
@@ -426,6 +452,14 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
   .mf-grid, .mf-info, .tbl-wrap table, th, td { border-color: #999 !important; }
   tr, td, th { page-break-inside: avoid; }
   .mf-logo { font-size: 30px; }
+  /* الكشف بالديزاين القديم — تصغير الترويسة والجداول عشان يدخل صفحة واحدة */
+  .mf-old .pr-head { padding-bottom: 6px; margin-bottom: 8px; }
+  .mf-old .pr-head .co { font-size: 20px; }
+  .mf-old .pr-head .ttl b { font-size: 16px; }
+  .mf-old table.pr { font-size: 11px; margin-bottom: 8px; }
+  .mf-old table.pr > thead > tr > th,
+  .mf-old table.pr > tbody > tr > td { padding: 3px 6px; }
+  .mf-old .pr-ack { margin-top: 12px; font-size: 12px; line-height: 1.7; }
   .draft-dock, .draft-overlay { display: none !important; }
 }
 
@@ -496,14 +530,16 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
    (الفترة / كل الفترة / نوع الحركات) وترويسة الكشف والرصيد الجاري فاضلين في مكانهم.
    الارتفاع نفسه بيتحسب من LedgerView (المساحة الفاضلة لحد آخر الشاشة). */
 @media screen {
-  /* على الشاشة الكشف مش ورقة A4 — هوامش الطباعة (14mm) واللوجو والعناوين الكبيرة
-     كانوا بياكلوا نص الشاشة قبل أول سطر. بنضغطهم هنا عشان المساحة كلها تروح للحركات،
-     وبيرجعوا زي ما هم في الـ PDF والطباعة (captureSheet بيضيف .pdf-capture). */
-  .ledger-sheet:not(.pdf-capture) { padding: 12px 14px; }
-  .ledger-sheet:not(.pdf-capture) .mf-logo { display: none; }
-  .ledger-sheet:not(.pdf-capture) .mf-head { padding-bottom: 8px; }
-  .ledger-sheet:not(.pdf-capture) .mf-head h2 { font-size: 18px; }
-  .ledger-sheet:not(.pdf-capture) .lg-running { font-size: 16px; margin-top: 8px !important; }
+  /* الكشف بيفضل بشكله الطبيعي على الشاشة — اللوجو والترويسة زي ما هما، واللي بيتحرك
+     هو الحركات بس بين بارات مثبّتة. الهوامش أضيق شوية من هوامش الطباعة (14mm) عشان
+     عرض الشاشة يروح للأعمدة، وبترجع كاملة في الـ PDF والطباعة (.pdf-capture). */
+  .ledger-sheet:not(.pdf-capture) { padding: 16px 18px; }
+  /* البار الأخير: الرصيد الجاري مثبّت في آخر الكشف وانت بتسكرول */
+  .ledger-sheet:not(.pdf-capture) .lg-running {
+    position: sticky; inset-block-end: 0; z-index: 3;
+    background: var(--surface); border-top: 2px solid var(--ink);
+    margin-top: 0 !important; padding-block: 10px;
+  }
   /* حشو أسفل الصفحة محجوز لشريط النوافذ المصغّرة — طول ما الكشف مفتوح هو مساحة ميتة
      بتاكل من ارتفاع الجدول، فبنستعيدها (الشريط نفسه fixed فمابيتأثرش). */
   /* وكمان الكشف بياخد عرض الشاشة كله — سقف الصفحة (1400px) كان بيسيب هوامش فاضية
@@ -513,6 +549,12 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
   .ledger-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
   /* رؤوس الأعمدة فاضلة ثابتة وانت طالع للحركات القديمة */
   .ledger-scroll thead th { position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 var(--line); }
+
+  /* سطر الإجمالي مثبّت في آخر نافذة الحركات — بيفضل باين وانت طالع للحركات القديمة */
+  .ledger-scroll tbody tr.mf-total td {
+    position: sticky; inset-block-end: 0; z-index: 2;
+    background: var(--line-soft); box-shadow: 0 -2px 0 var(--ink);
+  }
 
   /* الجدول بيتقسّم على عرض الشاشة بدل ما يمدّ ويعمل سكرول أفقي: أعمدة التاريخ والنوع
      والمبالغ بعرض ثابت، و«البيان» بياخد الباقي ويلتف. الأرقام بس هي اللي مابتتكسرش. */
@@ -536,6 +578,61 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 @media print {
   .ledger-scroll { max-height: none !important; overflow: visible !important; }
   .ledger-scroll thead th { position: static !important; box-shadow: none !important; }
+}
+
+/* ===== كشف الحساب بالديزاين القديم (منقول من app_4.html) ===== */
+/* ترويسة: اسم الشركة على جنب و«كشف حساب تفصيلي» + نوع الطرف على الجنب التاني، وتحتهم
+   خط أسود ٣ بكسل. الجدول بحدود رمادية فاتحة (#ccc) ورأس بيج (#f0ece1) وخلايا بخط عادي
+   — البولد للعناوين وصف الإجمالي بس. .ledger-old بتتحط على الورقة فبتغلب .ledger-sheet. */
+.ledger-old .pr-head {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+  border-bottom: 3px solid var(--ink); padding-bottom: 12px; margin-bottom: 14px;
+}
+.ledger-old .pr-head .co { font-family: "Cairo", sans-serif; font-weight: 800; font-size: 24px; }
+.ledger-old .pr-head .ttl { text-align: end; }
+.ledger-old .pr-head .ttl b { font-size: 20px; }
+.ledger-old .pr-meta {
+  display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  font-size: 14px; margin-bottom: 12px;
+}
+
+/* جدول من غير أي خطوط بين الخلايا — لا رأسية ولا أفقية. اللي بيفصل هو المسافة
+   (padding أوسع)، وفاضل خطين بس ليهم معنى: تحت رأس الأعمدة وفوق صف الإجمالي. */
+.ledger-old .lg-tbl th, .ledger-old .lg-tbl td {
+  border: none; padding: 8px 11px; font-weight: 400; text-align: start;
+}
+.ledger-old .lg-tbl thead th {
+  background: #f0ece1; font-weight: 700; border-bottom: 1px solid #d8d2c2;
+}
+.ledger-old .lg-tbl .num { text-align: end; }
+.ledger-old .lg-tbl tbody tr { border-bottom: none; }
+/* صف الإجمالي: بولد وخط أسود فوقه — وبيفضل مثبّت تحت (شوف .ledger-scroll فوق) */
+.ledger-old .lg-tbl tr.mf-total td {
+  background: #f0ece1; font-weight: 800; border-top: 2px solid var(--ink); border-bottom: none;
+}
+/* جدول أصناف الفاتورة اللي بيتفتح جوّه السطر — نفس المعاملة */
+.ledger-old .lg-items th, .ledger-old .lg-items td { border: none; }
+/* البار الأخير: نفس شكل بلوك الإجماليات القديم — خط Cairo وخط أسود فوقه */
+.ledger-old .lg-running {
+  font-family: "Cairo", sans-serif; font-weight: 800; font-size: 18px;
+  border-top: 2px solid var(--ink);
+}
+/* على الورق بس (PDF / طباعة) بترجع الفواصل الأفقية بين السطور — من غير خطوط رأسية.
+   على الورق مافيش scroll ولا hover يساعدوا العين تمشي في السطر، فالخط بيفرق؛ على
+   الشاشة سايبينه نضيف. .pdf-capture بيتحط على الورقة نفسها من captureSheet(). */
+.pdf-capture.ledger-old .lg-tbl td { border-bottom: 1px solid #ccc; }
+.pdf-capture.ledger-old .lg-tbl tr.mf-total td { border-bottom: none; }
+.pdf-capture.ledger-old .lg-items td { border-bottom: 1px solid #d9d2c0; }
+
+@media print {
+  .ledger-old .pr-head { padding-bottom: 8px; margin-bottom: 10px; }
+  .ledger-old .pr-head .co { font-size: 20px; }
+  .ledger-old .pr-head .ttl b { font-size: 16px; }
+  .ledger-old .pr-meta { font-size: 12.5px; margin-bottom: 9px; }
+  .ledger-old .lg-tbl th, .ledger-old .lg-tbl td { padding: 4px 7px; }
+  .ledger-old .lg-tbl td { border-bottom: 1px solid #ccc; }
+  .ledger-old .lg-tbl tr.mf-total td { border-bottom: none; }
+  .ledger-old .lg-items td { border-bottom: 1px solid #d9d2c0; }
 }
 
 /* ---- كشف الحساب على الموبايل: كل حركة كارت بدل صف جدول ---- */
@@ -762,6 +859,31 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
     border-inline-start: 1px solid var(--ink-soft);
   }
 }
+
+/* ===== الديزاين القديم لكشف العربية (منقول بالحرف من app_4.html) ===== */
+/* ترويسة: اسم الشركة على جنب والعنوان + رقم الكشف على الجنب التاني، وتحتها خط
+   غامق. بعدها جدول بيانات ٣ أعمدة، وجدول الأصناف (م / الاصناف / العدد)، والإقرار.
+   .mf-old بتتحط على الورقة نفسها فبتغلب ستايلات .print-sheet و .mf-sheet. */
+.mf-old .pr-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  border-bottom: 3px solid var(--ink); padding-bottom: 12px; margin-bottom: 14px;
+}
+.mf-old .pr-head .co { font-family: "Cairo", sans-serif; font-weight: 800; font-size: 24px; }
+.mf-old .pr-head .ttl { text-align: end; }
+.mf-old .pr-head .ttl b { font-size: 20px; }
+
+.mf-old table.pr { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-bottom: 14px; }
+/* حدود رمادية فاتحة زي القديم، والخلايا بخط عادي — البولد للعناوين جوّه <b> بس */
+.mf-old table.pr > thead > tr > th,
+.mf-old table.pr > tbody > tr > td { border: 1px solid #ccc; padding: 7px 9px; font-weight: 400; }
+.mf-old table.pr > thead > tr > th { background: #f0ece1; font-weight: 700; text-align: start; }
+/* صفوف الإجماليات والفواصل بتفضل بولد رغم إن الخلية العادية بقت عادية */
+.mf-old table.pr > tbody > tr.mf-total > td,
+.mf-old .mt-tbl > tbody > tr.mt-sub > td,
+.mf-old .mt-tbl > tbody > tr.mt-split > td { font-weight: 800; }
+.mf-old table.pr > tbody > tr.mf-total > td { background: transparent; border-top: 2px solid var(--ink); }
+
+.mf-old .pr-ack { margin-top: 24px; font-size: 14px; line-height: 2; }
 
 /* ---- ألوان الحالة: وصلت / في الطريق ---- */
 /* نفس ألوان قايمة كشوفات العربيات بالظبط عشان الحالة تتقرا بنفس اللون في كل مكان. */

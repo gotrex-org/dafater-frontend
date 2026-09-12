@@ -136,6 +136,11 @@ function LedgerTab() {
 // الكشف يبقى شقّ ما ينفعش يتقرا.
 const MIN_BOX = 260;
 
+// نوع الطرف زي ما كان بيتكتب في ترويسة الكشف القديمة (app_4.html)
+const ROLE_LABEL: Record<string, string> = {
+  CLIENT: 'عميل', SUPPLIER: 'مورد', AGENT: 'صاحب commission', PERSON: 'عهدة',
+};
+
 // أول يوم في الشهر الحالي بصيغة YYYY-MM-DD (توقيت محلي)
 function startOfMonthISO() {
   const d = new Date();
@@ -358,25 +363,30 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
       </div>
 
       {isLoading || !data ? <Spinner /> : (
-        <div ref={sheetRef} className="card print-sheet ledger-sheet">
-          <div className="mf-logo">أبو شامة</div>
-          <div className="mf-head">
-            <h2>كشف حساب — {party.name}</h2>
-            {data.linkedParty && (
-              <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-                كشف مدمج مع {data.linkedParty.role === 'SUPPLIER' ? 'مورد' : 'عميل'}: <b>{data.linkedParty.name}</b>
-              </div>
-            )}
+        <div ref={sheetRef} className="card print-sheet ledger-sheet ledger-old">
+          {/* ترويسة الديزاين القديم (app_4.html): اسم الشركة على جنب، وعنوان الكشف ونوع
+              الطرف على الجنب التاني، وتحتهم خط أسود عريض — وبعدها سطر بيانات الطرف. */}
+          <div className="pr-head">
+            <div className="co">أبو شامة</div>
+            <div className="ttl"><b>كشف حساب تفصيلي</b><br />{ROLE_LABEL[party.role] ?? 'عميل'}</div>
           </div>
-          <div className="muted" style={{ margin: '8px 4px' }}>
-            رصيد افتتاحي: <span className="num">{amtWithEgp(data.opening, cur, party.avgExchangeRate)}</span>
-            {(from || to) && <span> · الفترة: {from ? fmtDate(from) : '…'} ← {to ? fmtDate(to) : '…'}</span>}
+          <div className="pr-meta">
+            <div><b>الاسم:</b> {party.name}{party.phone ? ` · ${party.phone}` : ''}</div>
+            <div>
+              <b>رصيد افتتاحي:</b> <span className="num">{amtWithEgp(data.opening, cur, party.avgExchangeRate)}</span>
+              {(from || to) && <> · <b>الفترة:</b> {from ? fmtDate(from) : '…'} ← {to ? fmtDate(to) : '…'}</>}
+            </div>
           </div>
+          {data.linkedParty && (
+            <div className="muted" style={{ fontSize: 13, margin: '0 0 10px' }}>
+              كشف مدمج مع {data.linkedParty.role === 'SUPPLIER' ? 'مورد' : 'عميل'}: <b>{data.linkedParty.name}</b>
+            </div>
+          )}
           <div ref={scrollBoxRef} className="tbl-wrap mf-grow ledger-scroll">
             <table className="lg-tbl">
               <thead>
                 <tr>
-                  <th>التاريخ</th><th>النوع</th><th>البيان</th><th>عليه</th><th>له</th>
+                  <th>التاريخ</th><th>النوع</th><th>البيان</th><th>مدين (عليه)</th><th>دائن (له)</th>
                   {kind === 'all' && <th>الرصيد</th>}
                 </tr>
               </thead>
@@ -428,8 +438,8 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                             ? <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); toggle(r.id); }}>{open ? '▾' : '▸'} {r.note || 'تفاصيل الفاتورة'}</button>
                             : r.note}
                         </td>
-                        <td className="num deb lg-deb" data-l="عليه">{r.debit ? money(r.debit, cur) : ''}</td>
-                        <td className="num cre lg-cre" data-l="له">{r.credit ? money(r.credit, cur) : ''}</td>
+                        <td className="num deb lg-deb" data-l="مدين">{r.debit ? money(r.debit, cur) : ''}</td>
+                        <td className="num cre lg-cre" data-l="دائن">{r.credit ? money(r.credit, cur) : ''}</td>
                         {kind === 'all' && <td className="num lg-bal" data-l="الرصيد">{money(r.balance, cur)}</td>}
                       </tr>
                       {open && (

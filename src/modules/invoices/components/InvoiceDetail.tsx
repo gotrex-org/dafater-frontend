@@ -6,12 +6,11 @@ import { downloadElementAsPdf } from '@/lib/pdf';
 import { PageTitle, Spinner, Field, MoneyInput } from '@/components/common';
 import { useAuth } from '@/lib/auth';
 import { useWindows } from '@/lib/windows';
-import { useInvoice, useInvoiceSheet, useDeleteInvoice, useUpdateInvoiceCommission } from '../hooks';
+import { useInvoice, useDeleteInvoice, useUpdateInvoiceCommission } from '../hooks';
 import { confirmCascadeDelete } from '@/lib/cascadeDelete';
 import type { Invoice } from '../dtos';
 import { InvoiceEditor } from './InvoiceEditor';
 import { CommissionPicker } from './CommissionPicker';
-import { InvoiceSheetBody, InvoiceSheetPayments } from './InvoiceSheet';
 
 export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: () => void }) {
   const { can } = useAuth();
@@ -21,30 +20,21 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
   const discount = invoice.discount || 0;
   const netTotal = total - discount; // الصافي بعد الخصم
   const kindLabel = invoice.kind === 'SALE' ? 'بيع' : 'شراء';
-  const isSale = invoice.kind === 'SALE';
   const cur = invoice.currency ?? invoice.party?.currency ?? 'EGP';
+
+  // الأصناف والبنود: «البند» هو المنتج المعلَّم service (نولون / عمولة دلالة / تحميل …).
+  // بيتعرض في قسم منفصل تحت الأصناف بإجمالي خاص بيه — نفس تقسيمة محرر الفاتورة.
+  const goods = invoice.items.filter((it) => !it.product?.service);
+  const services = invoice.items.filter((it) => !!it.product?.service);
+  const goodsTotal = goods.reduce((s, it) => s + it.qty * it.price, 0);
+  const servicesTotal = services.reduce((s, it) => s + it.qty * it.price, 0);
 
   const [showCommission, setShowCommission] = useState(false);
   const [commAmount, setCommAmount] = useState('');
   const [commPartyId, setCommPartyId] = useState('');
   const [commError, setCommError] = useState('');
-  // فاتورة وهمية مالهاش حركات في الكشف — فأرقام الشيت (حساب قديم/سدادات/الباقي) متنطبقش عليها.
-  const { data: sheet } = useInvoiceSheet(invoice.fake ? null : invoice.id);
   const deleteInvoice = useDeleteInvoice();
   const updateCommission = useUpdateInvoiceCommission();
-
-  // الباقي عليه (بيع) / الباقي له (شراء) — بنقلب الإشارة في الشراء عشان يقرأ موجب لما نبقى مدينين.
-  const sign = isSale ? 1 : -1;
-  const remaining = sheet ? sign * sheet.remaining : null;
-  const previousBalance = sheet ? sign * sheet.previousBalance : null;
-  const cashTransfer = sheet ? sign * sheet.cashTransfer : 0;
-  // اجمالي الفاتورة في الشيت شامل الحساب القديم (مجموع عمود «الاجمالي» كله).
-  const sheetTotal = previousBalance !== null ? previousBalance + netTotal : null;
-  // أي حركة تانية وقعت في نفس الفترة (مرتجع/خصم/مصروف على العميل) — بتفضل في كشف الحساب،
-  // وبتتعرض هنا كسطر واحد عشان حسبة الورقة تقفل.
-  const other = sheet && sheetTotal !== null && remaining !== null
-    ? remaining - (sheetTotal + cashTransfer - sheet.paymentsTotal)
-    : 0;
 
   const saveCommission = () => {
     setCommError('');
@@ -124,42 +114,67 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
           {cur === 'USD' && <div className="mf-info"><span className="mf-info-l">العملة</span><span className="mf-info-v" style={{ fontWeight: 700, color: 'var(--debit)' }}>دولار $</span></div>}
         </div>
 
-        {/* جسم الفاتورة زي الشيت — مكوّن مشترك، عشان نفس الشكل بالحرف في تابات
-            فواتير العميل وبوابة العميل كمان */}
-        <InvoiceSheetBody
-          items={invoice.items.map((it) => ({ name: it.product?.name ?? '—', qty: it.qty, price: it.price }))}
-          cur={cur as 'EGP' | 'USD'}
-          netTotal={netTotal}
-          discount={discount}
-          previousBalance={previousBalance}
-          cashTransfer={cashTransfer}
-          expensesTotal={0}   /* شاشة العاملين: مصاريف الفترة تخص بوابة العميل بس */
-          paymentsTotal={sheet ? sheet.paymentsTotal : null}
-          other={other}
-          remaining={remaining}
-          isSale={isSale}
-        />
+        {/* جدول واحد: الأصناف الأول بإجماليها، وتحتها البنود بإجماليها. مكتوب هنا
+            مباشرةً (مش InvoiceSheetBody المشترك) عشان بوابة العميل تفضل بشكلها. */}
+        <div className="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 90 }}>العدد</th>
+                <th>الصنف</th>
+                <th style={{ width: 110 }}>السعر {cur === 'USD' ? '($)' : '(ج.م)'}</th>
+                <th style={{ width: 120 }}>الاجمالي</th>
+              </tr>
+            </thead>
+            <tbody>
+              {goods.map((it) => (
+                <tr key={it.id}>
+                  <td className="num">{it.qty}</td>
+                  <td>{it.product?.name ?? '—'}</td>
+                  <td className="num">{money(it.price, cur)}</td>
+                  <td className="num">{money(it.qty * it.price, cur)}</td>
+                </tr>
+              ))}
+              {/* الإجماليات الفرعية بتبان بس لما يكون فيه بنود — من غيرها الفاتورة
+                  فيها رقم واحد وسطر «قبل الخصم» تحت بيكفّي. */}
+              {services.length > 0 && (
+                <tr className="inv-sub">
+                  <td colSpan={3}>إجمالي الأصناف</td>
+                  <td className="num">{money(goodsTotal, cur)}</td>
+                </tr>
+              )}
+              {services.map((it) => (
+                <tr key={it.id} className="inv-bnd">
+                  <td className="num">{it.qty}</td>
+                  <td><span className="inv-bnd-tag">بند</span>{it.product?.name ?? '—'}</td>
+                  <td className="num">{money(it.price, cur)}</td>
+                  <td className="num">{money(it.qty * it.price, cur)}</td>
+                </tr>
+              ))}
+              {services.length > 0 && (
+                <tr className="inv-sub">
+                  <td colSpan={3}>إجمالي البنود</td>
+                  <td className="num">{money(servicesTotal, cur)}</td>
+                </tr>
+              )}
+              {invoice.items.length === 0 && (
+                <tr><td colSpan={4} className="empty">مفيش أصناف على الفاتورة دي</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
-        {sheet && sheet.payments.length > 0 && (
-          <InvoiceSheetPayments
-            cur={cur as 'EGP' | 'USD'}
-            payments={sheet.payments.map((p) => ({ id: p.id, date: p.date, note: p.note || p.type, amount: p.amount }))}
-            total={sheet.paymentsTotal}
-            title={<>
-              سدادات فاتورة {invoice.no}
-              {sheet.nextInvoiceNo && <span className="muted"> — لحد فاتورة {sheet.nextInvoiceNo}</span>}
-            </>}
-          />
-        )}
+        <div className="inv-totals">
+          <div className="r"><span>قبل الخصم</span><span className="num">{money(total, cur)}</span></div>
+          {discount > 0 && (
+            <div className="r"><span>خصم</span><span className="num">− {money(discount, cur)}</span></div>
+          )}
+          <div className="r end"><span>الإجمالي</span><span className="num">{money(netTotal, cur)}</span></div>
+        </div>
 
-        {discount > 0 && (
-          <div className="num" style={{ marginTop: 8, textAlign: 'left', fontWeight: 700 }}>
-            الأصناف قبل الخصم: {money(total, cur)} · خصم: {money(discount, cur)}
-          </div>
-        )}
         {cur === 'USD' && !!invoice.exchangeRate && (
-          <div className="num" style={{ textAlign: 'left', fontWeight: 700, color: 'var(--debit)' }}>
-            بالمصري (سعر {EGP(invoice.exchangeRate)}): {EGP(total * invoice.exchangeRate)} ج.م
+          <div className="num" style={{ textAlign: 'left', fontWeight: 700, color: 'var(--debit)', marginTop: 8 }}>
+            بالمصري (سعر {EGP(invoice.exchangeRate)}): {EGP(netTotal * invoice.exchangeRate)} ج.م
           </div>
         )}
 
