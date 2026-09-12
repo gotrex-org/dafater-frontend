@@ -35,6 +35,7 @@ export function DriverTripsView() {
 
   // New trip form state
   const [driverName, setDriverName] = useState('');
+  const [vehicleLabel, setVehicleLabel] = useState('');
   const [vehL, setVehL] = useState(['', '', '']);
   const [vehNumbers, setVehNumbers] = useState('');
   const [trlL, setTrlL] = useState(['', '', '']);
@@ -52,6 +53,7 @@ export function DriverTripsView() {
   const selClient = allClients.find((c) => c.id === partyId);
 
   const resetForm = () => {
+    setVehicleLabel('');
     setDriverName(''); setVehL(['', '', '']); setVehNumbers(''); setTrlL(['', '', '']); setTrlNumbers(''); setPartyId('');
     setDepartureDate(todayISO()); setAgreedFreight(''); setInitialPaid(''); setInitialPaidTreasuryId(''); setTeaMoney(''); setNote(''); setErr('');
     setAdding(false);
@@ -67,6 +69,7 @@ export function DriverTripsView() {
         partyId,
         driverName: driverName.trim(),
         vehicleNo: buildPlate(vehL, vehNumbers),
+        vehicleLabel: vehicleLabel.trim() || undefined,
         trailerNo: buildPlate(trlL, trlNumbers),
         clientName: selClient?.name ?? '',
         departureDate,
@@ -159,6 +162,9 @@ export function DriverTripsView() {
             <Field label="اسم السائق">
               <input value={driverName} onChange={(e) => setDriverName(e.target.value)} />
             </Field>
+            <Field label="مسمّى العربية">
+              <input value={vehicleLabel} onChange={(e) => setVehicleLabel(e.target.value)} placeholder="عربية الزيتون / عربية ديدي" />
+            </Field>
             <Field label="رقم العربية (٣ حروف / أرقام)">
               <PlateInput letters={vehL} numbers={vehNumbers} onLettersChange={setVehL} onNumbersChange={setVehNumbers} numRef={vehNumRef} />
             </Field>
@@ -230,6 +236,7 @@ export function DriverTripsView() {
                   <div style={{ fontWeight: 800, fontSize: 15 }}>{trip.driverName}</div>
                   <div className="muted" style={{ fontSize: 12 }}>
                     {trip.clientName}
+                    {trip.vehicleLabel ? ` — ${trip.vehicleLabel}` : ''}
                     {trip.vehicleNo ? ` — ${trip.vehicleNo}` : ''}
                     {trip.trailerNo ? ` / ${trip.trailerNo}` : ''}
                   </div>

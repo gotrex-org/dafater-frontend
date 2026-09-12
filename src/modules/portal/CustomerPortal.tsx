@@ -733,75 +733,79 @@ function PortalManifestTabs({ invoiceUid, cur }: { invoiceUid: string; cur: 'EGP
           <span className={`pill mt-status st-${tab.status}`}>{MT_STATUS_LABEL[tab.status]}</span>
         </div>
 
-        <div className="card print-sheet mf-sheet">
-          <div className="mf-logo">أبو شامة</div>
-          <div className="mf-head">
-            <h2>كشف استلام بضاعة</h2>
-            <div className="mf-meta">
-              <span>رقم: <b>{tab.no}</b></span>
-              <span>التاريخ: <b>{fmtDate(tab.date)}</b></span>
-            </div>
+        <div className="card print-sheet mf-sheet mf-old">
+          <div className="pr-head">
+            <div className="co">أبو شامة</div>
+            <div className="ttl"><b>الفاتورة</b><br />رقم: {tab.no}</div>
           </div>
 
-          <div className="mf-grid">
-            {[['اسم العميل', tab.clientName], ['اسم السائق', tab.driverName],
-              ['مسمّى العربية', tab.vehicleLabel], ['رقم العربية', tab.vehicleNo],
-              ['رقم المقطورة', tab.trailerNo]].map(([l, v]) => (
-              <div key={l as string} className="mf-info">
-                <span className="mf-info-l">{l}</span>
-                <span className="mf-info-v">{v || '—'}</span>
-              </div>
-            ))}
-          </div>
+          <table className="pr">
+            <tbody>
+              <tr>
+                <td><b>تاريخ التحميل:</b> {fmtDate(tab.date)}</td>
+                <td><b>رقم العربية:</b> {tab.vehicleNo || ''}</td>
+                <td><b>اسم السائق:</b> {tab.driverName || ''}</td>
+              </tr>
+              <tr>
+                <td><b>مسمّى العربية:</b> {tab.vehicleLabel || ''}</td>
+                <td><b>رقم المقطورة:</b> {tab.trailerNo || ''}</td>
+                <td><b>الاسم:</b> {tab.clientName || ''}</td>
+              </tr>
+            </tbody>
+          </table>
 
           <div className="tbl-wrap mf-grow">
-            <table className="mt-tbl">
+            <table className="pr mt-tbl">
               <thead>
                 <tr>
-                  <th style={{ width: 110 }}>الكمية</th>
-                  <th>الصنف</th>
+                  <th style={{ width: 40 }}>م</th>
+                  <th>الاصناف</th>
+                  <th style={{ width: 90 }}>العدد</th>
                   <th style={{ width: 110 }}>السعر</th>
                   <th style={{ width: 130 }}>الاجمالي</th>
                 </tr>
               </thead>
               <tbody>
-                {tab.items.map((it) => (
+                {tab.items.map((it, i) => (
                   <tr key={it.id} className="mt-goods">
-                    <td className="num">{it.qty}</td>
+                    <td className="num">{i + 1}</td>
                     <td>{it.name}</td>
+                    <td className="num">{it.qty}</td>
                     <td className="num">{it.price === null ? '—' : money(it.price, cur)}</td>
                     <td className="num">{it.total === null ? '—' : money(it.total, cur)}</td>
                   </tr>
                 ))}
                 {tab.items.length === 0 && (
-                  <tr className="mt-goods"><td colSpan={4} className="empty">مفيش أصناف في الكشف</td></tr>
+                  <tr className="mt-goods"><td colSpan={5} className="empty">مفيش أصناف في الكشف</td></tr>
                 )}
                 <tr className="mt-sub mt-goods">
+                  <td />
+                  <td><b>اجمالي العدد</b></td>
                   <td className="num"><b>{totalQty}</b></td>
-                  <td><b>إجمالي العدد</b></td>
                   <td />
                   <td className="num">{money(tab.itemsTotal, cur)}</td>
                 </tr>
 
-                <tr className="mt-split"><td colSpan={4}>مصاريف العربية</td></tr>
+                <tr className="mt-split"><td colSpan={5}>مصاريف العربية</td></tr>
                 {tab.expenses.map((e) => (
                   <tr key={e.id} className="mt-exp">
                     <td className="muted" style={{ fontSize: 12 }}>{fmtDate(e.date)}</td>
                     <td>{e.note || e.category || 'مصروف'}</td>
                     <td />
+                    <td />
                     <td className="num">{money(e.amount, cur)}</td>
                   </tr>
                 ))}
                 {tab.expenses.length === 0 && (
-                  <tr className="mt-exp"><td colSpan={4} className="empty">مفيش مصاريف</td></tr>
+                  <tr className="mt-exp"><td colSpan={5} className="empty">مفيش مصاريف</td></tr>
                 )}
                 <tr className="mt-sub mt-exp">
-                  <td colSpan={3}>إجمالي المصاريف</td>
+                  <td colSpan={4}>إجمالي المصاريف</td>
                   <td className="num">{money(tab.expensesTotal, cur)}</td>
                 </tr>
 
                 <tr className="mf-total">
-                  <td colSpan={3}>إجمالي العربية</td>
+                  <td colSpan={4}>إجمالي العربية</td>
                   <td className="num">{money(tab.itemsTotal + tab.expensesTotal, cur)}</td>
                 </tr>
               </tbody>

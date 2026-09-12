@@ -15,7 +15,7 @@ const FIELD_LABELS: Record<string, string> = {
   date: 'التاريخ', paid: 'المدفوع', note: 'البيان / ملاحظة',
   name: 'الاسم', phone: 'التليفون',
   clientName: 'العميل', driverName: 'السائق',
-  vehicleNo: 'رقم العربية', trailerNo: 'رقم المقطورة',
+  vehicleNo: 'رقم العربية', vehicleLabel: 'مسمّى العربية', trailerNo: 'رقم المقطورة',
   agreedFreight: 'الناولون المتفق', unit: 'الوحدة', status: 'الحالة',
   items: 'الأصناف', qty: 'الكمية', no: 'الرقم', price: 'السعر', buyPrice: 'سعر الشراء',
   transactions: 'الحركات المالية', payments: 'المدفوعات', requests: 'الطلبات',

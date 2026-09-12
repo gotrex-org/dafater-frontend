@@ -4,11 +4,15 @@ import { useState } from 'react';
 import { EGP } from '@/lib/format';
 import { SearchInput, MoneyInput } from '@/components/common';
 import { useAuth } from '@/lib/auth';
+import { useWindows } from '@/lib/windows';
 import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from '../hooks';
 import { useDeleteWithRelated } from '@/lib/deleteWithRelated';
+import { ProductMovements } from '../../inventory/components/ProductMovements';
 import type { Product } from '../dtos';
 
 function ProductRow({ product, canManage }: { product: Product; canManage: boolean }) {
+  // `open` هنا محجوز لتوسيع سطر التعديل — فنافذة الكارت اسمها openWin
+  const { open: openWin } = useWindows();
   const update = useUpdateProduct();
   const del = useDeleteProduct();
   const [open, setOpen] = useState(false);
@@ -45,6 +49,16 @@ function ProductRow({ product, canManage }: { product: Product; canManage: boole
           {product.service && <span className="pill" style={{ marginInlineStart: 6 }}>خدمة</span>}
           {!!product.price && <span className="muted num" style={{ fontSize: 12, fontWeight: 400, marginInlineStart: 8 }}>سعر التقييم: {EGP(product.price)}</span>}
         </span>
+        {/* كارت الصنف من هنا كمان — شاشة المخزن بتستبعد بنود الخدمة، فده الطريق الوحيد
+            ليها بعد ما تتعلّم «بند خدمة» */}
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => openWin({
+            id: `product-card:${product.id}`,
+            title: `كارت الصنف — ${product.name}`,
+            render: (close) => <ProductMovements productId={product.id} name={product.name} onBack={close} backLabel="إغلاق" />,
+          })}
+        >كارت الصنف</button>
         {canManage && <button className="btn btn-ghost btn-sm" onClick={() => setOpen((o) => !o)}>{open ? 'إغلاق' : 'تعديل'}</button>}
         {canManage && <button className="btn btn-danger btn-sm" onClick={remove} disabled={del.isPending}>حذف</button>}
       </div>

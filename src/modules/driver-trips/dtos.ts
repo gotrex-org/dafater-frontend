@@ -14,6 +14,8 @@ export interface DriverTrip {
   party?: { id: string; name: string } | null;
   driverName: string;
   vehicleNo?: string | null;
+  /** مسمّى العربية (عربية الزيتون / عربية ديدي) */
+  vehicleLabel?: string | null;
   trailerNo?: string | null;
   clientName: string;
   departureDate: string;
@@ -42,6 +44,7 @@ export interface CreateDriverTripDto {
   partyId?: string;
   driverName: string;
   vehicleNo?: string;
+  vehicleLabel?: string;
   trailerNo?: string;
   clientName?: string;
   departureDate: string;
@@ -58,6 +61,7 @@ export interface UpdateDriverTripDto {
   partyId?: string;
   driverName?: string;
   vehicleNo?: string;
+  vehicleLabel?: string;
   trailerNo?: string;
   clientName?: string;
   departureDate?: string;

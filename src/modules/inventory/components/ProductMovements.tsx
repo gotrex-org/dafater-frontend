@@ -6,7 +6,13 @@ import { PageTitle, DataTable, Spinner, SegmentedControl, Combobox, StatsGrid, S
 import { useProductMovements, useAllProducts, useUpdateProduct } from '../../products/hooks';
 import type { ProductMovement } from '../../products/dtos';
 
-export function ProductMovements({ productId, name, onBack }: { productId: string; name: string; onBack: () => void }) {
+export function ProductMovements({ productId, name, onBack, backLabel = 'رجوع للمخزن' }: {
+  productId: string;
+  name: string;
+  onBack: () => void;
+  /** الكارت بيتفتح من المخزن ومن شاشة الأصناف كمان — فزرار الرجوع بيتسمّى حسب اللي جاي منه */
+  backLabel?: string;
+}) {
   const { data = [], isLoading } = useProductMovements(productId);
   const { data: products } = useAllProducts();
   const updateProduct = useUpdateProduct();
@@ -34,7 +40,7 @@ export function ProductMovements({ productId, name, onBack }: { productId: strin
 
   return (
     <>
-      <button className="btn btn-ghost btn-sm" onClick={onBack}>→ رجوع للمخزن</button>
+      <button className="btn btn-ghost btn-sm" onClick={onBack}>→ {backLabel}</button>
       <PageTitle title={`تقرير الصنف: ${name}`} subtitle="كل الكميات اللي اتشريت واتباعت، ومن مين وله مين" />
 
       {product !== undefined && (
@@ -44,7 +50,12 @@ export function ProductMovements({ productId, name, onBack }: { productId: strin
             checked={!!product.service}
             onChange={() => updateProduct.mutate({ id: productId, dto: { service: !product.service } })}
           />
-          <span style={{ fontSize: 13 }}>بند خدمة — يظهر تلقائياً في الفواتير والبيع الخارجي</span>
+          <span style={{ fontSize: 13 }}>
+            بند خدمة (بدون مخزون)
+            <span className="muted" style={{ marginInlineStart: 6, fontSize: 12 }}>
+              — لو علّمتها، الصنف هيختفي من شاشة المخزن؛ وترجّعها من الإعدادات ← الأصناف
+            </span>
+          </span>
         </label>
       )}
 

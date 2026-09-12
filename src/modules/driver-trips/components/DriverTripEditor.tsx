@@ -31,6 +31,8 @@ export function DriverTripEditor({ manifest, onSaved, onSkip }: Props) {
   const [partyId, setPartyId] = useState(() =>
     allClients.find((p) => p.name === manifest.clientName)?.id ?? ''
   );
+  // مسمّى العربية جاي من الكشف — بيظهر في بيان «عطلة عربية» على كشف حساب العميل
+  const [vehicleLabel, setVehicleLabel] = useState(manifest.vehicleLabel ?? '');
   const [vehL, setVehL] = useState(vehParsed.letters);
   const [vehNumbers, setVehNumbers] = useState(vehParsed.numbers);
   const [trlL, setTrlL] = useState(trlParsed.letters);
@@ -57,6 +59,7 @@ export function DriverTripEditor({ manifest, onSaved, onSkip }: Props) {
         partyId,
         driverName: driverName.trim(),
         vehicleNo: buildPlate(vehL, vehNumbers),
+        vehicleLabel: vehicleLabel.trim() || undefined,
         trailerNo: buildPlate(trlL, trlNumbers),
         departureDate,
         agreedFreight: Number(agreedFreight),
@@ -85,6 +88,7 @@ export function DriverTripEditor({ manifest, onSaved, onSkip }: Props) {
                 setDriverName(d.name);
                 const veh = parsePlate(d.vehicleNo ?? '');
                 if (veh.letters.some(Boolean) || veh.numbers) { setVehL(veh.letters); setVehNumbers(veh.numbers); }
+                if (d.vehicleLabel) setVehicleLabel(d.vehicleLabel);
                 const trl = parsePlate(d.trailerNo ?? '');
                 if (trl.letters.some(Boolean) || trl.numbers) { setTrlL(trl.letters); setTrlNumbers(trl.numbers); }
                 if (d.note && !note) setNote(d.note);
@@ -93,6 +97,9 @@ export function DriverTripEditor({ manifest, onSaved, onSkip }: Props) {
           </Field>
           <Field label="العميل">
             <PartyCombobox parties={allClients} value={partyId} onChange={setPartyId} role="CLIENT" />
+          </Field>
+          <Field label="مسمّى العربية">
+            <input value={vehicleLabel} onChange={(e) => setVehicleLabel(e.target.value)} placeholder="عربية الزيتون / عربية ديدي" />
           </Field>
           <Field label="رقم العربية (٣ حروف / أرقام)">
             <PlateInput letters={vehL} numbers={vehNumbers} onLettersChange={setVehL} onNumbersChange={setVehNumbers} numRef={vehNumRef} />

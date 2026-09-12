@@ -80,6 +80,8 @@ export function DriversRegistry() {
   const [vehNumbers, setVehNumbers] = useState('');
   const [trlL, setTrlL] = useState<string[]>(['', '', '']);
   const [trlNumbers, setTrlNumbers] = useState('');
+  // مسمّى العربية — بيتعبّى تلقائيًا في كشف العربية والرحلة لما السائق يتختار
+  const [vehicleLabel, setVehicleLabel] = useState('');
   const [note, setNote] = useState('');
   const [err, setErr] = useState('');
 
@@ -101,6 +103,7 @@ export function DriversRegistry() {
     const trl = parsePlate(d.trailerNo ?? '');
     setTrlL(trl.letters);
     setTrlNumbers(trl.numbers);
+    setVehicleLabel(d.vehicleLabel ?? '');
     setNote(d.note ?? '');
     setErr('');
   };
@@ -116,6 +119,7 @@ export function DriversRegistry() {
           phone: phone.trim() || undefined,
           phone2: phone2.trim() || undefined,
           vehicleNo: buildPlate(vehL, vehNumbers),
+          vehicleLabel: vehicleLabel.trim() || undefined,
           trailerNo: buildPlate(trlL, trlNumbers),
           note: note.trim() || undefined,
         },
@@ -146,6 +150,9 @@ export function DriversRegistry() {
             </Field>
             <Field label="رقم هاتف ثانٍ">
               <input inputMode="numeric" value={phone2} onChange={(e) => setPhone2(e.target.value)} placeholder="اختياري…" />
+            </Field>
+            <Field label="مسمّى العربية">
+              <input value={vehicleLabel} onChange={(e) => setVehicleLabel(e.target.value)} placeholder="عربية الزيتون / عربية ديدي" />
             </Field>
             <Field label="رقم العربية (٣ حروف / أرقام)">
               <PlateInput letters={vehL} numbers={vehNumbers} onLettersChange={setVehL} onNumbersChange={setVehNumbers} numRef={vehNumRef} />
@@ -180,7 +187,7 @@ export function DriversRegistry() {
               <div>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>{d.name}</div>
                 <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
-                  {[d.nationalId && `ق: ${d.nationalId}`, d.phone, d.phone2, d.vehicleNo, d.trailerNo].filter(Boolean).join(' — ') || 'لا توجد بيانات إضافية'}
+                  {[d.vehicleLabel, d.nationalId && `ق: ${d.nationalId}`, d.phone, d.phone2, d.vehicleNo, d.trailerNo].filter(Boolean).join(' — ') || 'لا توجد بيانات إضافية'}
                 </div>
                 {d.note && <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>{d.note}</div>}
               </div>

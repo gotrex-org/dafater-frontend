@@ -48,6 +48,7 @@ export function DriverTripDetail({ trip, onBack }: Props) {
 
   const vehParsed = parsePlate(trip.vehicleNo);
   const trlParsed = parsePlate(trip.trailerNo);
+  const [editVehLabel, setEditVehLabel]   = useState(trip.vehicleLabel ?? '');
   const [editVehL, setEditVehL]           = useState(vehParsed.letters);
   const [editVehNums, setEditVehNums]     = useState(vehParsed.numbers);
   const [editTrlL, setEditTrlL]           = useState(trlParsed.letters);
@@ -61,6 +62,7 @@ export function DriverTripDetail({ trip, onBack }: Props) {
     setEditName(trip.driverName);
     setEditPartyId(trip.party?.id ?? '');
     setEditClientName(trip.clientName);
+    setEditVehLabel(trip.vehicleLabel ?? '');
     const v = parsePlate(trip.vehicleNo); setEditVehL(v.letters); setEditVehNums(v.numbers);
     const t = parsePlate(trip.trailerNo); setEditTrlL(t.letters); setEditTrlNums(t.numbers);
     setEditDep(trip.departureDate.slice(0, 10));
@@ -82,6 +84,7 @@ export function DriverTripDetail({ trip, onBack }: Props) {
           driverName:   editName.trim(),
           partyId:      editPartyId || undefined,
           clientName:   selClient?.name ?? editClientName,
+          vehicleLabel: editVehLabel.trim(),
           vehicleNo:    buildPlate(editVehL, editVehNums),
           trailerNo:    buildPlate(editTrlL, editTrlNums),
           departureDate: editDep,
@@ -195,7 +198,12 @@ export function DriverTripDetail({ trip, onBack }: Props) {
         <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
           <div>
             <div style={{ fontWeight: 800, fontSize: 17 }}>{trip.driverName}</div>
-            {trip.vehicleNo && <div className="muted" style={{ fontSize: 13 }}>عربية: {trip.vehicleNo}{trip.trailerNo ? ` — مقطورة: ${trip.trailerNo}` : ''}</div>}
+            {(trip.vehicleLabel || trip.vehicleNo) && (
+              <div className="muted" style={{ fontSize: 13 }}>
+                عربية: {[trip.vehicleLabel, trip.vehicleNo].filter(Boolean).join(' — ')}
+                {trip.trailerNo ? ` — مقطورة: ${trip.trailerNo}` : ''}
+              </div>
+            )}
             <div className="muted" style={{ fontSize: 13 }}>العميل: {trip.clientName}</div>
             {trip.party && <div className="muted" style={{ fontSize: 12 }}>حساب: {trip.party.name}</div>}
           </div>
@@ -231,6 +239,9 @@ export function DriverTripDetail({ trip, onBack }: Props) {
               </Field>
               <Field label="العميل (حساب)">
                 <PartyCombobox parties={allClients} value={editPartyId} onChange={(id, p) => { setEditPartyId(id); setEditClientName(p?.name ?? allClients.find((c) => c.id === id)?.name ?? editClientName); }} role="CLIENT" />
+              </Field>
+              <Field label="مسمّى العربية">
+                <input value={editVehLabel} onChange={(e) => setEditVehLabel(e.target.value)} placeholder="عربية الزيتون / عربية ديدي" />
               </Field>
               <Field label="رقم العربية">
                 <PlateInput letters={editVehL} numbers={editVehNums} onLettersChange={setEditVehL} onNumbersChange={setEditVehNums} numRef={{ current: null } as any} />
