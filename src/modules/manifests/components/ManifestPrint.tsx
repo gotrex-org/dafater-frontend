@@ -13,15 +13,6 @@ const DOTS = '..........................';
 const PAGE_W = 794;
 const PAGE_H = 1123;
 
-function Info({ label, value }: { label: string; value?: string | null }) {
-  return (
-    <div className="mf-info">
-      <span className="mf-info-l">{label}</span>
-      <span className="mf-info-v">{value || '—'}</span>
-    </div>
-  );
-}
-
 export function ManifestPrint({ id, onClose }: { id: string; onClose: () => void }) {
   const { can } = useAuth();
   const { data: m, isLoading } = useManifest(id);
@@ -53,6 +44,20 @@ export function ManifestPrint({ id, onClose }: { id: string; onClose: () => void
   if (isLoading || !m) return <Spinner />;
   const totalQty = m.items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
 
+  // بيانات الكشف: ٣×٣ على الورقة، وبتتفرد سطر ورا سطر على الموبايل (شوف .pr-info
+  // في globals.css). الترتيب هنا هو ترتيب القراية على الموبايل بالظبط.
+  const info: [string, string | null | undefined][] = [
+    ['التاريخ', fmtDate(m.date)],
+    ['اسم العميل', m.clientName],
+    ['اسم السائق', m.driverName],
+    ['الرقم القومي', m.driverNID],
+    ['تليفون السائق', m.driverPhone],
+    ['مسمّى العربية', m.vehicleLabel],
+    ['رقم العربية', m.vehicleNo],
+    ['رقم المقطورة', m.trailerNo],
+    ['ملاحظات', m.note],
+  ];
+
   const handleDelete = () => {
     if (!window.confirm(`حذف كشف رقم ${m.no}؟ هذا الإجراء لا يمكن التراجع عنه.`)) return;
     deleteManifest.mutate(m.id, { onSuccess: onClose });
@@ -71,47 +76,58 @@ export function ManifestPrint({ id, onClose }: { id: string; onClose: () => void
       </div>
 
       <div className="print-scale" ref={outerRef}>
-        <div className="card print-sheet mf-lines" ref={innerRef}>
-          <div className="mf-logo">أبو شامة</div>
-          <div className="mf-head">
-            <h2>كشف استلام بضاعة</h2>
-            <div className="mf-meta">
-              <span>رقم: <b>{m.no}</b></span>
-              <span>التاريخ: <b>{fmtDate(m.date)}</b></span>
-            </div>
+        {/* الديزاين القديم (app_4.html): ترويسة اسم الشركة + العنوان ورقم الكشف،
+            جدول بيانات ٣ أعمدة، جدول الأصناف (م / الاصناف / العدد)، والإقرار.
+            نفس شكل كشف الاستلام في بوابة العميل (mf-old) — الاتنين بقوا متطابقين. */}
+        <div className="card print-sheet mf-old mf-plain" ref={innerRef}>
+          <div className="pr-head">
+            <div className="co">أبو شامة</div>
+            <div className="ttl"><b>كشف استلام بضاعة</b><br />رقم: {m.no}</div>
           </div>
 
-          <div className="mf-grid">
-            <Info label="اسم العميل" value={m.clientName} />
-            <Info label="اسم السائق" value={m.driverName} />
-            <Info label="الرقم القومي للسائق" value={m.driverNID} />
-            <Info label="رقم تليفون السائق" value={m.driverPhone} />
-            <Info label="مسمّى العربية" value={m.vehicleLabel} />
-            <Info label="رقم العربية" value={m.vehicleNo} />
-            <Info label="رقم المقطورة" value={m.trailerNo} />
-          </div>
+          {/* ٩ خانات في ٣×٣ — من غير خلية فاضية، والملاحظات جوّه الجدول بدل سطر لوحده */}
+          <table className="pr pr-info">
+            <tbody>
+              {[0, 3, 6].map((start) => (
+                <tr key={start}>
+                  {info.slice(start, start + 3).map(([label, value]) => (
+                    <td key={label}><b>{label}:</b> <span>{value || ''}</span></td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
           <div className="tbl-wrap mf-grow">
-            <table>
-              <thead><tr><th style={{ width: 120 }}>الكمية</th><th>الصنف</th></tr></thead>
+            <table className="pr">
+              <thead>
+                <tr>
+                  <th style={{ width: 44 }}>م</th>
+                  <th>الاصناف</th>
+                  <th style={{ width: 110 }}>العدد</th>
+                </tr>
+              </thead>
               <tbody>
                 {m.items.map((it, i) => (
                   <tr key={it.id ?? i}>
-                    <td className="num">{it.qty}</td>
+                    <td className="num">{i + 1}</td>
                     <td>{it.name}</td>
+                    <td className="num">{it.qty}</td>
                   </tr>
                 ))}
+                {m.items.length === 0 && (
+                  <tr><td colSpan={3} className="empty">مفيش أصناف في الكشف</td></tr>
+                )}
                 <tr className="mf-total">
-                  <td className="num"><b>{totalQty}</b></td>
+                  <td />
                   <td><b>إجمالي العدد</b></td>
+                  <td className="num"><b>{totalQty}</b></td>
                 </tr>
               </tbody>
             </table>
           </div>
 
-          {m.note && <p className="mf-note">ملاحظات: {m.note}</p>}
-
-          <div className="mf-ack">
+          <div className="pr-ack">
             <p>
               أقر أنا / <b>{DOTS}</b> باستلام البضاعة المذكورة أعلاه،
               وأتعهد بالحفاظ على البضاعة المستلمة في حالتها الجيدة، والالتزام بتوصيلها إلى

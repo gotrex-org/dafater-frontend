@@ -29,6 +29,7 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
   const goodsTotal = goods.reduce((s, it) => s + it.qty * it.price, 0);
   const servicesTotal = services.reduce((s, it) => s + it.qty * it.price, 0);
 
+
   const [showCommission, setShowCommission] = useState(false);
   const [commAmount, setCommAmount] = useState('');
   const [commPartyId, setCommPartyId] = useState('');
@@ -99,7 +100,7 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
       )}
 
 
-      <div ref={sheetRef} className="card print-sheet">
+      <div ref={sheetRef} className="card print-sheet inv-sheet">
         <div className="mf-logo">أبو شامة</div>
         <div className="mf-head">
           <h2 style={{ fontSize: 18 }}>{invoice.party?.name ?? '—'}</h2>
@@ -119,18 +120,19 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
         <div className="tbl-wrap">
           <table>
             <thead>
+              {/* الصنف الأول وياخد الباقي، وتلات أعمدة الأرقام وراه مرتبين ورا بعض */}
               <tr>
-                <th style={{ width: 90 }}>العدد</th>
                 <th>الصنف</th>
-                <th style={{ width: 110 }}>السعر {cur === 'USD' ? '($)' : '(ج.م)'}</th>
-                <th style={{ width: 120 }}>الاجمالي</th>
+                <th className="num" style={{ width: 80 }}>العدد</th>
+                <th className="num" style={{ width: 104 }}>السعر {cur === 'USD' ? '($)' : '(ج.م)'}</th>
+                <th className="num" style={{ width: 116 }}>الاجمالي</th>
               </tr>
             </thead>
             <tbody>
               {goods.map((it) => (
                 <tr key={it.id}>
-                  <td className="num">{it.qty}</td>
                   <td>{it.product?.name ?? '—'}</td>
+                  <td className="num">{it.qty}</td>
                   <td className="num">{money(it.price, cur)}</td>
                   <td className="num">{money(it.qty * it.price, cur)}</td>
                 </tr>
@@ -145,8 +147,8 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
               )}
               {services.map((it) => (
                 <tr key={it.id} className="inv-bnd">
-                  <td className="num">{it.qty}</td>
                   <td><span className="inv-bnd-tag">بند</span>{it.product?.name ?? '—'}</td>
+                  <td className="num">{it.qty}</td>
                   <td className="num">{money(it.price, cur)}</td>
                   <td className="num">{money(it.qty * it.price, cur)}</td>
                 </tr>

@@ -132,10 +132,6 @@ function LedgerTab() {
   );
 }
 
-// أقل ارتفاع لنافذة الجدول — لو الشاشة قصيرة أوي بنسمح للصفحة تسكرول شوية بدل ما
-// الكشف يبقى شقّ ما ينفعش يتقرا.
-const MIN_BOX = 260;
-
 // نوع الطرف زي ما كان بيتكتب في ترويسة الكشف القديمة (app_4.html)
 const ROLE_LABEL: Record<string, string> = {
   CLIENT: 'عميل', SUPPLIER: 'مورد', AGENT: 'صاحب commission', PERSON: 'عهدة',
@@ -182,9 +178,6 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const [dealUid, setDealUid] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const sheetRef = useRef<HTMLDivElement>(null);
-  // نافذة الجدول اللي بتسكرول جوّه الكشف (شوف الـ effect تحت).
-  const scrollBoxRef = useRef<HTMLDivElement>(null);
-  const scrolledKey = useRef<string | null>(null);
   const [showSettle, setShowSettle] = useState(false);
   const [wDate, setWDate] = useState(() => todayISO());
   const [wAmount, setWAmount] = useState('');
@@ -194,63 +187,12 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const [wMsg, setWMsg] = useState('');
   const postEntry = usePostEntry();
 
-  // الجدول بيشتغل كنافذة جوّه الكشف: بياخد المساحة الفاضلة لحد آخر الشاشة وبيسكرول
-  // لوحده، فالصفحة نفسها ما بتتحركش — التولبارات (الفترة / كل الفترة / نوع الحركات)
-  // وترويسة الكشف والرصيد الجاري فاضلين في مكانهم. والنافذة بتفتح على آخر معاملة
-  // (تحت) والمستخدم يطلع فوق للأقدم.
-  //
-  // scrollKey بيحدد إمتى نرجع ننزل تحت: تغيير الطرف أو الفترة أو نوع الحركات —
-  // ومش بينزل مع إعادة الرسم العادية (فتح تفاصيل صف / نافذة تعديل) عشان ما ينطّش
-  // من تحت إيد المستخدم وهو بيشتغل.
-  const scrollKey = `${party.id}|${from}|${to}|${kind}`;
-  // بنستعيد حشو أسفل الصفحة (المحجوز لشريط النوافذ المصغّرة) طول ما الكشف مفتوح —
-  // مساحة ميتة تحت الكشف كانت بتاكل من ارتفاع الجدول من غير أي فايدة.
+  // الكشف بياخد عرض الشاشة كله وبيلغي حشو أسفل الصفحة (المحجوز لشريط النوافذ
+  // المصغّرة) — الصفحة نفسها هي اللي بتسكرول، والجدول بيتفرد على طوله.
   useEffect(() => {
     document.body.classList.add('ledger-fit');
     return () => document.body.classList.remove('ledger-fit');
   }, []);
-
-  useEffect(() => {
-    const el = scrollBoxRef.current;
-    if (isLoading || !data || !el) return;
-
-    // الارتفاع متحسب من مكان الجدول الفعلي على الشاشة ناقص اللي تحته جوّه الكشف
-    // (سطر الرصيد الجاري + padding الكارت) — مش رقم ثابت، عشان يظبط لو التولبارات
-    // لفّت سطرين على شاشة صغيرة أو الويندو اتغيّر حجمها.
-    const fit = () => {
-      let below = 0;
-      for (let n = el.nextElementSibling; n; n = n.nextElementSibling) below += (n as HTMLElement).offsetHeight;
-      const sheet = el.parentElement;
-      if (sheet) below += parseFloat(getComputedStyle(sheet).paddingBottom) || 0;
-      const avail = window.innerHeight - el.getBoundingClientRect().top - below - 12;
-      el.style.maxHeight = `${Math.max(MIN_BOX, Math.round(avail))}px`;
-      // لو فضل أي فايض بيخلّي الصفحة نفسها تسكرول (حشو أسفل الصفحة مثلًا) نقصّه —
-      // عشان التولبارات ما تطلعش فوق خالص والسكرول يفضل جوّه الجدول بس.
-      const over = document.documentElement.scrollHeight - window.innerHeight;
-      if (over > 0) el.style.maxHeight = `${Math.max(MIN_BOX, Math.round(avail - over))}px`;
-    };
-
-    const jump = scrolledKey.current !== scrollKey;
-    if (jump) {
-      scrolledKey.current = scrollKey;
-      window.scrollTo({ top: 0 }); // نرجّع الصفحة فوق الأول عشان القياس يطلع صح
-    }
-    // rAF مزدوج: نستنى الصفوف الجديدة تترسم فعلًا قبل ما نقيس وننزل لآخر سطر — من
-    // غير كده بنحسب على ارتفاع الجدول القديم فبنقف في النص.
-    let inner = 0;
-    const outer = requestAnimationFrame(() => {
-      inner = requestAnimationFrame(() => {
-        fit();
-        if (jump) el.scrollTop = el.scrollHeight;
-      });
-    });
-    window.addEventListener('resize', fit);
-    return () => {
-      cancelAnimationFrame(outer);
-      cancelAnimationFrame(inner);
-      window.removeEventListener('resize', fit);
-    };
-  }, [data, isLoading, scrollKey]);
 
   if (invoiceUid) return <InvoiceDetailById uid={invoiceUid} onBack={() => setInvoiceUid(null)} />;
   if (dealUid) return <DealDetailById uid={dealUid} onBack={() => setDealUid(null)} />;
@@ -382,7 +324,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
               كشف مدمج مع {data.linkedParty.role === 'SUPPLIER' ? 'مورد' : 'عميل'}: <b>{data.linkedParty.name}</b>
             </div>
           )}
-          <div ref={scrollBoxRef} className="tbl-wrap mf-grow ledger-scroll">
+          <div className="tbl-wrap mf-grow ledger-scroll">
             <table className="lg-tbl">
               <thead>
                 <tr>
@@ -428,7 +370,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                           ) : fmtDate(r.date)}
                         </td>
                         <td className="lg-type">{r.type}</td>
-                        <td className="lg-note" style={{ color: 'var(--ink)', fontWeight: 400 }}>
+                        <td className="lg-note" style={{ color: 'var(--ink)', fontWeight: 600 }}>
                           {data.linkedParty && r.partyRole && (
                             <span className="pill" style={{ fontSize: 10, marginInlineEnd: 4, opacity: 0.75 }}>
                               {r.partyRole === 'SUPPLIER' ? 'مورد' : 'عميل'}
