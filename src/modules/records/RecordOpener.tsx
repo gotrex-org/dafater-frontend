@@ -4,6 +4,7 @@ import { InvoiceDetailById } from '../invoices/components/InvoiceDetail';
 import { DealDetailById } from '../deals/components/DealsView';
 import { LedgerDetailById } from '../parties/components/LedgerView';
 import { ManifestPrint } from '../manifests/components/ManifestPrint';
+import { DriverTripDetailById } from '../driver-trips/components/DriverTripDetail';
 
 // Entities that have a real per-record detail view we can open by uid. Used by the
 // activity log and the reports to deep-link a row to "the original record" without
@@ -14,6 +15,7 @@ const OPENERS: Record<string, (uid: string, onClose: () => void) => JSX.Element>
   deals:     (uid, onClose) => <DealDetailById uid={uid} onBack={onClose} />,
   parties:   (uid, onClose) => <LedgerDetailById uid={uid} onBack={onClose} />,
   manifests: (uid, onClose) => <ManifestPrint id={uid} onClose={onClose} />,
+  'driver-trips': (uid, onClose) => <DriverTripDetailById uid={uid} onBack={onClose} />,
 };
 
 export function canOpenRecord(entity: string, uid?: string | null): boolean {

@@ -6,6 +6,7 @@ import { EntryForm } from '@/modules/transactions/components/EntryForm';
 import { InvoicesView } from '@/modules/invoices/components/InvoicesView';
 import { DealsView } from '@/modules/deals/components/DealsView';
 import { ManifestsView } from '@/modules/manifests/components/ManifestsView';
+import { ClearanceView } from '@/modules/clearance/components/ClearanceView';
 import { DriverTripsView } from '@/modules/driver-trips/components/DriverTripsView';
 import { RequestsView } from '@/modules/requests/components/RequestsView';
 import { LedgerView } from '@/modules/parties/components/LedgerView';
@@ -36,6 +37,7 @@ export const SECTIONS: SectionDef[] = [
   { view: 'deals',        href: '/deals',        label: 'البيع الخارجي',     Component: DealsView },
   { view: 'manifests',    href: '/manifests',    label: 'كشوفات العربيات',   Component: ManifestsView,  nav: true },
   { view: 'driver-trips', href: '/driver-trips', label: 'كشف السائقين',      Component: DriverTripsView, nav: true },
+  { view: 'clearance',    href: '/clearance',    label: 'التخليص والجمارك',  Component: ClearanceView,  nav: true },
   { view: 'requests',     href: '/requests',     label: 'الطلبيات',          Component: RequestsView,   nav: true },
   { view: 'ledger',       href: '/ledger',       label: 'كشف الحساب',        Component: LedgerView,     nav: true },
   { view: 'inventory',    href: '/inventory',    label: 'المخازن',           Component: InventoryView,  nav: true },

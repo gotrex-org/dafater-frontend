@@ -105,6 +105,26 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 .form-grid { display: grid; gap: 12px; padding: 16px; grid-template-columns: 1fr; }
 @media (min-width: 620px) { .form-grid { grid-template-columns: 1fr 1fr; } }
 .full { grid-column: 1 / -1; }
+/* فورم محرر الكشف: حقول قصيرة كتير، فـ ٣ أعمدة على الشاشات العريضة بدل ٢ */
+@media (min-width: 980px) { .form-grid.mf-form { grid-template-columns: repeat(3, 1fr); } }
+/* عنوان قسم جوّه الفورم: بياخد الصف كله فبيكسر السطر لوحده، وخط رفيع بيكمّل
+   المسافة عشان يفصل الأقسام من غير ما ياخد مساحة زي كارت منفصل. */
+.form-sec {
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 10px;
+  font-family: "Cairo", sans-serif; font-weight: 800; font-size: 12.5px;
+  color: var(--ink-soft); letter-spacing: .03em; margin-top: 6px;
+}
+.form-sec::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.form-grid > .form-sec:first-child { margin-top: 0; }
+/* بار رقم على قد الرقم بالظبط: العرض بالـ ch من الكونترول، والحشو الجانبي ضيّق
+   عشان الحدود تلزق على الأرقام مش تسيب فراغ حواليها. */
+.num-fit { padding-inline: 6px !important; text-align: center; font-weight: 700; }
+/* حقل في آخر عمود في الصف — أقصى الشمال في RTL. بـ -2/-1 عشان يشتغل صح سواء
+   الفورم ٣ أعمدة (شاشة عريضة) أو ٢ (متوسطة) أو ١ (موبايل). */
+.field.fld-end { grid-column: -2 / -1; }
+/* خلفية بيج — لمفاتيح الكشف (الرقم والعميل) عشان يتفرزوا عن باقي الحقول.
+   بتمسك الـ input جوّه الحقل حتى لو جاي من Combobox مش input عادي. */
+.field.fld-beige input { background: var(--paper); }
 .toolbar { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
 .sp { margin-inline-start: auto; }
 .empty { text-align: center; padding: 34px 16px; color: var(--ink-soft); }
@@ -898,7 +918,8 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 
 /* القاعدة العامة th,td بتحط nowrap — في جدول البيانات ده بيخلّي الجدول يتمدّ أعرض
    من الورقة فالـ print-scale بيصغّر الكشف كله. هنا القيم بتلفّ جوّه خليتها. */
-.mf-old table.pr.pr-info > tbody > tr > td { white-space: normal; width: 33.33%; }
+/* من غير عرض ثابت — فيه خانات بـ colSpan (العميل والملاحظات) والمتصفح بيوزّع صح */
+.mf-old table.pr.pr-info > tbody > tr > td { white-space: normal; }
 /* أسماء الأصناف الطويلة تلفّ كمان — الأرقام بس هي اللي مابتتكسرش */
 .mf-old table.pr > tbody > tr > td { white-space: normal; }
 .mf-old table.pr .num { white-space: nowrap; }
@@ -936,15 +957,20 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 /* ---- ألوان الحالة: وصلت / في الطريق ---- */
 /* نفس ألوان قايمة كشوفات العربيات بالظبط عشان الحالة تتقرا بنفس اللون في كل مكان. */
 .mt-tab .mt-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-soft); flex: none; }
-.mt-tab.st-arrived .mt-dot { background: var(--debit); }
-.mt-tab.st-pending .mt-dot { background: var(--credit); }
-.mt-tab.st-arrived.is-active { box-shadow: inset 0 3px 0 var(--debit); }
-.mt-tab.st-pending.is-active { box-shadow: inset 0 3px 0 var(--credit); }
-.mt-panel.st-arrived { border-color: var(--debit); border-inline-start-width: 4px; }
-.mt-panel.st-pending { border-color: var(--credit); border-inline-start-width: 4px; }
-.mt-status.st-arrived { background: rgba(178, 58, 46, .12); color: var(--debit); }
-.mt-status.st-pending { background: rgba(15, 110, 92, .12); color: var(--credit); }
+/* أحمر = في الطريق (لسه بره) · أخضر = كمّلت الرحلة. */
+.mt-tab.st-pending .mt-dot { background: var(--debit); }
+.mt-tab.st-arrived .mt-dot { background: var(--credit); }
+.mt-tab.st-pending.is-active { box-shadow: inset 0 3px 0 var(--debit); }
+.mt-tab.st-arrived.is-active { box-shadow: inset 0 3px 0 var(--credit); }
+.mt-panel.st-pending { border-color: var(--debit); border-inline-start-width: 4px; }
+.mt-panel.st-arrived { border-color: var(--credit); border-inline-start-width: 4px; }
+.mt-status.st-pending { background: rgba(178, 58, 46, .12); color: var(--debit); }
+.mt-status.st-arrived { background: rgba(15, 110, 92, .12); color: var(--credit); }
 .mt-status.st-none { background: var(--line-soft); color: var(--ink-soft); }
+/* خارج من مكتب شحن: أبيض بإطار خفيف — حالة قائمة بذاتها مش «ناقصة رحلة» */
+.mt-status.st-office { background: #fff; color: var(--ink-soft); box-shadow: inset 0 0 0 1px var(--line); }
+/* كشف مش مربوط بفاتورة — دهبي */
+.mt-status.st-unlinked { background: rgba(185, 138, 46, .14); color: var(--gold); }
 
 /* ===== تابات فواتير العميل (المستوى الأعلى: عميل ← فاتورة ← عربية) ===== */
 /* شكلها أعرض وأبرز من تابات العربيات اللي جوّاها عشان المستويين ما يتلخبطوش. */
@@ -974,10 +1000,39 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
   .pt-home-links { flex-direction: row; flex-wrap: wrap; }
 }
 
-/* ---- قايمة كشوفات العربيات: حدود باينة زي الشيت ---- */
-/* الجدول العام حدوده خفيفة (سطر فاصل بس)؛ هنا عايزينها شبكة كاملة واضحة. */
-.mf-list table { border: 1px solid var(--ink-soft); }
-.mf-list th, .mf-list td { border: 1px solid var(--ink-soft); }
-.mf-list thead th { background: transparent; color: inherit; }
+/* ---- شريط السلسلة: الفاتورة · الكشف · رحلة السائق · التخليص ---- */
+/* الحلقات الموجودة أزرار بتفتح سجلها، والناقصة باهتة ومش قابلة للضغط. */
+.chain-bar {
+  display: flex; align-items: stretch; gap: 0; flex-wrap: wrap;
+  margin-bottom: 12px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 12px; padding: 6px;
+}
+.chain-chip {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  padding: 7px 13px; border: none; background: none; border-radius: 9px;
+  font-family: inherit; text-align: start; color: var(--ink);
+}
+.chain-chip .l { font-size: 11px; font-weight: 800; color: var(--ink-soft); letter-spacing: .02em; }
+.chain-chip b { font-size: 13.5px; font-weight: 800; }
+button.chain-chip { cursor: pointer; }
+button.chain-chip:hover { background: var(--accent-soft); color: var(--accent-d); }
+button.chain-chip:hover .l { color: var(--accent-d); }
+.chain-chip.is-current { background: var(--line-soft); }
+.chain-chip.is-empty b { color: var(--ink-soft); font-weight: 600; }
+/* فاصل رفيع بين الحلقات — مش سهم، عشان اتجاه السهم في RTL بيلخبط */
+.chain-sep { width: 1px; background: var(--line); margin: 6px 2px; flex: none; }
+@media (max-width: 640px) {
+  .chain-bar { gap: 2px; }
+  .chain-sep { display: none; }
+  .chain-chip { flex: 1 1 45%; }
+}
+
+/* ---- قايمة كشوفات العربيات ---- */
+/* كانت عليها شبكة حدود كاملة بلون --ink-soft (رمادي غامق) فكانت تقيلة وسط
+   جداول البرنامج. اتشالت — الجدول بقى بفواصل السطور الخفيفة الافتراضية،
+   واللي بيفرّق السطور عن بعض هو لون الحالة مش الخطوط. */
+/* رأس الجدول بالبيج بتاع البرنامج زي باقي الجداول. كان متحطّ عليه transparent
+   فكان الجدول ده لوحده أبيض وسط كل الجداول التانية. */
+.mf-list thead th { background: var(--line-soft); color: inherit; }
 /* الشريط الجانبي بيفضل باين فوق حدود الخلية */
 .mf-list tbody tr:hover { background: rgba(0,0,0,.03); }

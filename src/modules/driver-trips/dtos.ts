@@ -58,6 +58,8 @@ export interface CreateDriverTripDto {
 }
 
 export interface UpdateDriverTripDto {
+  /** ربط الرحلة بكشف عربية — سلسلة فاضية معناها فك الربط */
+  manifestId?: string;
   partyId?: string;
   driverName?: string;
   vehicleNo?: string;

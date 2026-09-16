@@ -92,17 +92,18 @@ function LedgerTab() {
           {!isRestricted && (
             <div style={{ position: 'relative' }}>
               <button
-                className={`btn btn-sm ${role === 'AGENT' || role === 'PERSON' ? 'btn-primary' : 'btn-ghost'}`}
+                className={`btn btn-sm ${role === 'AGENT' || role === 'PERSON' || role === 'CLEARANCE' ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => setMoreOpen((o) => !o)}
                 title="commission / عهدة"
                 style={{ fontWeight: 800, fontSize: role === 'AGENT' || role === 'PERSON' ? 13 : 17, lineHeight: 1 }}
               >
-                {role === 'AGENT' ? 'commission' : role === 'PERSON' ? 'عهدة' : '⋮'}
+                {role === 'AGENT' ? 'commission' : role === 'PERSON' ? 'عهدة' : role === 'CLEARANCE' ? 'مخلّص' : '⋮'}
               </button>
               {moreOpen && (
                 <div style={{ position: 'absolute', top: '100%', insetInlineStart: 0, zIndex: 30, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,.12)', padding: 4, display: 'grid', gap: 2, minWidth: 150, marginTop: 4 }}>
                   <button className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { setRole('AGENT'); setMoreOpen(false); }}>أصحاب commission</button>
                   <button className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { setRole('PERSON'); setMoreOpen(false); }}>عهدة (أمانات/سلف)</button>
+                  <button className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { setRole('CLEARANCE'); setMoreOpen(false); }}>المخلّصين</button>
                 </div>
               )}
             </div>
@@ -341,9 +342,10 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                         className="lg-row"
                         style={{
                           cursor: 'pointer',
-                          ...(r.manifestDate && r.manifestArrived === true
+                          // أحمر = العربية لسه في الطريق · أخضر = كمّلت الرحلة
+                          ...(r.manifestDate && r.manifestArrived === false
                             ? { background: 'rgba(178,58,46,0.10)', borderRight: '3px solid var(--debit)' }
-                            : r.manifestDate && r.manifestArrived === false
+                            : r.manifestDate && r.manifestArrived === true
                             ? { background: 'rgba(15,110,92,0.10)', borderRight: '3px solid var(--credit)' }
                             : {}),
                         }}

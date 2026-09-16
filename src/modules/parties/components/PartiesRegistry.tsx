@@ -112,8 +112,9 @@ function PartyRow({ party, canDelete, canManage }: { party: Party; canDelete: bo
   };
 
   const otherRole: 'CLIENT' | 'SUPPLIER' = party.role === 'CLIENT' ? 'SUPPLIER' : 'CLIENT';
-  // أصحاب العهد (PERSON) مالهمش ربط عميل↔مورد ولا عملة دولارية — بيتخفوا عنهم الحاجتين دول.
-  const isPerson = party.role === 'PERSON';
+  // أصحاب العهد والمخلّصين حسابات خدمة بالجنيه — مالهمش ربط عميل↔مورد ولا عملة
+  // دولارية، فبيتخفوا عنهم الحاجتين دول.
+  const isPerson = party.role === 'PERSON' || party.role === 'CLEARANCE';
 
   return (
     <div style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 12, marginBottom: 8 }}>
@@ -150,8 +151,10 @@ function PartyRow({ party, canDelete, canManage }: { party: Party; canDelete: bo
   );
 }
 
-type RegistryRole = 'CLIENT' | 'SUPPLIER' | 'PERSON';
-const ROLE_LABEL: Record<RegistryRole, string> = { CLIENT: 'عميل', SUPPLIER: 'مورد', PERSON: 'صاحب عهدة' };
+type RegistryRole = 'CLIENT' | 'SUPPLIER' | 'PERSON' | 'CLEARANCE';
+const ROLE_LABEL: Record<RegistryRole, string> = {
+  CLIENT: 'عميل', SUPPLIER: 'مورد', PERSON: 'صاحب عهدة', CLEARANCE: 'مخلّص جمركي',
+};
 
 export function PartiesRegistry() {
   const { user, can } = useAuth();
@@ -168,7 +171,7 @@ export function PartiesRegistry() {
 
   const canManage = !!user?.admin || can('settings');
   const roleLabel = ROLE_LABEL[role];
-  const isPerson = role === 'PERSON';
+  const isPerson = role === 'PERSON' || role === 'CLEARANCE';
 
   const addParty = () => {
     if (!pName.trim()) { setPErr('اكتب الاسم'); return; }
@@ -203,6 +206,7 @@ export function PartiesRegistry() {
             { value: 'CLIENT', label: 'العملاء' },
             { value: 'SUPPLIER', label: 'الموردين' },
             { value: 'PERSON', label: 'أصحاب العهد' },
+            { value: 'CLEARANCE', label: 'المخلّصين' },
           ]}
         />
         <SearchInput value={search} onChange={setSearch} placeholder="بحث بالاسم…" />

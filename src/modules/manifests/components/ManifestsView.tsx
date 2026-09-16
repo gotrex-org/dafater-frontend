@@ -81,7 +81,10 @@ export function ManifestsView() {
 
   if (viewId) return <ManifestPrint id={viewId} onClose={() => setViewId(null)} />;
 
-  const manifestStatus = (m: Manifest): 'arrived' | 'pending' | 'none' => {
+  // كشف خارج من مكتب شحن مالوش رحلة سائق عندنا أصلاً — فحالته مش «ناقصة رحلة»،
+  // دي حالة قائمة بذاتها (أبيض). الباقي حسب رحلة السائق.
+  const manifestStatus = (m: Manifest): 'arrived' | 'pending' | 'office' | 'none' => {
+    if (m.vehicleSource === 'CLIENT_OFFICE') return 'office';
     const trips = m.driverTrips ?? [];
     if (!trips.length) return 'none';
     return trips.some((t) => t.arrivalDate) ? 'arrived' : 'pending';
@@ -89,10 +92,15 @@ export function ManifestsView() {
 
   // خلفية السطر بس — الشريط الجانبي اتشال لأن شبكة حدود الجدول (mf-lines/mf-list)
   // بتغطّي عليه؛ اللون بقى باين من خلفية السطر + بادچ الحالة الملوّن.
+  //   أحمر  = في الطريق (لسه بره)
+  //   أخضر  = كمّلت الرحلة
+  //   أبيض  = خارج من مكتب شحن
+  //   رمادي = عربيتنا ولسه مااتسجّلتش ليها رحلة
   const STATUS_STYLE: Record<string, React.CSSProperties> = {
-    arrived: { background: 'rgba(178,58,46,0.12)' },
-    pending: { background: 'rgba(15,110,92,0.12)' },
-    none: {},
+    pending: { background: 'rgba(178,58,46,0.12)' },
+    arrived: { background: 'rgba(15,110,92,0.12)' },
+    office: {},
+    none: { background: 'rgba(28,42,51,0.045)' },
   };
 
   const columns: Column<Manifest>[] = [
@@ -105,9 +113,11 @@ export function ManifestsView() {
     // الربط بالفاتورة — بيبيّن الكشوفات اللي لسه مستقلة وماتظهرش كتاب في أي فاتورة
     {
       header: 'الفاتورة',
+      // «مستقل» بادچ دهبي مش نص رمادي — عشان الكشف غير المربوط بفاتورة يشدّ العين
+      // من غير ما ياخد لون الصف (الصف محجوز لحالة الرحلة).
       cell: (m) => m.invoice
         ? <span className="pill">فاتورة {m.invoice.no}</span>
-        : <span className="muted">مستقل</span>,
+        : <span className="pill mt-status st-unlinked">مستقل</span>,
     },
     {
       header: 'الحالة',
@@ -117,7 +127,8 @@ export function ManifestsView() {
         const s = manifestStatus(m);
         if (s === 'arrived') return <span className="pill mt-status st-arrived">وصلت ✓</span>;
         if (s === 'pending') return <span className="pill mt-status st-pending">في الطريق</span>;
-        return <span className="pill mt-status st-none">—</span>;
+        if (s === 'office') return <span className="pill mt-status st-office">مكتب شحن</span>;
+        return <span className="pill mt-status st-none">مستنية رحلة</span>;
       },
     },
   ];

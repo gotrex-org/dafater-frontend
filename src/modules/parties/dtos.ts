@@ -1,4 +1,5 @@
-export type PartyRole = 'CLIENT' | 'SUPPLIER' | 'AGENT' | 'PERSON';
+/** CLEARANCE = مخلّص جمركي — طرف بحساب جاري زي المورد */
+export type PartyRole = 'CLIENT' | 'SUPPLIER' | 'AGENT' | 'PERSON' | 'CLEARANCE';
 export type PartyType = 'INVOICE' | 'LEDGER';
 
 export interface LinkedPartyRef {

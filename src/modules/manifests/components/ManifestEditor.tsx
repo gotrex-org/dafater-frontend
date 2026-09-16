@@ -5,6 +5,7 @@ import { todayISO, fmtDate } from '@/lib/format';
 import { useNavigationGuard } from '@/lib/useNavigationGuard';
 import { fieldNavKeyDown } from '@/lib/field-nav';
 import { PageTitle, Field, Combobox, MoneyInput, PlateInput, parsePlate, buildPlate } from '@/components/common';
+import { VEHICLE_SOURCE_LABEL, type VehicleSource } from '../dtos';
 import { ProductCombobox } from '../../products/components/ProductCombobox';
 import { PartyCombobox } from '../../invoices/components/PartyCombobox';
 import { useAllProducts } from '../../products/hooks';
@@ -83,6 +84,11 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
   const [error, setError] = useState('');
   const [saved, setSaved] = useState<Manifest | null>(null);
   const [makeDriverTrip, setMakeDriverTrip] = useState(false);
+  // مصدر العربية: من عندنا (وساعتها السلسلة بتكمل — كشف سائق وتخليص وجمارك)
+  // ولا مكتب شحن تابع للعميل (اسم المكتب بس).
+  const [vehicleSource, setVehicleSource] = useState<VehicleSource>(manifest?.vehicleSource ?? 'OURS');
+  const [shippingOffice, setShippingOffice] = useState(manifest?.shippingOffice ?? '');
+  const isOurs = vehicleSource === 'OURS';
 
   const setItem = (i: number, patch: Partial<ManifestItem>) =>
     setItems((its) => its.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
@@ -109,6 +115,9 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
       vehicleNo: buildPlate(vehL, vehNumbers),
       vehicleLabel: vehicleLabel.trim() || undefined,
       trailerNo: buildPlate(trlL, trlNumbers),
+      vehicleSource,
+      // اسم المكتب بيتمسح لو رجّعنا النوع لعربيتنا، عشان مايفضلش اسم قديم معلّق
+      shippingOffice: isOurs ? '' : shippingOffice.trim(),
       note: note.trim() || undefined,
       items: goods.map((it) => ({ name: it.name.trim(), qty: Number(it.qty) || 0 })),
     };
@@ -131,7 +140,8 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
   const trlNumRef = useRef<HTMLInputElement>(null!);
   const isPending = isEdit ? updateManifest.isPending : createManifest.isPending;
 
-  if (saved && makeDriverTrip) {
+  // كشف السائق للعربيات بتاعتنا بس — عربية مكتب العميل مالهاش رحلة عندنا.
+  if (saved && makeDriverTrip && saved.vehicleSource === 'OURS') {
     return (
       <DriverTripEditor
         manifest={saved}
@@ -139,6 +149,12 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
         onSkip={() => onCreated(saved)}
       />
     );
+  }
+
+  // عربية مكتب العميل: مافيش سؤال كشف سائق — بنقفل على طول.
+  if (saved && saved.vehicleSource !== 'OURS') {
+    onCreated(saved);
+    return null;
   }
 
   if (saved) {
@@ -165,10 +181,28 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
         subtitle={isEdit ? undefined : 'كشف مستقل لاستلام وتوصيل البضاعة — غير مرتبط بفاتورة'}
       />
       <div className="card" onKeyDown={fieldNavKeyDown}>
-        <div className="form-grid">
-          {!isEdit && <Field label="رقم الكشف"><input value={no} onChange={(e) => setNo(e.target.value)} placeholder={clientName ? '…' : 'اختر العميل أولاً'} style={no ? { fontWeight: 700 } : {}} /></Field>}
-          <Field label="التاريخ"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-          <Field label="اسم العميل" full>
+        {/* mf-form = ٣ أعمدة على الشاشات العريضة — الفورم فيه حقول قصيرة كتير
+            (أرقام ولوحات وتواريخ) فعمودين كانوا بيسيبوا فراغ ويطوّلوا الفورم. */}
+        <div className="form-grid mf-form">
+          {/* نفس شكل «رقم الفاتورة»: العرض على قد الرقم بالـ ch، متوسّط وبولد.
+              الفرق إن رقم الكشف يدوي — تقدر تغيّره، مش readOnly. */}
+          {!isEdit && (
+            <Field label="رقم الكشف" className="fld-beige">
+              <input
+                value={no}
+                onChange={(e) => setNo(e.target.value)}
+                placeholder=""
+                title="رقم تلقائي — تقدر تغيّره"
+                className="num-fit"
+                style={{ width: `${Math.max(no?.length || 0, 3) + 1}ch` }}
+              />
+            </Field>
+          )}
+          <Field label="التاريخ" className="fld-end">
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+          <div className="form-sec">بيانات الكشف</div>
+          <Field label="اسم العميل" full className="fld-beige">
             <PartyCombobox
               parties={parties?.data ?? []}
               value={partyId}
@@ -183,7 +217,7 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
           </Field>
           {/* الربط بالفاتورة: هو اللي بيخلّي العربية تظهر كتاب جوّه الفاتورة بأصنافها
               ومصاريفها. بيتفعّل بعد اختيار العميل عشان نجيب فواتيره. */}
-          <Field label="الفاتورة المرتبطة" full>
+          <Field label="الفاتورة المرتبطة">
             <select
               value={invoiceId}
               onChange={(e) => setInvoiceId(e.target.value)}
@@ -200,6 +234,28 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
               ))}
             </select>
           </Field>
+          {/* نوع العربية هو اللي بيحدد السلسلة: من عندنا → كشف سائق وتخليص وجمارك،
+              مكتب العميل → اسم المكتب وبس. */}
+          <Field label="العربية">
+            <select
+              value={vehicleSource}
+              onChange={(e) => setVehicleSource(e.target.value as VehicleSource)}
+              style={{ width: '100%', padding: '11px 12px', border: '1.5px solid var(--line)', borderRadius: 10, background: '#fff' }}
+            >
+              <option value="OURS">{VEHICLE_SOURCE_LABEL.OURS}</option>
+              <option value="CLIENT_OFFICE">{VEHICLE_SOURCE_LABEL.CLIENT_OFFICE}</option>
+            </select>
+          </Field>
+          {!isOurs && (
+            <Field label="اسم مكتب الشحن">
+              <input
+                value={shippingOffice}
+                onChange={(e) => setShippingOffice(e.target.value)}
+                placeholder="اسم المكتب اللي شحن عنده العميل"
+              />
+            </Field>
+          )}
+          <div className="form-sec">السائق</div>
           <Field label="اسم السائق">
             <DriverCombo
               value={driverName}
@@ -219,6 +275,7 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
           </Field>
           <Field label="الرقم القومي للسائق"><input inputMode="numeric" value={driverNID} onChange={(e) => setDriverNID(e.target.value.replace(/\D/g, ''))} /></Field>
           <Field label="رقم تليفون السائق"><input inputMode="numeric" value={driverPhone} onChange={(e) => setDriverPhone(e.target.value.replace(/\D/g, ''))} /></Field>
+          <div className="form-sec">العربية</div>
           <Field label="مسمّى العربية">
             <input value={vehicleLabel} onChange={(e) => setVehicleLabel(e.target.value)} placeholder="عربية الزيتون / عربية ديدي" />
           </Field>
@@ -228,6 +285,7 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
           <Field label="رقم المقطورة (٣ حروف / أرقام)">
             <PlateInput letters={trlL} numbers={trlNumbers} onLettersChange={setTrlL} onNumbersChange={setTrlNumbers} numRef={trlNumRef} />
           </Field>
+          <div className="form-sec">ملاحظات</div>
           <Field label="ملاحظات (اختياري)" full><input value={note} onChange={(e) => setNote(e.target.value)} /></Field>
         </div>
 

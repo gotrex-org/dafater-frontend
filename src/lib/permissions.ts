@@ -53,6 +53,13 @@ export const PERMISSIONS: PermGroup[] = [
   },
   { page: 'driver-trips', label: 'كشف السائقين', actions: [] },
   {
+    page: 'clearance', label: 'التخليص والجمارك', actions: [
+      { key: 'clearance.expense', label: 'ترحيل مصروف جمارك' },
+      { key: 'clearance.pay',     label: 'سداد لمخلّص' },
+      { key: 'clearance.delete',  label: 'حذف حركة تخليص' },
+    ],
+  },
+  {
     page: 'requests', label: 'طلبيات العملاء', actions: [
       { key: 'requests.create',  label: 'إنشاء طلبية' },
       { key: 'requests.receive', label: 'تسجيل وارد' },

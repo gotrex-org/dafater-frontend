@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { EGP, fmtDate, todayISO } from '@/lib/format';
-import { Field, Combobox, MoneyInput, PlateInput, parsePlate, buildPlate } from '@/components/common';
+import { Field, Combobox, MoneyInput, PlateInput, parsePlate, buildPlate, Spinner } from '@/components/common';
 import { PartyCombobox } from '../../invoices/components/PartyCombobox';
 import { useAllParties } from '../../parties/hooks';
 import { useAllTreasury } from '../../treasury/hooks';
 import { useConfig } from '../../config/hooks';
-import { useAddPayment, useDeletePayment, useSetArrival, useUpdateDriverTrip, useUpdateWeightDiff } from '../hooks';
+import { useAddPayment, useDeletePayment, useDriverTrip, useSetArrival, useUpdateDriverTrip, useUpdateWeightDiff } from '../hooks';
+import { useManifests } from '../../manifests/hooks';
 import type { DriverTrip } from '../dtos';
 
 // Fallbacks only — actual values come from useConfig() (إعدادات رحلات السائقين)
@@ -31,6 +32,15 @@ export function DriverTripDetail({ trip, onBack }: Props) {
   const deletePayment   = useDeletePayment();
   const setArrival      = useSetArrival();
   const updateTrip      = useUpdateDriverTrip();
+
+  // ربط الرحلة بكشف عربية. بنعرض كشوفات نفس العميل اللي عربيتها من عندنا بس —
+  // كشف عربية مكتب العميل مالوش رحلة سائق (والباك إند بيرفضه كمان).
+  const [linking, setLinking] = useState(false);
+  const [linkErr, setLinkErr] = useState('');
+  const { data: manifestsPage } = useManifests({ search: trip.clientName, pageSize: 100 });
+  const linkableManifests = (manifestsPage?.data ?? []).filter(
+    (m) => m.vehicleSource === 'OURS' && m.clientName === trip.clientName,
+  );
   const updateWeightDiff = useUpdateWeightDiff();
   const { data: parties } = useAllParties('CLIENT');
   const { data: treasury } = useAllTreasury();
@@ -206,6 +216,55 @@ export function DriverTripDetail({ trip, onBack }: Props) {
             )}
             <div className="muted" style={{ fontSize: 13 }}>العميل: {trip.clientName}</div>
             {trip.party && <div className="muted" style={{ fontSize: 12 }}>حساب: {trip.party.name}</div>}
+
+            {/* ربط الرحلة بكشف عربية — بيخلّيك تعمل الرحلة والكشف كل واحد لوحده
+                وتربطهم بعدين. الكشوفات اللي عربيتها من مكتب العميل مابتظهرش هنا
+                أصلاً، والباك إند بيرفضها كمان لو حد حاول. */}
+            <div className="muted" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 7, marginTop: 4, flexWrap: 'wrap' }}>
+              <span>كشف العربية:</span>
+              {trip.manifest
+                ? <b style={{ color: 'var(--ink)' }}>كشف {trip.manifest.no}</b>
+                : <span>مستقلة — مش مربوطة بكشف</span>}
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ fontSize: 11, padding: '2px 7px' }}
+                onClick={() => { setLinking((v) => !v); setLinkErr(''); }}
+              >
+                {linking ? 'إلغاء' : trip.manifest ? 'تغيير' : 'اربط بكشف'}
+              </button>
+            </div>
+            {linking && (
+              <div style={{ marginTop: 6, maxWidth: 340 }}>
+                <select
+                  value={trip.manifest?.uid ?? ''}
+                  disabled={updateTrip.isPending}
+                  onChange={(e) => {
+                    setLinkErr('');
+                    updateTrip.mutate(
+                      { id: trip.id, dto: { manifestId: e.target.value } },
+                      {
+                        onSuccess: () => setLinking(false),
+                        onError: (err: any) => setLinkErr(err?.message || 'مانفعش الربط'),
+                      },
+                    );
+                  }}
+                  style={{ width: '100%', padding: '8px 10px', border: '1.5px solid var(--line)', borderRadius: 9, background: '#fff', fontSize: 13 }}
+                >
+                  <option value="">مستقلة — من غير كشف</option>
+                  {linkableManifests.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      كشف {m.no} — {fmtDate(m.date)}{m.clientName ? ` — ${m.clientName}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {linkableManifests.length === 0 && (
+                  <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>
+                    مفيش كشوفات متاحة لـ {trip.clientName} — كشوفات مكتب الشحن مالهاش رحلة سائق.
+                  </div>
+                )}
+                {linkErr && <div className="err-text" style={{ fontSize: 12 }}>{linkErr}</div>}
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
             <div>
@@ -530,4 +589,11 @@ export function DriverTripDetail({ trip, onBack }: Props) {
       )}
     </div>
   );
+}
+
+/** يفتح رحلة سائق بالـ uid — بيستخدمه شريط السلسلة و RecordOpener. */
+export function DriverTripDetailById({ uid, onBack }: { uid: string; onBack: () => void }) {
+  const { data, isLoading } = useDriverTrip(uid);
+  if (isLoading || !data) return <Spinner />;
+  return <DriverTripDetail trip={data} onBack={onBack} />;
 }
