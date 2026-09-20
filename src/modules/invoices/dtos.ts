@@ -39,6 +39,8 @@ export interface Invoice {
   note?: string | null;
   party?: Party;
   warehouse?: Warehouse;
+  /** الخزنة اللي اتحصّل/اتدفع منها — بترجع مع الفاتورة عشان التعديل يفتح على نفس الخزنة */
+  treasury?: { id: string; name: string } | null;
   items: InvoiceItem[];
 }
 

@@ -107,7 +107,18 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   const stockByProduct = new Map((stock ?? []).map((r) => [r.productId, r]));
   const { data: lastPrices } = useLastPrices(kind);
   const lastPriceByProduct = new Map((lastPrices ?? []).map((r) => [r.productId, r]));
-  const [treasuryId, setTreasuryId] = useState(d?.treasuryId ?? '');
+  // في فاتورة بيع بنعرض كمان سعر الشراء — الثابت على الصنف، وإلا آخر سعر اشترينا بيه.
+  const { data: lastBuyPrices } = useLastPrices('PURCHASE');
+  const lastBuyByProduct = new Map((lastBuyPrices ?? []).map((r) => [r.productId, r]));
+  // إظهار/إخفاء عمود سعر الشراء في فاتورة البيع — الاختيار بيفضل محفوظ للمستخدم.
+  const [showCost, setShowCost] = useState<boolean>(() => {
+    try { return localStorage.getItem('dafater:invoice:showCost') !== '0'; } catch { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('dafater:invoice:showCost', showCost ? '1' : '0'); } catch {}
+  }, [showCost]);
+  // التعديل بيفتح على نفس الخزنة اللي اتسجّلت على الفاتورة — زي باقي الحقول.
+  const [treasuryId, setTreasuryId] = useState(d?.treasuryId ?? invoice?.treasury?.id ?? '');
   const [paid, setPaid] = useState(d?.paid ?? (invoice ? String(invoice.paid || '') : ''));
   const [discount, setDiscount] = useState(d?.discount ?? (invoice?.discount ? String(invoice.discount) : ''));
   const [fake, setFake] = useState(d?.fake ?? invoice?.fake ?? false);
@@ -142,7 +153,10 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
     if (prefilled || !products) return;
     const pinned = products.data.filter((p) => (kind === 'SALE' ? p.pinSale : p.pinPurchase));
     // Pinned defaults become extra "بنود" that sit AFTER the products (a blank product line first).
-    if (pinned.length) setLines([blankLine(), ...pinned.map((p) => ({ ...blankLine(), productId: p.id, bnd: true }))]);
+    if (pinned.length) setLines([blankLine(), ...pinned.map((p) => {
+      const fixed = kind === 'SALE' ? p.salePrice : p.purchasePrice;
+      return { ...blankLine(), productId: p.id, bnd: true, price: fixed && fixed > 0 ? String(fixed) : '' };
+    })]);
     setPrefilled(true);
   }, [products, prefilled, kind]);
 
@@ -185,6 +199,32 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   const totalEgp = isUSD && rate > 0 ? total * rate : 0; // EGP equivalent of a USD invoice
   const setLine = (i: number, patch: Partial<Line>) =>
     setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+
+  // السعر الثابت المحفوظ على الصنف حسب نوع الفاتورة. 0/فاضي = مفيش سعر ثابت.
+  const fixedPriceOf = (p?: { salePrice?: number; purchasePrice?: number }) => {
+    const v = kind === 'SALE' ? p?.salePrice : p?.purchasePrice;
+    return v && v > 0 ? v : undefined;
+  };
+  // السعر اللي بيتحط تلقائيًا أول ما تختار الصنف: السعر الثابت المحفوظ عليه، ولو
+  // الصنف لسه متسعّرش يقع على آخر سعر اتعامل بيه في فاتورة من نفس النوع — فأول
+  // فاتورة للصنف هي اللي بتسعّره، واللي بعدها بتفتح على نفس السعر.
+  const autoPriceFor = (id: string) => {
+    const fixed = fixedPriceOf(products?.data.find((p) => p.id === id));
+    if (fixed !== undefined) return fixed;
+    const last = lastPriceByProduct.get(id)?.price;
+    return last && last > 0 ? last : undefined;
+  };
+  // اختيار صنف في سطر: بيملا السعر تلقائيًا — وقابل للتعديل بعدها عادي،
+  // والتعديل على الفاتورة مبيغيّرش السعر الثابت المحفوظ على الصنف.
+  // سعر مكتوب بالفعل في السطر مبيتمسحش.
+  const pickProduct = (i: number, id: string) => {
+    const auto = autoPriceFor(id);
+    setLines((ls) => ls.map((l, idx) => {
+      if (idx !== i) return l;
+      const keep = Number(l.price) > 0;
+      return { ...l, productId: id, price: keep || auto === undefined ? l.price : String(auto) };
+    }));
+  };
 
   const save = () => {
     setError('');
@@ -354,13 +394,35 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
         )}
         <div className="tbl-wrap combo-table invoice-items">
           <table>
-            <thead><tr><th>الكمية</th><th>الصنف</th><th>السعر {isUSD ? '($)' : '(ج.م)'}</th><th>الإجمالي</th><th></th></tr></thead>
+            <thead><tr>
+              <th>الكمية</th>
+              <th>الصنف</th>
+              <th>
+                السعر {isUSD ? '($)' : '(ج.م)'}
+                {kind === 'SALE' && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    title={showCost ? 'إخفاء سعر الشراء' : 'إظهار سعر الشراء'}
+                    style={{ marginInlineStart: 6, fontSize: 13, padding: '1px 5px', lineHeight: 1 }}
+                    onClick={() => setShowCost((v) => !v)}
+                  >{showCost ? '🙈' : '👁'}</button>
+                )}
+              </th>
+              {kind === 'SALE' && showCost && <th>سعر الشراء</th>}
+              <th>الإجمالي</th>
+              <th></th>
+            </tr></thead>
             <tbody>
               {lines.map((l, i) => {
                 if (l.bnd) return null; // البنود الإضافية ليها قسم منفصل تحت
                 const prod = l.productId ? products?.data.find((p) => p.id === l.productId) : undefined;
                 const stockRow = prod && !prod.service ? stockByProduct.get(l.productId) : undefined;
                 const lastPrice = prod ? lastPriceByProduct.get(l.productId) : undefined;
+                // سعر الشراء المعروض في فاتورة البيع: الثابت على الصنف، وإلا آخر سعر شراء فعلي.
+                const lastBuy = prod ? lastBuyByProduct.get(l.productId) : undefined;
+                const fixedCost = prod?.purchasePrice && prod.purchasePrice > 0 ? prod.purchasePrice : undefined;
+                const cost = fixedCost ?? lastBuy?.price;
                 const pinned = prod ? (kind === 'SALE' ? !!prod.pinSale : !!prod.pinPurchase) : false;
                 return (
                   <tr key={l._key}>
@@ -369,7 +431,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
                       <ProductCombobox
                         products={products?.data ?? []}
                         value={l.productId}
-                        onChange={(id) => setLine(i, { productId: id })}
+                        onChange={(id) => pickProduct(i, id)}
                       />
                       {prod && !prod.service && (
                         <div style={{ fontSize: 12, marginTop: 3, fontWeight: 700 }} className={(stockRow?.qty ?? 0) < 0 ? 'deb' : 'muted'}>
@@ -442,6 +504,21 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
                         </div>
                       )}
                     </td>
+                    {kind === 'SALE' && showCost && (
+                      <td className="num" style={{ fontSize: 12.5 }}>
+                        {cost === undefined ? (
+                          <span className="muted">—</span>
+                        ) : (
+                          <span
+                            style={{ fontWeight: 700 }}
+                            title={fixedCost !== undefined ? 'سعر الشراء الثابت المحفوظ على الصنف' : 'آخر سعر شراء فعلي'}
+                          >
+                            {money(cost, cur)}
+                            {fixedCost === undefined && <span className="muted" style={{ fontWeight: 400 }}> (آخر شراء)</span>}
+                          </span>
+                        )}
+                      </td>
+                    )}
                     <td className="num">{money(Number(l.qty) * Number(l.price), cur)}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center', position: 'relative' }}>
@@ -498,7 +575,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
               return (
                 <div key={l._key} style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', background: 'var(--surface)', borderRadius: 6, padding: '4px 6px', fontSize: 12 }}>
                   <div style={{ flex: 1, minWidth: 150 }}>
-                    <ProductCombobox products={products?.data ?? []} value={l.productId} onChange={(id) => setLine(i, { productId: id })} />
+                    <ProductCombobox products={products?.data ?? []} value={l.productId} onChange={(id) => pickProduct(i, id)} />
                   </div>
                   <MoneyInput value={l.qty} onChange={(v) => setLine(i, { qty: v })} placeholder="كمية" style={{ width: 56 }} />
                   <span className="muted" style={{ fontSize: 11 }}>×</span>

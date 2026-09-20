@@ -505,8 +505,9 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
   .draft-dock, .draft-overlay { display: none !important; }
 }
 
-/* ===== Minimized invoice drafts ===== */
-/* Taskbar of minimized windows along the bottom */
+/* ===== Open-window tab strip ===== */
+/* Every open window lives here until it's closed — the one you're looking at is the
+   highlighted tab, the rest are waiting in the background with their state intact. */
 .draft-dock {
   position: fixed; inset-block-end: 12px; inset-inline: 12px; z-index: 50;
   display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; justify-content: flex-start;
@@ -529,6 +530,14 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
   font-size: 20px; line-height: 1; padding: 8px 12px; align-self: stretch;
 }
 .draft-chip-x:hover { color: #fff; background: var(--debit, #c0392b); }
+/* التاب اللي قدامك دلوقتي — لونه لون الصفحة وله خط علوي واضح، زي تاب المتصفح المفتوح. */
+.draft-chip.is-active {
+  background: var(--paper); color: var(--ink);
+  border-color: var(--line); box-shadow: 0 -2px 0 0 var(--accent, #1c2a33) inset, var(--shadow);
+}
+.draft-chip.is-active .draft-chip-open:hover { background: rgba(0,0,0,.05); }
+.draft-chip.is-active .draft-chip-x { color: var(--ink-soft); }
+.draft-chip.is-active .draft-chip-x:hover { color: #fff; }
 
 /* Restored draft floating over the whole app */
 .draft-overlay {
@@ -576,6 +585,11 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
   /* الهوامش أضيق شوية من هوامش الطباعة (14mm) عشان عرض الشاشة يروح للأعمدة،
      وبترجع كاملة في الـ PDF والطباعة (.pdf-capture). */
   .ledger-sheet:not(.pdf-capture) { padding: 16px 18px; }
+  /* الورقة بتاخد طول محتواها على الشاشة بس. .print-sheet مثبّتة على ارتفاع
+     صفحة A4 كاملة (min-height: 297mm) — ده صح للورق، لكن على الشاشة كان
+     بيسيب فراغ أبيض كبير تحت الكشف أول ما الصفوف تقلّ (فلتر، أو فترة فيها
+     حركات قليلة). الارتفاع الكامل بيرجع في الطباعة والـ PDF (.pdf-capture). */
+  .ledger-sheet:not(.pdf-capture) { min-height: 0; }
   /* الكشف بياخد عرض الشاشة كله — سقف الصفحة (1400px) كان بيسيب هوامش فاضية على
      الجانبين وبيضغط عمود «البيان»؛ وحشو أسفل الصفحة المحجوز لشريط النوافذ المصغّرة
      مساحة ميتة هنا. الاتنين بيرجعوا أول ما تسيب الكشف. */
@@ -930,28 +944,39 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 .mf-old.mf-plain table.pr > thead > tr > th {
   background: transparent; border-bottom: 2px solid var(--ink);
 }
+/* سطر «إجمالي العدد» بخلفية بيچ زي القديم — نفس البيچ بتاع رأس الجدول القديم
+   وسطر إجمالي كشف الحساب. print-color-adjust عشان البيچ يطلع في الطباعة كمان
+   مش على الشاشة بس (المتصفح بيشيل خلفيات الطباعة افتراضيًا). */
+.mf-old.mf-plain table.pr > tbody > tr.mf-total > td {
+  background: #f0ece1;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
 
-/* ── الموبايل: جدول بيانات الكشف بيتفرد سطر ورا سطر ──────────────── */
-/* ٣ أعمدة في 390px يعني ~110px للخانة — الاسم الطويل بيلفّ ٣ سطور والخط بينزل.
-   هنا بيبقى كل حقل في سطر: الاسم ناحية والقيمة ناحية. الورقة والـ PDF مابيتأثروش
-   (القاعدة على الشاشة الصغيرة بس، و.pdf-capture بيرجّع الجدول لـ ٣×٣). */
+/* ── بيانات الكشف: كل حقل في سطر لوحده، زي الشكل القديم ──────────── */
+/* الاسم ناحية والقيمة ناحية، واحد تحت التاني — مش ٣ خانات جنب بعض في سطر.
+   نفس الترتيب على الشاشة وفي الطباعة وفي الـ PDF، بأي عرض. */
+.mf-plain table.pr.pr-info:not(.x),
+.mf-plain table.pr.pr-info > tbody,
+.mf-plain table.pr.pr-info > tbody > tr { display: block; }
+/* صندوق بحواف مدوّرة زي الشكل القديم (mf-grid)، وجوّاه خطوط أفقية بس تفصل
+   الحقول — مافيش فاصل رأسي بين اسم الحقل وقيمته. */
+.mf-plain table.pr.pr-info {
+  border: 1px solid #ccc; border-radius: 10px; overflow: hidden;
+}
+.mf-plain table.pr.pr-info > tbody > tr > td {
+  display: flex; align-items: baseline; width: auto !important;
+  padding: 0; border: none; border-bottom: 1px solid #ddd;
+}
+.mf-plain table.pr.pr-info > tbody > tr:last-child > td:last-child { border-bottom: none; }
+.mf-plain table.pr.pr-info > tbody > tr > td > b {
+  flex: 0 0 150px; padding: 7px 9px; font-weight: 700; color: var(--ink-soft);
+}
+.mf-plain table.pr.pr-info > tbody > tr > td > span {
+  padding: 7px 9px; font-weight: 600; min-width: 0; overflow-wrap: anywhere;
+}
+/* شاشة ضيقة: عمود الأسماء بيرجع أرفع عشان القيمة تلاقي مكان */
 @media screen and (max-width: 640px) {
-  .mf-plain table.pr.pr-info:not(.x),
-  .mf-plain table.pr.pr-info > tbody,
-  .mf-plain table.pr.pr-info > tbody > tr { display: block; }
-  .mf-plain table.pr.pr-info { border: 1px solid #ccc; }
-  .mf-plain table.pr.pr-info > tbody > tr > td {
-    display: flex; align-items: baseline; width: auto !important;
-    padding: 0; border: none; border-bottom: 1px solid #ddd;
-  }
-  .mf-plain table.pr.pr-info > tbody > tr:last-child > td:last-child { border-bottom: none; }
-  .mf-plain table.pr.pr-info > tbody > tr > td > b {
-    flex: 0 0 112px; padding: 7px 9px; font-weight: 700;
-    color: var(--ink-soft); border-inline-end: 1px solid #ddd;
-  }
-  .mf-plain table.pr.pr-info > tbody > tr > td > span {
-    padding: 7px 9px; font-weight: 600; min-width: 0; overflow-wrap: anywhere;
-  }
+  .mf-plain table.pr.pr-info > tbody > tr > td > b { flex: 0 0 112px; }
 }
 
 /* ---- ألوان الحالة: وصلت / في الطريق ---- */

@@ -4,12 +4,16 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { money, EGP, fmtDate, todayISO } from '@/lib/format';
 import { downloadElementAsPdf, printElementOnePage } from '@/lib/pdf';
 import { replaceAmountInNote } from '@/lib/noteAmount';
+import { normalizeAr } from '@/lib/arabicSearch';
 import { PageTitle, DataTable, SegmentedControl, Spinner, Combobox, Field, MoneyInput, type Column } from '@/components/common';
 import { useAuth } from '@/lib/auth';
+import { useSectionActive } from '@/lib/windowed';
 import { InvoiceDetailById } from '../../invoices/components/InvoiceDetail';
 import { DealDetailById } from '../../deals/components/DealsView';
 import { usePostEntry, useUpdateTransaction, useDeleteTransaction } from '../../transactions/hooks';
-import { useParties, useParty, usePartyLedger } from '../hooks';
+import { useParties, useParty, usePartyLedger, useDeleteParty } from '../hooks';
+import { useDeleteWithRelated } from '@/lib/deleteWithRelated';
+import { NewPartyModal } from './NewPartyModal';
 import { PartiesRegistry } from './PartiesRegistry';
 import { TrialBalance } from './TrialBalance';
 import type { Party, PartyRole, LedgerRow } from '../dtos';
@@ -38,11 +42,22 @@ function amtWithEgp(amount: number | undefined | null, currency?: string | null,
 // ─── Ledger tab ───────────────────────────────────────────────────────────────
 
 function LedgerTab() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const restrictedIds = user?.ledgerPartyIds ?? [];
   const isRestricted = !user?.admin && restrictedIds.length > 0;
 
   const [role, setRole] = useState<PartyRole>('CLIENT');
+  // أصحاب العهدة بيتضافوا ويتشالوا من هنا على طول — مالهمش بيانات غير الاسم
+  // والتليفون، فمالوش لازمة تفتح الإعدادات عشان تضيف واحد وترجع. باقي الأنواع
+  // (عملاء/موردين) فيها رصيد افتتاحي وعملة وربط، فمكانها فاضل صفحة الأطراف.
+  const [addingPerson, setAddingPerson] = useState(false);
+  const delParty = useDeleteParty();
+  const { start: startDeleteParty, modal: deletePartyModal } = useDeleteWithRelated(delParty, {
+    onError: (e) => window.alert(e.message),
+  });
+  const isCustody = role === 'PERSON';
+  const canAddPerson = isCustody && (!!user?.admin || can('settings'));
+  const canDeletePerson = isCustody && !!user?.admin;
   const [moreOpen, setMoreOpen] = useState(false); // قائمة الثلاث نقاط (commission / عهدة)
   const [selected, setSelected] = useState<Party | null>(null);
   const [search, setSearch] = useState('');
@@ -75,6 +90,22 @@ function LedgerTab() {
     { header: 'الاسم', cell: (p) => <span><b>{p.name}</b> {p.currency === 'USD' && <span className="pill">دولار</span>}</span> },
     { header: 'الهاتف', cell: (p) => p.phone || '—', className: 'muted' },
     { header: 'الرصيد', cell: (p) => <span className={(p.balance ?? 0) >= 0 ? 'deb' : 'cre'}>{amtWithEgp(p.balance, p.currency, p.avgExchangeRate)}</span>, className: 'num' },
+    // الحذف بيسأل الأول لو عليه حركات — نفس سؤال صفحة الأطراف بالظبط.
+    ...(canDeletePerson ? [{
+      header: '',
+      cell: (p: Party) => (
+        <button
+          className="btn btn-danger btn-sm"
+          title={`حذف ${p.name}`}
+          disabled={delParty.isPending}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!window.confirm(`حذف ${p.name}؟`)) return;
+            startDeleteParty(p.id, p.name);
+          }}
+        >×</button>
+      ),
+    } as Column<Party>] : []),
   ];
 
   return (
@@ -117,6 +148,9 @@ function LedgerTab() {
         <div style={{ minWidth: 220 }}>
           <Combobox options={sorted} value="" onChange={(id) => { const p = all.find((x) => x.id === id); if (p) setSelected(p); }} placeholder="اكتب واختر بالاسم…" />
         </div>
+        {canAddPerson && (
+          <button className="btn btn-primary btn-sm" onClick={() => setAddingPerson(true)}>+ صاحب عهدة جديد</button>
+        )}
       </div>
       <DataTable
         columns={columns}
@@ -129,6 +163,16 @@ function LedgerTab() {
         onPage={setPage}
         pageSize={pageSize}
       />
+      {addingPerson && (
+        <NewPartyModal
+          initialName=""
+          role="PERSON"
+          label="صاحب عهدة"
+          onCreated={() => setAddingPerson(false)}
+          onClose={() => setAddingPerson(false)}
+        />
+      )}
+      {deletePartyModal}
     </>
   );
 }
@@ -151,6 +195,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const [from, setFrom] = useState(startOfMonthISO());
   const [to, setTo] = useState('');
   const [kind, setKind] = useState<LedgerKind>('all');
+  const [rowSearch, setRowSearch] = useState('');
   const { data, isLoading } = usePartyLedger(party.id, { from: from || undefined, to: to || undefined });
   const [sel, setSel] = useState<LedgerRow | null>(null);
   const [selEditing, setSelEditing] = useState(false);
@@ -187,20 +232,49 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const [wError, setWError] = useState('');
   const [wMsg, setWMsg] = useState('');
   const postEntry = usePostEntry();
+  const sectionActive = useSectionActive();
 
   // الكشف بياخد عرض الشاشة كله وبيلغي حشو أسفل الصفحة (المحجوز لشريط النوافذ
   // المصغّرة) — الصفحة نفسها هي اللي بتسكرول، والجدول بيتفرد على طوله.
+  // بس وإحنا وقفين على الكشف — لو مصغّر أو في تاب في الخلفية ميعملش حاجة، وكشفين
+  // مفتوحين في نفس الوقت ميشيلوش الكلاس من تحت بعض.
   useEffect(() => {
+    if (!sectionActive) return;
     document.body.classList.add('ledger-fit');
     return () => document.body.classList.remove('ledger-fit');
-  }, []);
+  }, [sectionActive]);
 
   if (invoiceUid) return <InvoiceDetailById uid={invoiceUid} onBack={() => setInvoiceUid(null)} />;
   if (dealUid) return <DealDetailById uid={dealUid} onBack={() => setDealUid(null)} />;
 
   const toggle = (id: string) => setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  // فلتر الكشف: بيدوّر في كل حاجة ظاهرة في السطر — التاريخ (بالشكلين اللي ممكن
+  // تكتبه بيهم)، ونوع الحركة، والبيان، والمبالغ، ورقم العربية، ورقم المستند،
+  // وأسماء الأصناف اللي جوّه الفاتورة.
+  // التطبيع العربي شغال («أحمد» تلاقي «احمد»)، والأرقام بتتقارن من غير فواصل
+  // ولا كسور — فـ«1500» تلاقي «1,500.00».
+  const digitsOf = (s: string) => s.replace(/[^\d]/g, '');
+  const qRaw = rowSearch.trim();
+  const qn = normalizeAr(qRaw);
+  const qd = digitsOf(qRaw);
+  const matchesSearch = (r: LedgerRow) => {
+    if (!qn) return true;
+    const text = [
+      fmtDate(r.date), r.date.slice(0, 10),
+      r.manifestDate ? fmtDate(r.manifestDate) : '',
+      r.type, r.note, r.clientNote, r.partyName,
+      r.manifestNo, r.docNo,
+      r.debit, r.credit,
+      ...(r.invoiceItems ?? []).map((it) => it.name),
+    ].filter(Boolean).join(' ');
+    if (normalizeAr(text).includes(qn)) return true;
+    // رقم مكتوب من غير فواصل يلاقي الرقم المعروض بفواصله
+    return !!qd && digitsOf(text).includes(qd);
+  };
+
   const filteredRows = (data?.rows ?? []).filter((r) => {
+    if (!matchesSearch(r)) return false;
     if (kind === 'invoices') return !!(r.invoiceUid || r.dealUid);
     if (kind === 'collect') return !r.invoiceUid && !r.dealUid;
     if (kind === 'commission') return (r.credit ?? 0) > 0;
@@ -220,6 +294,10 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const detailRowIds = visibleRows.filter((r) => r.invoiceItems?.length).map((r) => r.id);
   const allExpanded = detailRowIds.length > 0 && detailRowIds.every((id) => expanded.has(id));
   const toggleAllDetails = () => setExpanded(allExpanded ? new Set() : new Set(detailRowIds));
+  // أعمدة الجدول ثابتة مهما فلترت — الفلتر بيقلّل الصفوف بس، عمر ما بيشيل عمود
+  // ولا يغيّر عرض الكشف. («الرصيد» بيختفي مع فلاتر النوع بس، زي ما كان دايمًا،
+  // لأنها بتغيّر معنى الكشف نفسه مش بتدوّر جوّاه.)
+  const showBalance = kind === 'all';
 
   return (
     <>
@@ -303,6 +381,21 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
             {allExpanded ? '▾ إخفاء كل التفاصيل' : '▸ إظهار كل التفاصيل'}
           </button>
         )}
+        <div style={{ flex: 1 }} />
+        <input
+          value={rowSearch}
+          onChange={(e) => setRowSearch(e.target.value)}
+          placeholder="فلتر: بيان، صنف، تاريخ، مبلغ، رقم عربية…"
+          style={{ minWidth: 230, padding: '8px 10px', border: '1.5px solid var(--line)', borderRadius: 10, fontSize: 13 }}
+        />
+        {rowSearch && (
+          <button className="btn btn-ghost btn-sm" title="مسح الفلتر" onClick={() => setRowSearch('')}>×</button>
+        )}
+        <span className="muted" style={{ fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>
+          {rowSearch.trim()
+            ? `${visibleRows.length} من ${(data?.rows ?? []).length} حركة`
+            : `${visibleRows.length} حركة`}
+        </span>
       </div>
 
       {isLoading || !data ? <Spinner /> : (
@@ -330,7 +423,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
               <thead>
                 <tr>
                   <th>التاريخ</th><th>النوع</th><th>البيان</th><th>مدين (عليه)</th><th>دائن (له)</th>
-                  {kind === 'all' && <th>الرصيد</th>}
+                  {showBalance && <th>الرصيد</th>}
                 </tr>
               </thead>
               <tbody>
@@ -384,7 +477,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                         </td>
                         <td className="num deb lg-deb" data-l="مدين">{r.debit ? money(r.debit, cur) : ''}</td>
                         <td className="num cre lg-cre" data-l="دائن">{r.credit ? money(r.credit, cur) : ''}</td>
-                        {kind === 'all' && <td className="num lg-bal" data-l="الرصيد">{money(r.balance, cur)}</td>}
+                        {showBalance && <td className="num lg-bal" data-l="الرصيد">{money(r.balance, cur)}</td>}
                       </tr>
                       {open && (
                         <tr className="lg-items-row">
@@ -408,7 +501,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                     <td colSpan={3} style={{ fontWeight: 800 }}>الإجمالي</td>
                     <td className="num deb">{money(totalDebit, cur)}</td>
                     <td className="num cre">{money(totalCredit, cur)}</td>
-                    {kind === 'all' && <td className="num">{money(data.balance, cur)}</td>}
+                    {showBalance && <td className="num">{money(data.balance, cur)}</td>}
                   </tr>
                 )}
                 {visibleRows.length === 0 && <tr><td colSpan={6} className="empty">لا توجد حركات</td></tr>}

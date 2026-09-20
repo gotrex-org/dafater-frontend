@@ -37,6 +37,12 @@ export interface DriverTrip {
   remainingDelay?: number;
   remainingWeightDiff?: number;
   trulyClosed?: boolean;
+  // الفاتورة المربوطة — اللي الناولون اتحصّل فيها من العميل
+  invoiceId?: number | null;
+  invoice?: { uid: string; no: string; date: string; items: { qty: number; price: number; product: { name: string } | null }[] } | null;
+  collectedFreight?: number;
+  collectedLines?: TripInvoiceLine[];
+  tripProfit?: number;
 }
 
 export interface CreateDriverTripDto {
@@ -78,4 +84,15 @@ export interface AddPaymentDto {
   paymentType?: 'freight' | 'delay' | 'weightDiff' | 'advance';
   treasuryId?: string;
   weightDiffAmount?: number;
+}
+
+/** بند خدمة على الفاتورة المربوطة — ناولون/تحميل/شفتنة… */
+export interface TripInvoiceLine { name: string; total: number; }
+
+/** فاتورة بيع ينفع الرحلة تتربط بيها */
+export interface TripInvoiceCandidate {
+  uid: string;
+  no: string;
+  date: string;
+  items: { qty: number; price: number; product: { name: string } | null }[];
 }

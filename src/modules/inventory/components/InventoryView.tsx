@@ -15,22 +15,99 @@ import { StockAdjustment } from '../../adjustments/components/StockAdjustment';
 import { StockTransfer } from '../../adjustments/components/StockTransfer';
 import { WarehouseStockPrint } from './WarehouseStockPrint';
 
-function CostCell({ row, canEdit }: { row: StockRow; canEdit: boolean }) {
+/**
+ * اسم الصنف بيتعدّل من مكانه في شاشة المخازن — دوسة على الاسم تفتحه للكتابة،
+ * Enter يحفظ و Esc يلغي. الاسم متخزّن على الصنف نفسه فبيتغيّر في كل المخازن
+ * والفواتير القديمة كمان (الفواتير بتشاور على الصنف، مش بتنسخ اسمه).
+ * الدوسة مابتفتحش كارت الصنف — السطر كله قابل للضغط، فبنوقف الحدث هنا.
+ */
+function NameCell({ row, canEdit }: { row: StockRow; canEdit: boolean }) {
+  const qc = useQueryClient();
+  const updateProduct = useUpdateProduct();
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(row.name);
+  const [err, setErr] = useState('');
+
+  if (!canEdit) return <>{row.name}</>;
+
+  const save = () => {
+    const name = val.trim();
+    if (!name) return setErr('اكتب الاسم');
+    if (name === row.name) { setEditing(false); setErr(''); return; }
+    updateProduct.mutate(
+      { id: row.productId, dto: { name } },
+      {
+        onSuccess: () => { qc.invalidateQueries({ queryKey: warehouseKeys.all }); setEditing(false); setErr(''); },
+        onError: (e: any) => setErr(e.message ?? 'حدث خطأ'),
+      },
+    );
+  };
+
+  if (editing) {
+    return (
+      <span onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+        <input
+          autoFocus
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') save();
+            if (e.key === 'Escape') { setVal(row.name); setErr(''); setEditing(false); }
+          }}
+          style={{ width: 190, padding: '4px 8px', border: '1.5px solid var(--accent)', borderRadius: 7, fontSize: 13 }}
+        />
+        <button className="btn btn-primary btn-sm" style={{ padding: '2px 8px' }} onClick={save} disabled={updateProduct.isPending}>✓</button>
+        <button className="btn btn-ghost btn-sm" style={{ padding: '2px 8px' }} onClick={() => { setVal(row.name); setErr(''); setEditing(false); }}>×</button>
+        {err && <span className="err-text" style={{ fontSize: 11 }}>{err}</span>}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      title="اضغط لتعديل اسم الصنف"
+      style={{ cursor: 'text', borderBottom: '1px dashed var(--line)' }}
+      onClick={(e) => { e.stopPropagation(); setVal(row.name); setEditing(true); }}
+    >
+      {row.name}
+    </span>
+  );
+}
+
+/**
+ * خانة سعر بتتعدّل في مكانها من شاشة المخازن. `field` بيحدد السعر اللي على الصنف:
+ *   price         = سعر التقييم (بيقيّم المخزون)
+ *   purchasePrice = سعر الشراء الثابت — بيتحط تلقائيًا في سطر فاتورة الشراء
+ *   salePrice     = سعر البيع الثابت — بيتحط تلقائيًا في سطر فاتورة البيع
+ * التلاتة بيتخزنوا على الصنف نفسه، فالتعديل من هنا بيبان في كل المخازن والفواتير
+ * الجديدة على طول. تعديل السعر جوّه فاتورة بيخص الفاتورة دي بس ومابيرجعش هنا.
+ */
+function PriceCell({
+  row, canEdit, field, hint,
+}: {
+  row: StockRow;
+  canEdit: boolean;
+  field: 'price' | 'purchasePrice' | 'salePrice';
+  hint: string;
+}) {
   const qc = useQueryClient();
   const updateProduct = useUpdateProduct();
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState('');
+  const current = field === 'price' ? row.cost : (row[field] ?? 0);
+  // 0 في سعر ثابت معناها «مش متسجّل» — شرطة أوضح من ٠٫٠٠
+  const shown = field !== 'price' && !current ? <span className="muted">—</span> : <>{EGP(current)}</>;
 
-  if (!canEdit) return <>{EGP(row.cost)}</>;
+  if (!canEdit) return shown;
 
   if (!editing) {
     return (
       <span
         style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}
-        title="اضغط لتعديل سعر الصنف"
-        onClick={(e) => { e.stopPropagation(); setVal(String(row.cost || '')); setEditing(true); }}
+        title={hint}
+        onClick={(e) => { e.stopPropagation(); setVal(String(current || '')); setEditing(true); }}
       >
-        {EGP(row.cost)}
+        {shown}
         <span style={{ opacity: 0.5, fontSize: 12 }}>✏</span>
       </span>
     );
@@ -38,7 +115,7 @@ function CostCell({ row, canEdit }: { row: StockRow; canEdit: boolean }) {
 
   const save = () => {
     updateProduct.mutate(
-      { id: row.productId, dto: { price: Number(val) || 0 } },
+      { id: row.productId, dto: { [field]: Number(val) || 0 } },
       { onSuccess: () => { qc.invalidateQueries({ queryKey: warehouseKeys.all }); setEditing(false); } },
     );
   };
@@ -118,15 +195,17 @@ export function InventoryView() {
   }
 
   const columns: Column<StockRow>[] = [
-    { header: 'الصنف', cell: (r) => r.name },
+    { header: 'الصنف', cell: (r) => <NameCell row={r} canEdit={canEditPrice} /> },
     { header: 'الرصيد', cell: (r) => <span className={r.qty < 0 ? 'deb' : ''}>{QTY(r.qty)} {r.unit || ''}</span>, className: 'num' },
-    { header: 'سعر التقييم', cell: (r) => <CostCell row={r} canEdit={canEditPrice} />, className: 'num muted' },
+    { header: 'سعر الشراء', cell: (r) => <PriceCell row={r} canEdit={canEditPrice} field="purchasePrice" hint="سعر الشراء الثابت — بيتحط تلقائيًا في سطر فاتورة الشراء، وقابل للتعديل على الفاتورة" />, className: 'num' },
+    { header: 'سعر البيع', cell: (r) => <PriceCell row={r} canEdit={canEditPrice} field="salePrice" hint="سعر البيع الثابت — بيتحط تلقائيًا في سطر فاتورة البيع، وقابل للتعديل على الفاتورة" />, className: 'num' },
+    { header: 'سعر التقييم', cell: (r) => <PriceCell row={r} canEdit={canEditPrice} field="price" hint="سعر تقييم المخزون — بيتحسب من متوسط الشراء لو مش محطوط يدوي" />, className: 'num muted' },
     { header: 'القيمة', cell: (r) => EGP(r.value), className: 'num' },
   ];
 
   return (
     <>
-      <PageTitle title="المخازن" subtitle="رصيد البضاعة في كل مخزن وقيمتها التقديرية" />
+      <PageTitle title="المخازن" subtitle="رصيد البضاعة في كل مخزن وقيمتها — واضغط على أي سعر عشان تعدّله" />
 
       {/* view switcher */}
       <div className="toolbar" style={{ marginBottom: 0 }}>

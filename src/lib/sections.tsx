@@ -14,7 +14,7 @@ import { InventoryView } from '@/modules/inventory/components/InventoryView';
 import { TreasuryView } from '@/modules/treasury/components/TreasuryView';
 import { SettingsView } from '@/modules/settings/components/SettingsView';
 import { AuditView } from '@/modules/audit/components/AuditView';
-import { DailyReport } from '@/modules/transactions/components/DailyReport';
+import { ReportsSection } from '@/modules/reports/components/ReportsView';
 import { ForexView } from '@/modules/forex/components/ForexView';
 import { OrdersView } from '@/modules/orders/components/OrdersView';
 
@@ -44,7 +44,7 @@ export const SECTIONS: SectionDef[] = [
   { view: 'treasury',     href: '/treasury',     label: 'الخزنة',            Component: TreasuryView,   nav: true },
   { view: 'settings',     href: '/settings',     label: 'الإعدادات',         Component: SettingsView,   nav: true },
   { view: 'audit',        href: '/audit',        label: 'سجل النشاط',        Component: AuditView,      nav: true },
-  { view: 'today',        href: '/today',        label: 'تقرير اليوم',       Component: DailyReport,    nav: true },
+  { view: 'today',        href: '/today',        label: 'التقارير',          Component: ReportsSection, nav: true, primaryOnly: true },
   { view: 'forex',        href: '/forex',        label: 'الدولار',           Component: ForexView },
   { view: 'orders',       href: '/orders',       label: 'الطلبيات',          Component: OrdersView },
 ];

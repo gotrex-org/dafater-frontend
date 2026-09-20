@@ -28,6 +28,27 @@ export function useDriverTrip(id: string) {
   });
 }
 
+/** فواتير العميل اللي ينفع الرحلة تتربط بيها — بتتجاب لما تفتح اختيار الربط بس. */
+export function useTripInvoiceCandidates(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [KEY, id, 'invoice-candidates'],
+    queryFn: () => driverTripsApi.invoiceCandidates(id),
+    enabled: !!id && enabled,
+  });
+}
+
+export function useLinkTripInvoice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, invoiceId }: { id: string; invoiceId: string | null }) =>
+      driverTripsApi.linkInvoice(id, invoiceId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [KEY] });
+      qc.invalidateQueries({ queryKey: ['reports'] });
+    },
+  });
+}
+
 export function useCreateDriverTrip() {
   const qc = useQueryClient();
   return useMutation({

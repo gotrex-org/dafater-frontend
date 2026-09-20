@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { EGP, QTY, fmtDate } from '@/lib/format';
 import { PageTitle, DataTable, Spinner, SegmentedControl, Combobox, StatsGrid, StatCard, type Column } from '@/components/common';
-import { useProductMovements, useAllProducts, useUpdateProduct } from '../../products/hooks';
+import { useProductMovements, useProductStock, useAllProducts, useUpdateProduct } from '../../products/hooks';
 import type { ProductMovement } from '../../products/dtos';
 
 export function ProductMovements({ productId, name, onBack, backLabel = 'رجوع للمخزن' }: {
@@ -14,6 +14,7 @@ export function ProductMovements({ productId, name, onBack, backLabel = 'رجو�
   backLabel?: string;
 }) {
   const { data = [], isLoading } = useProductMovements(productId);
+  const { data: stock } = useProductStock(productId);
   const { data: products } = useAllProducts();
   const updateProduct = useUpdateProduct();
   const product = products?.data.find((p) => p.id === productId);
@@ -59,7 +60,14 @@ export function ProductMovements({ productId, name, onBack, backLabel = 'رجو�
         </label>
       )}
 
-      <StatsGrid columns={2}>
+      {/* «الموجود حاليًا» جاي من رصيد المخزن الحقيقي مش من (مشترى − مُباع) — فبيحسب
+          كمان المرتجعات والتسويات والبضاعة المعارة اللي لسه بره. */}
+      <StatsGrid columns={3}>
+        <StatCard
+          variant={(stock?.onHand ?? 0) < 0 ? 'debit' : 'accent'}
+          label="الموجود حاليًا (كل المخازن)"
+          value={stock ? `${QTY(stock.onHand)} ${product?.unit ?? ''}`.trim() : '…'}
+        />
         <StatCard variant="blue" label="إجمالي المشترى (دخول)" value={QTY(bought)} />
         <StatCard variant="gold" label="إجمالي المُباع (خروج)" value={QTY(sold)} />
       </StatsGrid>

@@ -9,7 +9,7 @@ import { DriverTripDetailById } from '../driver-trips/components/DriverTripDetai
 // Entities that have a real per-record detail view we can open by uid. Used by the
 // activity log and the reports to deep-link a row to "the original record" without
 // any URL routing — it swaps the current page for the target's detail component
-// (the same full-page-swap idiom the app already uses, e.g. DailyReport → invoice).
+// (the same full-page-swap idiom the app already uses, e.g. AuditView → invoice).
 const OPENERS: Record<string, (uid: string, onClose: () => void) => JSX.Element> = {
   invoices:  (uid, onClose) => <InvoiceDetailById uid={uid} onBack={onClose} />,
   deals:     (uid, onClose) => <DealDetailById uid={uid} onBack={onClose} />,

@@ -8,6 +8,8 @@ export const productsApi = {
   // No JWT required — used by the public (no-login) order form for item suggestions.
   publicCatalog: () => api.get<Product[]>('/products/public-catalog'),
   movements: (id: string) => api.get<ProductMovement[]>(`/products/${id}/movements`),
+  /** الموجود دلوقتي من الصنف في كل المخازن مع بعض */
+  stock: (id: string) => api.get<{ onHand: number }>(`/products/${id}/stock`),
   lastPrices: (kind: 'SALE' | 'PURCHASE') => api.get<LastPrice[]>(`/products/last-prices?kind=${kind}`),
   create: (dto: CreateProductDto) => api.post<Product>('/products', dto),
   update: (id: string, dto: UpdateProductDto) => api.patch<Product>(`/products/${id}`, dto),

@@ -28,6 +28,15 @@ export function useLastPrices(kind: 'SALE' | 'PURCHASE') {
   return useQuery({ queryKey: ['products', 'last-prices', kind], queryFn: () => productsApi.lastPrices(kind) });
 }
 
+/** الموجود دلوقتي من الصنف في كل المخازن — بيتعرض في كارت الصنف. */
+export function useProductStock(id: string | null) {
+  return useQuery({
+    queryKey: ['products', 'stock', id],
+    queryFn: () => productsApi.stock(id as string),
+    enabled: !!id,
+  });
+}
+
 export function useProductMovements(id: string | null) {
   return useQuery({
     queryKey: ['products', 'movements', id],

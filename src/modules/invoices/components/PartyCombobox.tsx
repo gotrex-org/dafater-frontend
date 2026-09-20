@@ -22,7 +22,13 @@ export function PartyCombobox({
   onChange: (id: string, party?: Party) => void;
   role: PartyRole;
 }) {
-  const label = role === 'CLIENT' ? 'عميل' : role === 'SUPPLIER' ? 'مورد' : 'طرف';
+  const label =
+    role === 'CLIENT' ? 'عميل'
+    : role === 'SUPPLIER' ? 'مورد'
+    : role === 'PERSON' ? 'صاحب عهدة'
+    : role === 'CLEARANCE' ? 'مخلّص'
+    : role === 'AGENT' ? 'صاحب commission'
+    : 'طرف';
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [focused, setFocused] = useState(false);

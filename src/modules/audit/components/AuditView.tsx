@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useTableState } from '@/lib/useTableState';
 import { money, fmtDate, fmtDateTime } from '@/lib/format';
 import { PageTitle, DataTable, SearchInput, type Column } from '@/components/common';
@@ -80,46 +80,74 @@ function formatScalar(v: unknown): string {
   return String(v);
 }
 
-function SnapshotValue({ value, depth = 0 }: { value: any; depth?: number }) {
-  if (Array.isArray(value)) {
-    if (value.length === 0) return <span className="muted" style={{ fontSize: 13 }}>—</span>;
-    return (
-      <div style={{ display: 'grid', gap: 6 }}>
-        {value.map((item, i) => (
-          <div key={i} style={{ border: '1px solid var(--line-soft)', borderRadius: 6, padding: 8 }}>
-            <SnapshotValue value={item} depth={depth + 1} />
-          </div>
-        ))}
-      </div>
-    );
+// قيم الأعمدة المحفوظة بالإنجليزي (النوع، الدور، العملة…) تتقرا عربي في السجل.
+const VALUE_LABELS: Record<string, string> = {
+  SALE: 'بيع', PURCHASE: 'شراء',
+  CLIENT: 'عميل', SUPPLIER: 'مورد', PERSON: 'صاحب عهدة', AGENT: 'صاحب commission', CLEARANCE: 'مخلّص جمركي',
+  EGP: 'جنيه', USD: 'دولار',
+  OPEN: 'مفتوحة', RETURNED: 'مرتجعة',
+  GOODS: 'بضاعة', CASH: 'نقدًا', DEBT: 'على الحساب', MIXED: 'مختلط',
+  WAREHOUSE: 'مصاريف مخزن', EXTERNAL: 'مصاريف خارجية',
+  CLIENT_OFFICE: 'مكتب شحن', OWN: 'عربيتنا',
+};
+const fmtVal = (v: unknown): string =>
+  (typeof v === 'string' && VALUE_LABELS[v]) || formatScalar(v);
+
+/**
+ * صفوف «إيه العنصر ده» بالعربي — بتتحط جوّه بيانات الحركة فوق على طول، فمفيش قسم
+ * «بيانات العنصر» منفصل بيرمي كل حقل في الداتابيز على الشاشة.
+ * الفواتير والبيع الخارجي ليهم ترتيب مكتوب بإيدينا (الرقم ← الطرف ← الخزنة)؛
+ * باقي الأقسام بتتقرا من الـ snapshot بأسماء الحقول المعروفة.
+ * كله جاي من الـ snapshot المتخزّن مع الحركة، فبيشتغل على السجلات القديمة كمان —
+ * وأي حقل مش موجود فيها بيتشال بدل ما يبان فاضي.
+ */
+function detailRows(entity: string, snap: any): [string, string][] {
+  if (!snap || typeof snap !== 'object' || Array.isArray(snap)) return [];
+
+  if (entity === 'invoices' || entity === 'deals') {
+    const isDeal = entity === 'deals';
+    const rows: [string, string][] = [
+      [isDeal ? 'رقم العملية' : 'رقم الفاتورة', snap.no != null ? `#${snap.no}` : ''],
+      ['النوع', isDeal ? 'بيع خارجي' : snap.kind ? `فاتورة ${fmtVal(snap.kind)}` : ''],
+      ['التاريخ', snap.date ? fmtDate(snap.date) : ''],
+      ['العميل', snap.client?.name ?? (snap.kind === 'SALE' ? snap.party?.name ?? '' : '')],
+      ['المورد', snap.supplier?.name ?? (snap.kind === 'PURCHASE' ? snap.party?.name ?? '' : '')],
+      ['المخزن', snap.warehouse?.name ?? ''],
+      ['الخزنة', snap.treasury?.name ?? ''],
+      ['العملة', snap.currency === 'USD' ? 'دولار' : ''],
+      ['فاتورة وهمية', snap.fake ? 'نعم' : ''],
+      ['البيان', snap.note ?? ''],
+    ];
+    return rows.filter(([, v]) => !!v);
   }
-  if (value && typeof value === 'object') {
-    const entries = Object.entries(value).filter(([k, v]) => !isSkippableKey(k, v));
-    if (entries.length === 0) return <span className="muted" style={{ fontSize: 13 }}>—</span>;
-    return (
-      <div style={{ display: 'grid', gap: 6 }}>
-        {entries.map(([k, v]) => (
-          <div key={k} style={{ display: 'grid', gridTemplateColumns: depth === 0 ? 'auto 1fr' : '1fr', gap: '2px 16px', alignItems: 'baseline' }}>
-            <span className="muted" style={{ fontSize: 12, fontWeight: 700 }}>{FIELD_LABELS[k] ?? k}</span>
-            {v && typeof v === 'object' ? <SnapshotValue value={v} depth={depth + 1} /> : <span style={{ fontSize: 13 }}>{formatScalar(v)}</span>}
-          </div>
-        ))}
-      </div>
-    );
+
+  const out: [string, string][] = [];
+  for (const [k, v] of Object.entries(snap)) {
+    if (isSkippableKey(k, v)) continue;
+    if (Array.isArray(v)) continue;                       // الأصناف ليها جدولها تحت
+    if (v && typeof v === 'object') {                     // علاقة — الاسم بس يهم
+      const nm = (v as any).name;
+      if (nm) out.push([FIELD_LABELS[k] ?? k, String(nm)]);
+      continue;
+    }
+    if (v === null || v === '' || v === false) continue;  // فاضي/مطفي مش معلومة
+    out.push([FIELD_LABELS[k] ?? k, fmtVal(v)]);
   }
-  return <span style={{ fontSize: 13 }}>{formatScalar(value)}</span>;
+  return out;
 }
 
 // Clean line-item view for an invoice/deal snapshot — just the goods (الكمية/الصنف/
-// السعر/الإجمالي) plus the money line, instead of dumping every internal field.
+// السعر/الإجمالي) plus the money line. بيانات الفاتورة نفسها (الرقم، الطرف، الخزنة…)
+// بتتعرض فوق مع بيانات الحركة، مش هنا.
 function InvoiceItemsDetail({ snap }: { snap: any }) {
   const items: any[] = Array.isArray(snap?.items) ? snap.items : [];
   const cur: 'USD' | 'EGP' = snap?.currency === 'USD' ? 'USD' : 'EGP';
   const total = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.price) || 0), 0);
   const paid = Number(snap?.paid) || 0;
+  const discount = Number(snap?.discount) || 0;
   return (
     <div style={{ marginTop: 16, borderTop: '1px solid var(--line-soft)', paddingTop: 14 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-soft)', marginBottom: 10 }}>تفاصيل الفاتورة</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-soft)', marginBottom: 10 }}>الأصناف</div>
       <div className="tbl-wrap">
         <table>
           <thead><tr><th style={{ width: 80 }}>الكمية</th><th>الصنف</th><th style={{ width: 110 }}>السعر</th><th style={{ width: 120 }}>الإجمالي</th></tr></thead>
@@ -137,11 +165,14 @@ function InvoiceItemsDetail({ snap }: { snap: any }) {
         </table>
       </div>
       <div className="num" style={{ marginTop: 8, textAlign: 'left', fontWeight: 700 }}>
-        الإجمالي: {money(total, cur)}{paid > 0 ? ` · المدفوع: ${money(paid, cur)}` : ''}
+        الإجمالي: {money(total, cur)}
+        {discount > 0 ? ` · خصم: ${money(discount, cur)} · الصافي: ${money(total - discount, cur)}` : ''}
+        {paid > 0 ? ` · المدفوع: ${money(paid, cur)}${snap?.treasury?.name ? ` (خزنة ${snap.treasury.name})` : ''}` : ''}
       </div>
     </div>
   );
 }
+
 
 function AuditDetail({ log, onBack, onOpen }: { log: AuditLog; onBack: () => void; onOpen: (entity: string, uid: string) => void }) {
   const { user } = useAuth();
@@ -224,19 +255,18 @@ function AuditDetail({ log, onBack, onOpen }: { log: AuditLog; onBack: () => voi
               <span>{log.summary}</span>
             </>
           )}
+
+          {/* بيانات العنصر نفسه — جوّه نفس الشبكة، مش قسم منفصل تحت */}
+          {detailRows(log.entity, log.snapshot).map(([label, value]) => (
+            <Fragment key={label}>
+              <span className="muted" style={{ fontSize: 13 }}>{label}</span>
+              <b style={{ fontSize: 13 }}>{value}</b>
+            </Fragment>
+          ))}
         </div>
 
-        {log.snapshot && (
-          (log.entity === 'invoices' || log.entity === 'deals')
-            ? <InvoiceItemsDetail snap={log.snapshot} />
-            : (
-              <div style={{ marginTop: 16, borderTop: '1px solid var(--line-soft)', paddingTop: 14 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-soft)', marginBottom: 10 }}>
-                  {log.action === 'DELETE' ? 'بيانات العنصر المحذوف' : 'بيانات العنصر'}
-                </div>
-                <SnapshotValue value={log.snapshot} />
-              </div>
-            )
+        {log.snapshot && (log.entity === 'invoices' || log.entity === 'deals') && (
+          <InvoiceItemsDetail snap={log.snapshot} />
         )}
 
         {log.action === 'UPDATE' && log.diff && Object.keys(log.diff).length > 0 && (
@@ -251,10 +281,10 @@ function AuditDetail({ log, onBack, onOpen }: { log: AuditLog; onBack: () => voi
                     {FIELD_LABELS[field] ?? field}
                   </span>
                   <span style={{ color: 'var(--debit)', textDecoration: 'line-through', fontSize: 13 }}>
-                    {formatScalar(entry.from)}
+                    {fmtVal(entry.from)}
                   </span>
                   <span style={{ color: 'var(--credit)', fontWeight: 700, fontSize: 13 }}>
-                    ← {formatScalar(entry.to)}
+                    ← {fmtVal(entry.to)}
                   </span>
                 </div>
               ))}

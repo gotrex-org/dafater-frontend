@@ -1,5 +1,5 @@
 import { api, http } from '@/lib/api';
-import type { AddPaymentDto, CreateDriverTripDto, DriverTrip, UpdateDriverTripDto } from './dtos';
+import type { AddPaymentDto, CreateDriverTripDto, DriverTrip, TripInvoiceCandidate, UpdateDriverTripDto } from './dtos';
 
 export const driverTripsApi = {
   list: (params?: { status?: string; pendingBalance?: boolean }) =>
@@ -11,5 +11,10 @@ export const driverTripsApi = {
   deletePayment: (id: string, payId: string) => api.del<DriverTrip>(`/driver-trips/${id}/payments/${payId}`),
   setArrival: (id: string, data: { arrivalDate: string; weightDiffAmount?: number }) => api.patch<DriverTrip>(`/driver-trips/${id}/arrival`, data),
   patchWeightDiff: (id: string, amount: number) => api.patch<DriverTrip>(`/driver-trips/${id}/weight-diff`, { amount }),
+  invoiceCandidates: (id: string) =>
+    http.get<TripInvoiceCandidate[]>(`/driver-trips/${id}/invoice-candidates`).then((r) => r.data),
+  /** سلسلة فاضية = فك الربط */
+  linkInvoice: (id: string, invoiceId: string | null) =>
+    api.patch<DriverTrip>(`/driver-trips/${id}/invoice`, { invoiceId: invoiceId ?? '' }),
   remove: (id: string) => api.del<void>(`/driver-trips/${id}`),
 };

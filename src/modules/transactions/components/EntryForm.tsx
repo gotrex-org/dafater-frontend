@@ -264,7 +264,10 @@ export function EntryForm() {
   const [goodsMode, setGoodsMode] = useState<GoodsMode>('invoices');
   const [invoiceIds, setInvoiceIds] = useState<string[]>([]);
   const [goodsItems, setGoodsItems] = useState<GoodsItem[]>([]);
+  // صاحب العهدة بيتاخد من نفس الدروب ليست بتاعة باقي الأطراف. الـ API لسه بياخد
+  // الاسم، فبنمسك الاتنين: الـ id للاختيار في الليستة، والاسم للإرسال.
   const [holderName, setHolderName] = useState('');
+  const [holderId, setHolderId] = useState('');
   // وجهة تسوية العهدة عند التوريد: خزنة (رد كاش) / عميل (يتحمّلها) / بند (مصروف)
   const [custodyDest, setCustodyDest] = useState<'treasury' | 'client' | 'category'>('treasury');
   const [amount, setAmount] = useState('');
@@ -294,7 +297,7 @@ export function EntryForm() {
     : type === 'cash' && cashTarget === 'client' ? clients?.data.find((c) => c.id === partyId)
     : type === 'cash' && cashTarget === 'supplier' ? suppliers?.data.find((s) => s.id === partyId)
     : type === 'cash' && cashTarget === 'account' ? allParties.find((p) => p.id === partyId)
-    : type === 'cash' && cashTarget === 'custody' ? persons?.data.find((p) => p.name === holderName.trim())
+    : type === 'cash' && cashTarget === 'custody' ? persons?.data.find((p) => p.id === holderId) ?? persons?.data.find((p) => p.name === holderName.trim())
     : undefined;
   const selPartyCur = (selParty as any)?.currency;
   const usdPay = (type === 'collect' || type === 'paySupplier') && (selPartyCur === 'USD' || treasuryCur === 'USD');
@@ -308,7 +311,7 @@ export function EntryForm() {
     setAmount(''); setNote(''); setClientNote(''); setPartyId(''); setPartyId2('');
     setTreasuryId(''); setTreasuryId2(''); setCategoryId(''); setWarehouseId('');
     setRate(''); setAddFee(false); setFeeAmount('500'); setForexAgentId(''); setExpensePartyId('');
-    setInvoiceIds([]); setGoodsItems([]); setHolderName('');
+    setInvoiceIds([]); setGoodsItems([]); setHolderName(''); setHolderId('');
   };
 
   const submit = () => {
@@ -354,7 +357,7 @@ export function EntryForm() {
       if (needsTreasury && !treasuryId) return setError('اختر الخزنة');
       if ((cashTarget === 'client' || cashTarget === 'supplier') && !partyId) return setError(cashTarget === 'client' ? 'اختر العميل' : 'اختر المورد');
       if (cashTarget === 'account' && !partyId) return setError('اختر الحساب');
-      if (cashTarget === 'custody' && !holderName.trim()) return setError('اكتب اسم صاحب العهدة');
+      if (cashTarget === 'custody' && !holderName.trim()) return setError('اختر صاحب العهدة (أو ضيفه بالزرار)');
       if (custodySettleClient && !partyId) return setError('اختر العميل اللي هتتحوّل عليه العهدة');
       if (custodySettleCategory && !categoryId) return setError('اختر بند المصروف');
       if (cashTarget === 'warehouse' && !warehouseId) return setError('اختر المخزن');
@@ -492,7 +495,7 @@ export function EntryForm() {
                   </Field>
 
                   <Field label="الجهة">
-                    <select value={cashTarget} onChange={(e) => { setCashTarget(e.target.value as CashTarget); setPartyId(''); setWarehouseId(''); setCategoryId(''); setHolderName(''); setCustodyDest('treasury'); }}>
+                    <select value={cashTarget} onChange={(e) => { setCashTarget(e.target.value as CashTarget); setPartyId(''); setWarehouseId(''); setCategoryId(''); setHolderName(''); setHolderId(''); setCustodyDest('treasury'); }}>
                       <option value="client">عميل</option>
                       <option value="supplier">مورد</option>
                       <option value="warehouse">مصاريف مخزن</option>
@@ -505,16 +508,16 @@ export function EntryForm() {
                   </Field>
 
                   {cashTarget === 'custody' && (
-                    <Field label="صاحب العهدة (أي شخص)">
-                      <input
-                        value={holderName}
-                        onChange={(e) => setHolderName(e.target.value)}
-                        placeholder="اكتب الاسم…"
-                        list="custody-holders"
+                    <Field label="صاحب العهدة">
+                      <PartyCombobox
+                        parties={persons?.data ?? []}
+                        value={holderId}
+                        onChange={(id, p) => {
+                          setHolderId(id);
+                          setHolderName(p?.name ?? persons?.data.find((x) => x.id === id)?.name ?? '');
+                        }}
+                        role="PERSON"
                       />
-                      <datalist id="custody-holders">
-                        {(persons?.data ?? []).map((p) => <option key={p.id} value={p.name} />)}
-                      </datalist>
                     </Field>
                   )}
 

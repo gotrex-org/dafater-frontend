@@ -7,7 +7,7 @@ import { PartyCombobox } from '../../invoices/components/PartyCombobox';
 import { useAllParties } from '../../parties/hooks';
 import { useAllTreasury } from '../../treasury/hooks';
 import { useConfig } from '../../config/hooks';
-import { useAddPayment, useDeletePayment, useDriverTrip, useSetArrival, useUpdateDriverTrip, useUpdateWeightDiff } from '../hooks';
+import { useAddPayment, useDeletePayment, useDriverTrip, useLinkTripInvoice, useSetArrival, useTripInvoiceCandidates, useUpdateDriverTrip, useUpdateWeightDiff } from '../hooks';
 import { useManifests } from '../../manifests/hooks';
 import type { DriverTrip } from '../dtos';
 
@@ -329,6 +329,8 @@ export function DriverTripDetail({ trip, onBack }: Props) {
         )}
 
 
+        <InvoiceLink trip={trip} />
+
         {/* Stats row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(140px,1fr))', gap: 10, marginTop: 14 }}>
           {[
@@ -596,4 +598,88 @@ export function DriverTripDetailById({ uid, onBack }: { uid: string; onBack: () 
   const { data, isLoading } = useDriverTrip(uid);
   if (isLoading || !data) return <Spinner />;
   return <DriverTripDetail trip={data} onBack={onBack} />;
+}
+
+// الناولون اللي بيتدفع للسواق (agreedFreight) مقابل اللي بيتحصّل من العميل — بند
+// «ناولون» على فاتورة البيع. رحلة واحدة = فاتورة واحدة، والربط صريح هنا لأن سلسلة
+// (رحلة ← كشف عربية ← فاتورة) مش مليانة في الداتا القديمة.
+function InvoiceLink({ trip }: { trip: DriverTrip }) {
+  const [picking, setPicking] = useState(false);
+  const { data: candidates, isLoading } = useTripInvoiceCandidates(trip.id, picking);
+  const link = useLinkTripInvoice();
+
+  const collected = trip.collectedFreight ?? 0;
+  const profit = trip.tripProfit ?? collected - trip.agreedFreight;
+  const linked = !!trip.invoice;
+
+  const choose = (invoiceId: string | null) =>
+    link.mutate({ id: trip.id, invoiceId }, { onSuccess: () => setPicking(false) });
+
+  return (
+    <div className="card" style={{ padding: '12px 16px', marginTop: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <b style={{ flex: 1 }}>الناولون على العميل</b>
+        {linked ? (
+          <>
+            <span className="pill">فاتورة #{trip.invoice!.no} — {fmtDate(trip.invoice!.date)}</span>
+            <button className="btn btn-ghost btn-sm" onClick={() => setPicking((p) => !p)}>تغيير</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => choose(null)} disabled={link.isPending}>فك الربط</button>
+          </>
+        ) : (
+          <button className="btn btn-primary btn-sm" onClick={() => setPicking((p) => !p)}>اربط بفاتورة</button>
+        )}
+      </div>
+
+      {linked ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(140px,1fr))', gap: 10, marginTop: 10 }}>
+          <div className="stat"><div className="muted" style={{ fontSize: 12 }}>محصّل من العميل</div><div className="num cre" style={{ fontWeight: 800 }}>{EGP(collected)}</div></div>
+          <div className="stat"><div className="muted" style={{ fontSize: 12 }}>مدفوع للسواق</div><div className="num deb" style={{ fontWeight: 800 }}>{EGP(trip.agreedFreight)}</div></div>
+          <div className="stat"><div className="muted" style={{ fontSize: 12 }}>مكسب النقلة</div><div className={`num ${profit >= 0 ? 'cre' : 'deb'}`} style={{ fontWeight: 800 }}>{EGP(profit)}</div></div>
+        </div>
+      ) : (
+        <div className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>
+          لسه مش مربوطة بفاتورة — الناولون المدفوع للسواق ({EGP(trip.agreedFreight)}) من غير اللي اتحصّل من العميل.
+        </div>
+      )}
+
+      {!!trip.collectedLines?.length && linked && (
+        <div className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>
+          {trip.collectedLines.map((l) => `${l.name} ${EGP(l.total)}`).join(' · ')}
+        </div>
+      )}
+
+      {picking && (
+        <div style={{ marginTop: 10, borderTop: '1.5px solid var(--line)', paddingTop: 10 }}>
+          {isLoading ? <Spinner /> : !candidates?.length ? (
+            <div className="empty">مفيش فواتير بيع فيها ناولون لـ {trip.clientName} من غير ربط</div>
+          ) : (
+            <div className="tbl-wrap">
+              <table>
+                <thead><tr><th>الفاتورة</th><th>التاريخ</th><th>البنود</th><th style={{ width: 120 }}>الإجمالي</th><th style={{ width: 80 }}></th></tr></thead>
+                <tbody>
+                  {candidates.map((c) => {
+                    const total = c.items.reduce((s, it) => s + it.qty * it.price, 0);
+                    return (
+                      <tr key={c.uid}>
+                        <td><b>#{c.no}</b></td>
+                        <td>{fmtDate(c.date)}</td>
+                        <td className="muted">{c.items.map((it) => it.product?.name ?? '—').join('، ')}</td>
+                        <td className="num">{EGP(total)}</td>
+                        <td>
+                          <button className="btn btn-primary btn-sm" onClick={() => choose(c.uid)} disabled={link.isPending}>
+                            {trip.invoice?.uid === c.uid ? 'مربوطة' : 'اربط'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {link.error && <div className="error" style={{ marginTop: 8 }}>{(link.error as any).message}</div>}
+        </div>
+      )}
+    </div>
+  );
 }

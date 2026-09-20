@@ -20,12 +20,14 @@ function ProductRow({ product, canManage }: { product: Product; canManage: boole
   const [unit, setUnit] = useState(product.unit ?? '');
   const [service, setService] = useState(!!product.service);
   const [price, setPrice] = useState(product.price ? String(product.price) : '');
+  const [purchasePrice, setPurchasePrice] = useState(product.purchasePrice ? String(product.purchasePrice) : '');
+  const [salePrice, setSalePrice] = useState(product.salePrice ? String(product.salePrice) : '');
   const [msg, setMsg] = useState('');
 
   const save = () => {
     if (!name.trim()) return setMsg('اكتب الاسم');
     update.mutate(
-      { id: product.id, dto: { name: name.trim(), unit: unit.trim() || undefined, service, price: Number(price) || 0 } },
+      { id: product.id, dto: { name: name.trim(), unit: unit.trim() || undefined, service, price: Number(price) || 0, purchasePrice: Number(purchasePrice) || 0, salePrice: Number(salePrice) || 0 } },
       { onSuccess: () => { setMsg('تم الحفظ ✓'); setOpen(false); }, onError: (e: any) => setMsg(e.message) },
     );
   };
@@ -48,6 +50,8 @@ function ProductRow({ product, canManage }: { product: Product; canManage: boole
           {product.unit && <span className="muted" style={{ fontSize: 12, fontWeight: 400, marginInlineStart: 8 }}>({product.unit})</span>}
           {product.service && <span className="pill" style={{ marginInlineStart: 6 }}>خدمة</span>}
           {!!product.price && <span className="muted num" style={{ fontSize: 12, fontWeight: 400, marginInlineStart: 8 }}>سعر التقييم: {EGP(product.price)}</span>}
+          {!!product.purchasePrice && <span className="muted num" style={{ fontSize: 12, fontWeight: 400, marginInlineStart: 8 }}>شراء: {EGP(product.purchasePrice)}</span>}
+          {!!product.salePrice && <span className="muted num" style={{ fontSize: 12, fontWeight: 400, marginInlineStart: 8 }}>بيع: {EGP(product.salePrice)}</span>}
         </span>
         {/* كارت الصنف من هنا كمان — شاشة المخزن بتستبعد بنود الخدمة، فده الطريق الوحيد
             ليها بعد ما تتعلّم «بند خدمة» */}
@@ -67,6 +71,8 @@ function ProductRow({ product, canManage }: { product: Product; canManage: boole
           <input placeholder="الاسم" value={name} onChange={(e) => setName(e.target.value)} style={{ flex: 1, minWidth: 130 }} />
           <input placeholder="الوحدة (اختياري)" value={unit} onChange={(e) => setUnit(e.target.value)} style={{ maxWidth: 140 }} />
           <MoneyInput value={price} onChange={setPrice} placeholder="سعر التقييم" style={{ maxWidth: 140 }} />
+          <MoneyInput value={purchasePrice} onChange={setPurchasePrice} placeholder="سعر شراء ثابت" style={{ maxWidth: 140 }} />
+          <MoneyInput value={salePrice} onChange={setSalePrice} placeholder="سعر بيع ثابت" style={{ maxWidth: 140 }} />
           <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer' }}>
             <input type="checkbox" checked={service} onChange={(e) => setService(e.target.checked)} />
             بند خدمة (بدون مخزون)
@@ -92,6 +98,8 @@ export function ProductsManager() {
   const [pUnit, setPUnit] = useState('');
   const [pService, setPService] = useState(false);
   const [pPrice, setPPrice] = useState('');
+  const [pPurchase, setPPurchase] = useState('');
+  const [pSale, setPSale] = useState('');
   const [pErr, setPErr] = useState('');
 
   const canManage = !!user?.admin || can('settings');
@@ -100,8 +108,8 @@ export function ProductsManager() {
     if (!pName.trim()) { setPErr('اكتب الاسم'); return; }
     setPErr('');
     createProduct.mutate(
-      { name: pName.trim(), unit: pUnit.trim() || undefined, service: pService, price: Number(pPrice) || 0 },
-      { onSuccess: () => { setPName(''); setPUnit(''); setPService(false); setPPrice(''); setAdding(false); }, onError: (e: any) => setPErr(e.message) },
+      { name: pName.trim(), unit: pUnit.trim() || undefined, service: pService, price: Number(pPrice) || 0, purchasePrice: Number(pPurchase) || 0, salePrice: Number(pSale) || 0 },
+      { onSuccess: () => { setPName(''); setPUnit(''); setPService(false); setPPrice(''); setPPurchase(''); setPSale(''); setAdding(false); }, onError: (e: any) => setPErr(e.message) },
     );
   };
 
@@ -126,6 +134,8 @@ export function ProductsManager() {
             style={{ flex: 1, minWidth: 150 }} />
           <input placeholder="الوحدة (اختياري)" value={pUnit} onChange={(e) => setPUnit(e.target.value)} style={{ maxWidth: 150 }} />
           <MoneyInput value={pPrice} onChange={setPPrice} placeholder="سعر التقييم (اختياري)" style={{ maxWidth: 150 }} />
+          <MoneyInput value={pPurchase} onChange={setPPurchase} placeholder="سعر شراء ثابت" style={{ maxWidth: 150 }} />
+          <MoneyInput value={pSale} onChange={setPSale} placeholder="سعر بيع ثابت" style={{ maxWidth: 150 }} />
           <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer' }}>
             <input type="checkbox" checked={pService} onChange={(e) => setPService(e.target.checked)} />
             بند خدمة (بدون مخزون)

@@ -9,9 +9,19 @@ export interface Busiest {
   peakMonth: { month: string; total: number; count: number } | null;
   peakDay: { day: string; total: number; count: number } | null;
 }
+// أرقام التجارة (بضاعة) بس — بنود الخدمات (ناولون/تحميل…) بتروح لتقرير الشحن.
 export interface ReportSummary {
   sales: number; purchases: number; salesCount: number; purchasesCount: number;
   salesReturns: number; purchaseReturns: number; netSales: number; grossProfit: number;
+  addedCosts: number;       // ناولون داخلي + شاي على بنود الشراء
+  landedPurchases: number;  // المشتريات + التكاليف المضافة = تكلفتك الحقيقية
+  services: { collected: number; paid: number };
+}
+export interface ShippingSummary {
+  collected: number; paid: number; profit: number; trips: number;
+  income: { invoiceServices: number; delay: number; weightDiff: number };
+  costs: { driverFreight: number; invoiceServices: number; customs: number };
+  warehouseNote: number;    // مصاريف المخزن — للعلم، مش داخلة في `paid`
 }
 export interface InactiveClient { id: string; name: string; lastActivity: string | null; daysSince: number | null; }
 export interface ProfitLoss { revenue: number; cost: number; goodsExpenses: number; grossProfit: number; expenses: number; warehouseExpenses: number; settlement: number; netProfit: number; }
@@ -33,6 +43,7 @@ const range = (from?: string, to?: string) => {
 
 export const reportsApi = {
   summary: (from?: string, to?: string) => api.get<ReportSummary>(`/reports/summary${range(from, to)}`),
+  shipping: (from?: string, to?: string) => api.get<ShippingSummary>(`/reports/shipping${range(from, to)}`),
   topProducts: (from?: string, to?: string) => api.get<TopProduct[]>(`/reports/top-products${range(from, to)}`),
   topClients: (from?: string, to?: string) => api.get<TopParty[]>(`/reports/top-clients${range(from, to)}`),
   topSuppliers: (from?: string, to?: string) => api.get<TopParty[]>(`/reports/top-suppliers${range(from, to)}`),

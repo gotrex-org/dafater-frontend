@@ -82,7 +82,6 @@ export const PERMISSIONS: PermGroup[] = [
       { key: 'treasury.forex',     label: 'وسطاء الصرف' },
     ],
   },
-  { page: 'today', label: 'تقرير اليوم', actions: [] },
   {
     page: 'settings', label: 'الإعدادات', actions: [
       { key: 'settings.users',   label: 'إدارة المستخدمين' },

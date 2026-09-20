@@ -1,5 +1,5 @@
-import { DailyReport } from '@/modules/transactions/components/DailyReport';
+import { ReportsSection } from '@/modules/reports/components/ReportsView';
 
 export default function TodayPage() {
-  return <DailyReport />;
+  return <ReportsSection />;
 }

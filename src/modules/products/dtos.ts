@@ -6,6 +6,10 @@ export interface Product {
   pinSale?: boolean;
   pinPurchase?: boolean;
   price?: number;
+  /** سعر شراء ثابت — يُملأ تلقائيًا في سطر فاتورة الشراء وقابل للتعديل عليها */
+  purchasePrice?: number;
+  /** سعر بيع ثابت — يُملأ تلقائيًا في سطر فاتورة البيع وقابل للتعديل عليها */
+  salePrice?: number;
 }
 
 export interface LastPrice {
@@ -32,6 +36,10 @@ export interface CreateProductDto {
   pinSale?: boolean;
   pinPurchase?: boolean;
   price?: number;
+  /** سعر شراء ثابت — يُملأ تلقائيًا في سطر فاتورة الشراء وقابل للتعديل عليها */
+  purchasePrice?: number;
+  /** سعر بيع ثابت — يُملأ تلقائيًا في سطر فاتورة البيع وقابل للتعديل عليها */
+  salePrice?: number;
 }
 
 export interface UpdateProductDto {
@@ -41,4 +49,8 @@ export interface UpdateProductDto {
   pinSale?: boolean;
   pinPurchase?: boolean;
   price?: number;
+  /** سعر شراء ثابت — يُملأ تلقائيًا في سطر فاتورة الشراء وقابل للتعديل عليها */
+  purchasePrice?: number;
+  /** سعر بيع ثابت — يُملأ تلقائيًا في سطر فاتورة البيع وقابل للتعديل عليها */
+  salePrice?: number;
 }

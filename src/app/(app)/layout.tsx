@@ -16,18 +16,18 @@ import { RemindersView } from '@/modules/reminders/components/RemindersView';
 // intact. Route children aren't rendered here; the outlet renders the active section.
 function Desktop({ userName, isPrimary, onLogout }: { userName: string; isPrimary: boolean; onLogout: () => void }) {
   const { can } = useAuth();
-  const { activateSection, activeSectionId } = useWindows();
+  const { navigateSection, newSection, activeSectionView } = useWindows();
   const pathname = usePathname();
   const router = useRouter();
   const { data: due } = useReminderDueCount(isPrimary);
   const { data: whDue } = useWarehouseDueCount(isPrimary);
   const [remindersOpen, setRemindersOpen] = useState(false);
 
-  const openSection = (s: SectionDef) =>
-    activateSection({ id: s.view, title: s.label, href: s.href, node: <s.Component /> });
+  const spec = (s: SectionDef) => ({ view: s.view, title: s.label, href: s.href, node: <s.Component /> });
+  const openSection = (s: SectionDef) => navigateSection(spec(s));
 
   // Any navigation (nav click, dashboard tile, login redirect, direct URL) shows that
-  // section's page. activateSection keeps it mounted so its state survives.
+  // section's page. navigateSection keeps it mounted so its state survives.
   useEffect(() => {
     const s = sectionByHref(pathname);
     if (s) openSection(s);
@@ -59,9 +59,12 @@ function Desktop({ userName, isPrimary, onLogout }: { userName: string; isPrimar
         {navSections.map((s) => (
           <button
             key={s.view}
-            className={activeSectionId === s.view ? 'active' : ''}
+            className={activeSectionView === s.view ? 'active' : ''}
             style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-            onClick={() => { openSection(s); router.push(s.href); }}
+            title={`${s.label} — بالـ Shift أو زرار الماوس الأوسط يفتح نسخة تانية في تاب جديد`}
+            // Shift/middle click = نسخة تانية دايمًا، زي ما بتعمل في المتصفح.
+            onClick={(e) => { if (e.shiftKey) newSection(spec(s)); else openSection(s); router.push(s.href); }}
+            onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); newSection(spec(s)); router.push(s.href); } }}
           >
             {s.label}
           </button>

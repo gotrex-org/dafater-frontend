@@ -8,6 +8,9 @@ type R = { from?: string; to?: string };
 export const useReportSummary = ({ from, to }: R) =>
   useQuery({ queryKey: ['reports', 'summary', from, to], queryFn: () => reportsApi.summary(from, to) });
 
+export const useShippingSummary = ({ from, to }: R) =>
+  useQuery({ queryKey: ['reports', 'shipping', from, to], queryFn: () => reportsApi.shipping(from, to) });
+
 export const useTopProducts = ({ from, to }: R) =>
   useQuery({ queryKey: ['reports', 'top-products', from, to], queryFn: () => reportsApi.topProducts(from, to) });
 
