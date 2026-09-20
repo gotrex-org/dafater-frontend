@@ -12,7 +12,6 @@ function portalStartOfMonth() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 }
 import { ProductCombobox } from '../products/components/ProductCombobox';
-import { InvoiceSheetBody, InvoiceSheetPayments } from '../invoices/components/InvoiceSheet';
 import type { AuthUser, Paginated } from '@/lib/types';
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -101,7 +100,6 @@ function useMyLedger(params: { from?: string; to?: string } = {}) {
 
 // ---- تابات «فاتورة N / استلامات N» في البوابة ----
 
-interface MyInvoiceRow { id: string; no: string; date: string; currency: 'EGP' | 'USD' }
 
 interface MyManifestTab {
   id: string;
@@ -139,13 +137,6 @@ const MT_ROW_TINT: Record<MyManifestTab['status'], React.CSSProperties> = {
   pending: { background: 'rgba(15,110,92,0.12)' },
   none: {},
 };
-
-function useMyInvoiceList() {
-  return useQuery<MyInvoiceRow[]>({
-    queryKey: ['my-invoices'],
-    queryFn: () => api.get('/invoices/my'),
-  });
-}
 
 function useMyManifestTabs(uid: string | null) {
   return useQuery<{ currency: 'EGP' | 'USD'; tabs: MyManifestTab[] }>({
@@ -495,6 +486,9 @@ function PortalInvoiceView({ uid, docNo, partyName, onBack }: {
         )}
         <div className="mf-grow" />
       </div>
+
+      {/* عربيات الفاتورة — كانت في تابات الرئيسية، بقت جوّه الفاتورة نفسها */}
+      <PortalManifestTabs invoiceUid={uid} cur={data.currency} />
     </>
   );
 }
@@ -583,19 +577,25 @@ function LedgerTab({ partyName }: { partyName?: string }) {
         )}
       </div>
 
-      {/* portal-sheet: على الموبايل الصفوف بتتحوّل كروت بدل جدول — والـ PDF/الطباعة
-          بيرجّعوا شكل الجدول لأن captureSheet بيثبّت العرض على 794px ويضيف .pdf-capture */}
-      <div ref={sheetRef} className="card print-sheet ledger-sheet portal-sheet">
-        <div className="mf-logo">أبو شامة</div>
-        <div className="mf-head"><h2>كشف حساب{partyName ? ` — ${partyName}` : ''}</h2></div>
-        <div className="muted" style={{ margin: '8px 4px' }}>
-          {from || to
-            ? <>الفترة: {from ? fmtDate(from) : '…'} ← {to ? fmtDate(to) : '…'}</>
-            : 'الفترة: كل الحركات'}
+      {/* نفس ورقة كشف الحساب اللي في السيستم الداخلي بالحرف: ترويسة الديزاين القديم
+          (أبو شامة على جنب، والعنوان على الجنب التاني وتحتهم خط عريض)، وسطر بيانات
+          الطرف. .portal-sheet بتفضل عشان الصفوف تتحوّل كروت على الموبايل، و.lg-tbl
+          جنب .pl-tbl عشان حدود الجدول تيجي من ستايل الكشف القديم. */}
+      <div ref={sheetRef} className="card print-sheet ledger-sheet ledger-old portal-sheet">
+        <div className="pr-head">
+          <div className="co">أبو شامة</div>
+          <div className="ttl"><b>كشف حساب تفصيلي</b><br />عميل</div>
+        </div>
+        <div className="pr-meta">
+          {partyName && <div><b>الاسم:</b> {partyName}</div>}
+          <div>
+            <b>رصيد افتتاحي:</b> <span className="num">{EGP(data.opening || 0)}</span>
+            {(from || to) && <> · <b>الفترة:</b> {from ? fmtDate(from) : '…'} ← {to ? fmtDate(to) : '…'}</>}
+          </div>
         </div>
 
         <div className="tbl-wrap mf-grow">
-          <table className="pl-tbl">
+          <table className="pl-tbl lg-tbl">
             <thead>
               <tr>
                 <th>التاريخ</th><th>البيان</th><th>عليه</th><th>له</th>
@@ -699,8 +699,6 @@ function LedgerTab({ partyName }: { partyName?: string }) {
     </>
   );
 }
-
-// ─── invoices tab: تاب لكل فاتورة وجنبه تاب استلاماتها بنفس الرقم ──────────────
 
 /**
  * عربيات الفاتورة في البوابة — نفس شكل كشف الاستلام بالحرف زي السيستم الداخلي:
@@ -814,88 +812,6 @@ function PortalManifestTabs({ invoiceUid, cur }: { invoiceUid: string; cur: 'EGP
 
           {tab.note && <p className="mf-note">ملاحظات: {tab.note}</p>}
         </div>
-      </div>
-    </div>
-  );
-}
-
-function MyInvoiceTabs() {
-  const { data: invoices, isLoading } = useMyInvoiceList();
-  const [active, setActive] = useState(0);
-
-  const list = invoices ?? [];
-  // تاب الفاتورة وبعديه على طول تاب استلاماتها بنفس الرقم
-  const tabs = list.flatMap((inv) => [
-    { inv, kind: 'invoice' as const },
-    { inv, kind: 'receipts' as const },
-  ]);
-  const cursor = tabs.length ? tabs[Math.min(active, tabs.length - 1)] : null;
-  const { data: detail, isLoading: loadingDetail } = useMyInvoice(cursor?.inv.id ?? null);
-
-  if (isLoading) return <div className="card" style={{ padding: 22 }}><div className="empty">جارٍ التحميل…</div></div>;
-  if (!cursor) {
-    return (
-      <div className="card" style={{ padding: 22 }}>
-        <div className="empty">
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>لسه مفيش فواتير على حسابك</div>
-          <div style={{ fontSize: 13 }}>أول ما تتسجّل لك فاتورة هتلاقيها هنا هي واستلاماتها.</div>
-        </div>
-      </div>
-    );
-  }
-
-  const inv = cursor.inv;
-  const cur = inv.currency ?? 'EGP';
-
-  return (
-    <div className="pit-wrap">
-      <div className="pit-bar" role="tablist">
-        {tabs.map((t, i) => (
-          <button key={`${t.inv.id}:${t.kind}`} role="tab" aria-selected={i === active}
-            className={`pit-tab ${t.kind === 'receipts' ? 'is-receipts' : ''} ${i === active ? 'is-active' : ''}`}
-            onClick={() => setActive(i)}>
-            <span>{t.kind === 'invoice' ? `فاتورة ${t.inv.no}` : `استلامات ${t.inv.no}`}</span>
-            <span className="pit-tab-date">{fmtDate(t.inv.date)}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className={`pit-panel card ${cursor.kind === 'receipts' ? 'is-receipts' : ''}`}>
-        {loadingDetail || !detail ? (
-          <div className="empty">جارٍ التحميل…</div>
-        ) : cursor.kind === 'invoice' ? (
-          <>
-            <div className="pit-head">
-              <div><b>فاتورة {inv.no}</b> <span className="muted" style={{ fontSize: 12 }}>{fmtDate(inv.date)}</span></div>
-              <span className="pill">الإجمالي {EGP(detail.itemsTotal)}</span>
-            </div>
-            {/* نفس جسم ورقة الفاتورة المستخدَم في السيستم الداخلي بالحرف */}
-            <InvoiceSheetBody
-              items={detail.items}
-              cur={cur}
-              netTotal={detail.itemsTotal}
-              discount={detail.discount}
-              previousBalance={detail.previousBalance}
-              cashTransfer={detail.cashTransfer}
-              expensesTotal={detail.expensesTotal}
-              paymentsTotal={detail.paymentsTotal}
-              other={0}
-              remaining={detail.remaining}
-              isSale
-            />
-            <PortalManifestTabs invoiceUid={inv.id} cur={cur} />
-          </>
-        ) : (
-          <InvoiceSheetPayments
-            cur={cur}
-            payments={detail.payments}
-            total={detail.paymentsTotal}
-            title={<>
-              استلامات {inv.no}
-              <span className="muted">{' — '}من {fmtDate(inv.date)} لحد الفاتورة اللي بعدها</span>
-            </>}
-          />
-        )}
       </div>
     </div>
   );
@@ -1141,8 +1057,8 @@ export function CustomerPortal({ user }: { user: AuthUser }) {
         ))}
       </nav>
 
-      {/* home: الرصيد فوق، وتحته فواتير العميل بشكل التابات — ده اللي بيفتح عليه
-          العميل حسابه على طول. الطلبيات اتشالت من هنا وفضلت في تاب «طلبياتي». */}
+      {/* home: الرصيد فوق، وتحته كشف حساب العميل بنفس شكل السيستم الداخلي — ده اللي
+          بيفتح عليه العميل حسابه على طول. الطلبيات اتشالت من هنا وفضلت في تاب «طلبياتي». */}
       {tab === 'home' && (
         <>
           <div className="pt-home-top">
@@ -1158,12 +1074,13 @@ export function CustomerPortal({ user }: { user: AuthUser }) {
               )}
             </div>
             <div className="pt-home-links">
-              <button className="btn btn-ghost btn-sm" onClick={() => setTab('ledger')}>← كشف الحساب الكامل</button>
               <button className="btn btn-ghost btn-sm" onClick={() => setTab('manifests')}>← كشف العربيات</button>
             </div>
           </div>
 
-          <MyInvoiceTabs />
+          {/* الفواتير بتظهر للعميل كسطور في كشف حسابه زي السيستم الداخلي — الدوسة
+              على سطر فاتورة بتفتح ورقتها كاملة بعربياتها. */}
+          <LedgerTab partyName={user.partyName} />
         </>
       )}
 

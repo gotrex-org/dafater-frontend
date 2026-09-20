@@ -286,17 +286,6 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
   .inv-sheet .tbl-wrap > table .num { white-space: nowrap; }
   .inv-totals { width: 100%; }
 }
-/* خطوط رأسية باينة بين الأعمدة — في جدول الأصناف (العدد/الصنف/السعر/الاجمالي)
-   وجدول الاستلامات (التاريخ/البيان/المبلغ).
-   مقصورة على بوابة العميل (.pit-panel) بطلب صريح: شاشة الفاتورة عند العاملين
-   بتفضل بشكلها الأصلي من غير خطوط. */
-.pit-panel .sh-pay table th, .pit-panel .sh-pay table td,
-.pit-panel .sh-items table th, .pit-panel .sh-items table td { border-inline-end: 1px solid var(--ink-soft); }
-.pit-panel .sh-pay table th:last-child, .pit-panel .sh-pay table td:last-child,
-.pit-panel .sh-items table th:last-child, .pit-panel .sh-items table td:last-child { border-inline-end: none; }
-/* سطر «حساب قديم» مدموج على تلات أعمدة — الخطوط الرأسية جوّاه متلغبطة، فبنشيلها */
-.pit-panel .sh-items table tr.sh-old td { border-inline-end-color: transparent; }
-.pit-panel .sh-items table tr.sh-old td:last-child { border-inline-start: 1px solid var(--ink-soft); }
 /* على الموبايل الملخّص ينزل تحت الجدول ويتفرد صفّ */
 @media screen and (max-width: 700px) {
   .print-sheet:not(.pdf-capture) .sh-body { flex-direction: column; }
@@ -996,26 +985,6 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 .mt-status.st-office { background: #fff; color: var(--ink-soft); box-shadow: inset 0 0 0 1px var(--line); }
 /* كشف مش مربوط بفاتورة — دهبي */
 .mt-status.st-unlinked { background: rgba(185, 138, 46, .14); color: var(--gold); }
-
-/* ===== تابات فواتير العميل (المستوى الأعلى: عميل ← فاتورة ← عربية) ===== */
-/* شكلها أعرض وأبرز من تابات العربيات اللي جوّاها عشان المستويين ما يتلخبطوش. */
-.pit-wrap { margin-top: 4px; }
-.pit-bar { display: flex; gap: 4px; flex-wrap: wrap; align-items: flex-end; }
-.pit-tab {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
-  padding: 8px 16px; font-weight: 800; font-size: 14px; cursor: pointer;
-  background: var(--line-soft); color: var(--ink-soft);
-  border: 1px solid var(--line); border-bottom: none; border-radius: 12px 12px 0 0;
-}
-.pit-tab:hover { color: var(--ink); }
-.pit-tab.is-active { background: var(--surface); color: var(--ink); box-shadow: inset 0 3px 0 var(--blue); }
-/* تاب الاستلامات جنب فاتورته بنفس الرقم — بلون التحصيل عشان يتفرق عنها بالعين */
-.pit-tab.is-receipts.is-active { box-shadow: inset 0 3px 0 var(--credit); }
-.pit-panel.is-receipts { border-color: color-mix(in srgb, var(--credit) 35%, var(--line)); }
-.pit-tab-date { font-size: 11px; font-weight: 600; color: var(--ink-soft); }
-.pit-panel { border-radius: 0 14px 14px 14px; padding: 14px 16px; }
-.pit-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-.pit-head-end { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* رأس رئيسية بوابة العميل: الرصيد وروابط سريعة في سطر، وتحتهم تابات الفواتير */
 .pt-home-top { display: flex; gap: 12px; align-items: stretch; flex-wrap: wrap; margin-bottom: 14px; }
