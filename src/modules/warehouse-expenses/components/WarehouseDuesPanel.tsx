@@ -24,7 +24,7 @@ export function WarehouseDuesPanel({ compact = false }: { compact?: boolean }) {
 
   const confirmPay = (id: string) => {
     setErr('');
-    if (!treasuryId) return setErr('اختر الخزنة اللي هيتخصم منها');
+    if (!treasuryId) return setErr('اختر الخزنة التي سيُخصم منها');
     pay.mutate({ id, treasuryId }, {
       onSuccess: () => { setPayFor(null); setTreasuryId(''); },
       onError: (e: any) => setErr(e.message),

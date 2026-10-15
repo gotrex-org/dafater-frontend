@@ -22,6 +22,17 @@ export interface InvoiceItem {
   product?: Product;
 }
 
+/** سطر بند شحن على الفاتورة (نولون/تحميل/شفتنة…) — لا يؤثر على المخزون */
+export interface InvoiceCharge {
+  id: string;
+  qty: number;
+  price: number;
+  note?: string | null;
+  chargeType?: { id: string; name: string } | null;
+  /** العربية اللي البند إيرادها (اختياري) */
+  manifest?: { id: string; no: string } | null;
+}
+
 export interface Invoice {
   id: string;
   kind: InvoiceKind;
@@ -42,6 +53,8 @@ export interface Invoice {
   /** الخزنة اللي اتحصّل/اتدفع منها — بترجع مع الفاتورة عشان التعديل يفتح على نفس الخزنة */
   treasury?: { id: string; name: string } | null;
   items: InvoiceItem[];
+  /** بنود الشحن — جدول منفصل عن الأصناف */
+  charges?: InvoiceCharge[];
 }
 
 export interface CreateInvoiceItemDto {
@@ -59,6 +72,14 @@ export interface CreateInvoiceItemDto {
   commissionPartyId?: string;
 }
 
+export interface CreateInvoiceChargeDto {
+  chargeTypeId: string;
+  qty?: number;
+  price: number;
+  note?: string;
+  manifestId?: string;
+}
+
 export interface CreateInvoiceDto {
   kind: InvoiceKind;
   no?: string; // omitted → backend auto-numbers per kind
@@ -66,6 +87,7 @@ export interface CreateInvoiceDto {
   partyId: string;
   warehouseId: string;
   items: CreateInvoiceItemDto[];
+  charges?: CreateInvoiceChargeDto[];
   paid?: number;
   discount?: number;
   fake?: boolean;
@@ -81,6 +103,7 @@ export interface UpdateInvoiceDto {
   partyId: string;
   warehouseId: string;
   items: CreateInvoiceItemDto[];
+  charges?: CreateInvoiceChargeDto[];
   paid?: number;
   discount?: number;
   fake?: boolean;

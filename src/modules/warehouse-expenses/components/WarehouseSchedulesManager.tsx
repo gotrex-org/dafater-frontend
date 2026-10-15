@@ -32,7 +32,7 @@ export function WarehouseSchedulesManager() {
   };
 
   const remove = (id: string, t: string) => {
-    if (!window.confirm(`إيقاف بند "${t}" الثابت؟ الحركات اللي اتخصمت قبل كده هتفضل موجودة.`)) return;
+    if (!window.confirm(`إيقاف بند "${t}" الثابت؟ الحركات المخصومة سابقاً تبقى كما هي.`)) return;
     del.mutate(id);
   };
 

@@ -197,15 +197,15 @@ export function InventoryView() {
   const columns: Column<StockRow>[] = [
     { header: 'الصنف', cell: (r) => <NameCell row={r} canEdit={canEditPrice} /> },
     { header: 'الرصيد', cell: (r) => <span className={r.qty < 0 ? 'deb' : ''}>{QTY(r.qty)} {r.unit || ''}</span>, className: 'num' },
-    { header: 'سعر الشراء', cell: (r) => <PriceCell row={r} canEdit={canEditPrice} field="purchasePrice" hint="سعر الشراء الثابت — بيتحط تلقائيًا في سطر فاتورة الشراء، وقابل للتعديل على الفاتورة" />, className: 'num' },
-    { header: 'سعر البيع', cell: (r) => <PriceCell row={r} canEdit={canEditPrice} field="salePrice" hint="سعر البيع الثابت — بيتحط تلقائيًا في سطر فاتورة البيع، وقابل للتعديل على الفاتورة" />, className: 'num' },
-    { header: 'سعر التقييم', cell: (r) => <PriceCell row={r} canEdit={canEditPrice} field="price" hint="سعر تقييم المخزون — بيتحسب من متوسط الشراء لو مش محطوط يدوي" />, className: 'num muted' },
+    { header: 'سعر الشراء', cell: (r) => <PriceCell row={r} canEdit={canEditPrice} field="purchasePrice" hint="سعر الشراء الثابت — يُضاف تلقائياً في سطر فاتورة الشراء، وقابل للتعديل على الفاتورة" />, className: 'num' },
+    { header: 'سعر البيع', cell: (r) => <PriceCell row={r} canEdit={canEditPrice} field="salePrice" hint="سعر البيع الثابت — يُضاف تلقائياً في سطر فاتورة البيع، وقابل للتعديل على الفاتورة" />, className: 'num' },
+    { header: 'سعر التقييم', cell: (r) => <PriceCell row={r} canEdit={canEditPrice} field="price" hint="سعر تقييم المخزون — يُحسب من متوسط الشراء إذا لم يُحدد يدوياً" />, className: 'num muted' },
     { header: 'القيمة', cell: (r) => EGP(r.value), className: 'num' },
   ];
 
   return (
     <>
-      <PageTitle title="المخازن" subtitle="رصيد البضاعة في كل مخزن وقيمتها — واضغط على أي سعر عشان تعدّله" />
+      <PageTitle title="المخازن" subtitle="رصيد البضاعة في كل مخزن وقيمتها — اضغط على أي سعر لتعديله" />
 
       {/* view switcher */}
       <div className="toolbar" style={{ marginBottom: 0 }}>

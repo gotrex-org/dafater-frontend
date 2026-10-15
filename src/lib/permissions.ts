@@ -31,7 +31,6 @@ export const PERMISSIONS: PermGroup[] = [
       { key: 'invoices.createPurchase',  label: 'إنشاء فاتورة شراء' },
       { key: 'invoices.edit',            label: 'تعديل فاتورة' },
       { key: 'invoices.delete',          label: 'حذف فاتورة' },
-      { key: 'invoices.commission',      label: 'إضافة commission' },
       { key: 'invoices.registerProduct', label: 'تسجيل صنف جديد' },
     ],
   },
@@ -49,13 +48,16 @@ export const PERMISSIONS: PermGroup[] = [
       { key: 'manifests.delete',      label: 'حذف كشف' },
       { key: 'manifests.print',       label: 'طباعة' },
       { key: 'manifests.close',       label: 'قفل تاب العربية في الفاتورة' },
+      { key: 'manifests.shipping',    label: 'تكاليف الشحن في كشف العربية (جمرك وتخليص وربط البنود)' },
     ],
   },
   { page: 'driver-trips', label: 'كشف السائقين', actions: [] },
   {
-    page: 'clearance', label: 'التخليص والجمارك', actions: [
-      { key: 'clearance.expense', label: 'ترحيل مصروف جمارك' },
-      { key: 'clearance.pay',     label: 'سداد لمخلّص' },
+    page: 'clearance', label: 'مكاتب التخليص', actions: [
+      { key: 'clearance.offices', label: 'إضافة / تعديل / أرشفة / حذف مكتب تخليص' },
+      { key: 'clearance.expense', label: 'تخليص عربية (على حساب المكتب أو نقدي)' },
+      { key: 'clearance.pay',     label: 'دفعة لمكتب تخليص' },
+      { key: 'clearance.edit',    label: 'تعديل حركة تخليص' },
       { key: 'clearance.delete',  label: 'حذف حركة تخليص' },
     ],
   },
@@ -89,4 +91,9 @@ export const PERMISSIONS: PermGroup[] = [
     ],
   },
   { page: 'audit', label: 'سجل النشاط', actions: [] },
+  {
+    page: 'settlement', label: 'تصفية', actions: [
+      { key: 'settlement.prices', label: 'إدخال وتعديل قوائم أسعار المورد (التصفية برأس المال)' },
+    ],
+  },
 ];

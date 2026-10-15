@@ -55,6 +55,8 @@ interface MyInvoice {
   currency: 'EGP' | 'USD';
   items: { name: string; qty: number; price: number }[];
   /** إجمالي الأصناف بعد الخصم */
+  /** بنود الشحن على الفاتورة (نولون/تحميل/شفتنة…) */
+  charges?: { name: string; qty: number; price: number }[];
   itemsTotal: number;
   discount: number;
   /** الحساب القديم: الباقي من الفاتورة اللي قبلها */
@@ -357,7 +359,7 @@ function PortalInvoiceView({ uid, docNo, partyName, onBack }: {
   if (!data) return (
     <>
       <div className="toolbar no-print"><button className="btn btn-ghost btn-sm" onClick={onBack}>→ رجوع للكشف</button></div>
-      <div className="empty">الفاتورة مش متاحة</div>
+      <div className="empty">الفاتورة غير متاحة</div>
     </>
   );
 
@@ -411,10 +413,18 @@ function PortalInvoiceView({ uid, docNo, partyName, onBack }: {
                     <td className="num">{m(it.qty * it.price)}</td>
                   </tr>
                 ))}
+                {(data.charges ?? []).map((c, i) => (
+                  <tr key={`c${i}`}>
+                    <td className="num" data-l="عدد">{c.qty}</td>
+                    <td>{c.name}</td>
+                    <td className="num" data-l="سعر">{m(c.price)}</td>
+                    <td className="num">{m(c.qty * c.price)}</td>
+                  </tr>
+                ))}
               </tbody>
               <tfoot>
                 <tr className="mf-total">
-                  <td colSpan={3}>{data.discount > 0 ? 'إجمالي الأصناف بعد الخصم' : 'إجمالي الأصناف'}</td>
+                  <td colSpan={3}>{data.charges?.length ? (data.discount > 0 ? 'إجمالي الفاتورة بعد الخصم' : 'إجمالي الفاتورة') : (data.discount > 0 ? 'إجمالي الأصناف بعد الخصم' : 'إجمالي الأصناف')}</td>
                   <td className="num">{m(data.itemsTotal)}</td>
                 </tr>
               </tfoot>
@@ -774,7 +784,7 @@ function PortalManifestTabs({ invoiceUid, cur }: { invoiceUid: string; cur: 'EGP
                   </tr>
                 ))}
                 {tab.items.length === 0 && (
-                  <tr className="mt-goods"><td colSpan={5} className="empty">مفيش أصناف في الكشف</td></tr>
+                  <tr className="mt-goods"><td colSpan={5} className="empty">لا توجد أصناف في الكشف</td></tr>
                 )}
                 <tr className="mt-sub mt-goods">
                   <td />
@@ -795,7 +805,7 @@ function PortalManifestTabs({ invoiceUid, cur }: { invoiceUid: string; cur: 'EGP
                   </tr>
                 ))}
                 {tab.expenses.length === 0 && (
-                  <tr className="mt-exp"><td colSpan={5} className="empty">مفيش مصاريف</td></tr>
+                  <tr className="mt-exp"><td colSpan={5} className="empty">لا توجد مصاريف</td></tr>
                 )}
                 <tr className="mt-sub mt-exp">
                   <td colSpan={4}>إجمالي المصاريف</td>

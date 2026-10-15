@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { firstAllowedSection } from '@/lib/sections';
 
 export function LoginForm() {
   const { login, user } = useAuth();
@@ -13,7 +14,14 @@ export function LoginForm() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { if (user) router.replace('/dashboard'); }, [user, router]);
+  // بنوّديه أول تاب من حقه، مش لوحة التحكم على طول — فيه حسابات مابتشوفهاش خالص
+  // (زي حساب الشريك اللي بيشوف «شراكة مازن» بس).
+  useEffect(() => {
+    if (!user) return;
+    const can = (view: string) => user.admin || user.views.includes(view);
+    const target = firstAllowedSection(can, !!user.isPrimary);
+    router.replace(target?.href ?? '/dashboard');
+  }, [user, router]);
 
   const submit = async () => {
     if (!username || !password || busy) return;
@@ -21,7 +29,7 @@ export function LoginForm() {
     setError('');
     try {
       await login(username, password);
-      router.replace('/dashboard');
+      // التوجيه بيحصل في الـ effect فوق لما الـ user يتحدّث
     } catch (e: any) {
       setError(e.message || 'فشل الدخول');
       setBusy(false);

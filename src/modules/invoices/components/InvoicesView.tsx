@@ -14,7 +14,9 @@ import { ReturnsView } from '../../returns/components/ReturnsView';
 import { DiscountsView } from '../../discounts/components/DiscountsView';
 import { DealsView } from '../../deals/components/DealsView';
 
-const invoiceTotal = (inv: Invoice) => inv.items.reduce((s, it) => s + it.qty * it.price, 0);
+// إجمالي الفاتورة = الأصناف + بنود الشحن
+const invoiceTotal = (inv: Invoice) =>
+  inv.items.reduce((s, it) => s + it.qty * it.price, 0) + (inv.charges ?? []).reduce((s, c) => s + c.qty * c.price, 0);
 
 export function InvoicesView() {
   const { can } = useAuth();

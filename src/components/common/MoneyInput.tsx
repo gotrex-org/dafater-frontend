@@ -29,6 +29,7 @@ export function MoneyInput({
   placeholder,
   style,
   onKeyDown,
+  onBlur,
   autoFocus,
 }: {
   value: string;
@@ -36,6 +37,8 @@ export function MoneyInput({
   placeholder?: string;
   style?: CSSProperties;
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
+  /** يُستخدم للحفظ بالخروج من الخانة، كخانة داخل جدول */
+  onBlur?: () => void;
   autoFocus?: boolean;
 }) {
   return (
@@ -48,6 +51,7 @@ export function MoneyInput({
       autoFocus={autoFocus}
       onChange={(e) => onChange(sanitizeMoney(e.target.value))}
       onKeyDown={onKeyDown}
+      onBlur={onBlur}
     />
   );
 }

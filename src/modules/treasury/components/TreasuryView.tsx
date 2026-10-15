@@ -16,6 +16,7 @@ import { ExpenseCategoriesManager } from '../../expense-categories/components/Ex
 import { RecordOpener } from '../../records/RecordOpener';
 import { confirmCascadeDelete } from '@/lib/cascadeDelete';
 import { colorFor, rowTint } from '@/lib/userColor';
+import { ActivityBadge } from '@/lib/activity';
 import type { TreasuryAccount, TreasuryMovement, ExpenseByCategory } from '../dtos';
 
 // The source record a cash movement traces back to, in priority order: the invoice
@@ -121,6 +122,7 @@ export function TreasuryView() {
   const moveCols: Column<TreasuryMovement>[] = [
     { header: 'التاريخ', cell: (m) => fmtDate(m.date) },
     { header: 'النوع', cell: (m) => m.type },
+    { header: 'النشاط', cell: (m) => <ActivityBadge activity={m.activity} pct={m.shippingPct} /> },
     { header: 'المستخدم', cell: (m) => m.createdBy?.name ? <b style={{ color: colorFor(m.createdBy.name) }}>{m.createdBy.name}</b> : <span className="muted">—</span> },
     { header: 'الخزنة', cell: txTreasury, className: 'muted' },
     { header: 'البيان', cell: (m) => m.note || m.party?.name || '', className: 'muted' },

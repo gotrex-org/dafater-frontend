@@ -3,10 +3,11 @@
 import { useState, type ReactNode } from 'react';
 import { EGP, QTY, fmtDate } from '@/lib/format';
 import { PageTitle, Spinner, StatsGrid, StatCard, SegmentedControl, Combobox } from '@/components/common';
-import { useReportSummary, useShippingSummary, useTopProducts, useTopClients, useTopSuppliers, useBusiest, useInactiveClients, useProfitLoss, useExpensesByCategory, useBusiestFor, useCustodyBalances } from '../hooks';
+import { useTopProducts, useTopClients, useTopSuppliers, useBusiest, useInactiveClients, useProfitLoss, useExpensesByCategory, useBusiestFor, useCustodyBalances } from '../hooks';
 import { useAllParties } from '../../parties/hooks';
 import { useAllProducts } from '../../products/hooks';
 import { useAuth } from '@/lib/auth';
+import { TradeReportSection, ShippingReportSection, VehicleProfitsSection } from './ActivityReports';
 
 // أول الشهر الحالي — الفلتر بيفتح عليه افتراضيًا (تقارير شهرية).
 function monthStart(): string {
@@ -90,8 +91,6 @@ export function ReportsView({ embedded = false }: { embedded?: boolean }) {
   const [inactiveDays, setInactiveDays] = useState(45);
   const r = { from: from || undefined, to: to || undefined };
 
-  const summary = useReportSummary(r);
-  const shipping = useShippingSummary(r);
   const products = useTopProducts(r);
   const clients = useTopClients(r);
   const suppliers = useTopSuppliers(r);
@@ -119,72 +118,10 @@ export function ReportsView({ embedded = false }: { embedded?: boolean }) {
         {(from || to) && <button className="btn btn-ghost btn-sm" onClick={() => { setFrom(''); setTo(''); }}>كل الفترة</button>}
       </div>
 
-      {/* ——— الملخّص: كل نشاط لوحده ———
-          النشاطين بيمرّوا على نفس الفواتير، والفرق بينهم `Product.service`: بنود
-          البضاعة تجارة، وبنود الخدمات (ناولون/تحميل/شفتنة…) شحن. من غير الفصل ده
-          الناولون بيتجمّع مع البضاعة وبيضخّم المشتريات. */}
-      <Collapsible title="🏪 التجارة — بضاعة" defaultOpen headline={summary.data && (
-        <span className={summary.data.grossProfit >= 0 ? 'cre' : 'deb'}>{money(summary.data.grossProfit)}</span>
-      )}>
-        {summary.isLoading || !summary.data ? <Spinner /> : (
-          <>
-            <StatsGrid columns={3}>
-              <StatCard label="اشتريت بكام" value={money(summary.data.landedPurchases)} />
-              <StatCard variant="gold" label="بعت بكام" value={money(summary.data.netSales)} />
-              <StatCard
-                variant={summary.data.grossProfit >= 0 ? 'accent' : 'debit'}
-                label="الفرق"
-                value={money(summary.data.grossProfit)}
-              />
-            </StatsGrid>
-            <div className="muted" style={{ fontSize: 12.5, marginTop: 8 }}>
-              المشتريات = بضاعة {money(summary.data.purchases)}
-              {summary.data.addedCosts > 0 && <> + ناولون داخلي وشاي {money(summary.data.addedCosts)}</>}
-              {summary.data.purchaseReturns > 0 && <> − مرتجعات {money(summary.data.purchaseReturns)}</>}
-              {' · '}{summary.data.purchasesCount} فاتورة شراء، {summary.data.salesCount} فاتورة بيع
-            </div>
-          </>
-        )}
-      </Collapsible>
-
-      {/* الشحن — التريلات. الإيراد بنود خدمات على فاتورة البيع + العطلة وفرق الوزن،
-          والتكلفة ناولون السائقين والجمارك. */}
-      <Collapsible title="🚚 الشحن — التريلات" defaultOpen headline={shipping.data && (
-        <span className={shipping.data.profit >= 0 ? 'cre' : 'deb'}>{money(shipping.data.profit)}</span>
-      )}>
-        {shipping.isLoading || !shipping.data ? <Spinner /> : (
-          <>
-            <StatsGrid columns={3}>
-              <StatCard variant="gold" label="حصّلت بكام" value={money(shipping.data.collected)} />
-              <StatCard variant="debit" label="دفعت بكام" value={money(shipping.data.paid)} />
-              <StatCard
-                variant={shipping.data.profit >= 0 ? 'accent' : 'debit'}
-                label="الفرق"
-                value={money(shipping.data.profit)}
-              />
-            </StatsGrid>
-            <div className="tbl-wrap" style={{ marginTop: 10 }}>
-              <table>
-                <thead><tr><th>البند</th><th style={{ width: 140 }}>داخل</th><th style={{ width: 140 }}>خارج</th></tr></thead>
-                <tbody>
-                  <tr><td>ناولون وخدمات على فواتير البيع</td><td className="num cre">{EGP(shipping.data.income.invoiceServices)}</td><td /></tr>
-                  <tr><td>عطلة العربيات</td><td className="num cre">{EGP(shipping.data.income.delay)}</td><td /></tr>
-                  <tr><td>فرق الوزن</td><td className="num cre">{EGP(shipping.data.income.weightDiff)}</td><td /></tr>
-                  <tr><td>ناولون السائقين (المتفق عليه)</td><td /><td className="num deb">{EGP(shipping.data.costs.driverFreight)}</td></tr>
-                  <tr><td>التخليص والجمارك</td><td /><td className="num deb">{EGP(shipping.data.costs.customs)}</td></tr>
-                  {shipping.data.costs.invoiceServices > 0 && (
-                    <tr><td>خدمات على فواتير شراء <span className="muted">— المفروض متكونش موجودة</span></td><td /><td className="num deb">{EGP(shipping.data.costs.invoiceServices)}</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="muted" style={{ fontSize: 12.5, marginTop: 8 }}>
-              {shipping.data.trips} رحلة في الفترة. مصاريف المخزن ({money(shipping.data.warehouseNote)}) مش داخلة هنا —
-              فيها تحميل مع إيجار ومرتبات، ومفيش في الداتا حاجة تفصلهم.
-            </div>
-          </>
-        )}
-      </Collapsible>
+      {/* ——— النشاطين كل واحد لوحده: التجارة، الشحن، وربح كل عربية ——— */}
+      <TradeReportSection r={r} />
+      <ShippingReportSection r={r} />
+      <VehicleProfitsSection r={r} />
 
       {/* 3) مصاريف — مجموعتين (مخزن/خارجية) وجوه كل واحدة بنودها */}
       <Collapsible title="🧾 مصاريف" headline={expenses.data && <span className="deb">{money(expenses.data.total)}</span>}>
@@ -237,7 +174,7 @@ export function ReportsView({ embedded = false }: { embedded?: boolean }) {
       <Collapsible title="🤝 العُهَد (فلوس مع الناس أمانة/سلف)" headline={custody.data && <span className="deb">{money(custody.data.total)}</span>}>
         {custody.isLoading ? <Spinner /> : !custody.data?.holders.length ? <div className="empty">لا توجد عُهَد مفتوحة</div> : (
           <div className="tbl-wrap"><table>
-            <thead><tr><th style={{ width: 32 }}>#</th><th>صاحب العهدة</th><th style={{ width: 140 }}>المبلغ اللي عليه</th></tr></thead>
+            <thead><tr><th style={{ width: 32 }}>#</th><th>صاحب العهدة</th><th style={{ width: 140 }}>المبلغ المستحق عليه</th></tr></thead>
             <tbody>{custody.data.holders.map((h, i) => (
               <tr key={h.id}><td className="muted">{i + 1}</td><td><b>{h.name}</b></td><td className="num deb">{EGP(h.balance)}</td></tr>
             ))}</tbody>

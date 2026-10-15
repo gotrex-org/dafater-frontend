@@ -1,53 +1,39 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { money, EGP, fmtDate } from '@/lib/format';
 import { downloadElementAsPdf } from '@/lib/pdf';
-import { PageTitle, Spinner, Field, MoneyInput } from '@/components/common';
+import { PageTitle, Spinner } from '@/components/common';
 import { useAuth } from '@/lib/auth';
 import { useWindows } from '@/lib/windows';
-import { useInvoice, useDeleteInvoice, useUpdateInvoiceCommission } from '../hooks';
+import { useInvoice, useDeleteInvoice } from '../hooks';
 import { confirmCascadeDelete } from '@/lib/cascadeDelete';
 import type { Invoice } from '../dtos';
 import { InvoiceEditor } from './InvoiceEditor';
-import { CommissionPicker } from './CommissionPicker';
 
 export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: () => void }) {
   const { can } = useAuth();
   const { open } = useWindows();
   const sheetRef = useRef<HTMLDivElement>(null);
-  const total = invoice.items.reduce((s, it) => s + it.qty * it.price, 0);
   const discount = invoice.discount || 0;
-  const netTotal = total - discount; // الصافي بعد الخصم
   const kindLabel = invoice.kind === 'SALE' ? 'بيع' : 'شراء';
   const cur = invoice.currency ?? invoice.party?.currency ?? 'EGP';
 
-  // الأصناف والبنود: «البند» هو المنتج المعلَّم service (نولون / عمولة دلالة / تحميل …).
-  // بيتعرض في قسم منفصل تحت الأصناف بإجمالي خاص بيه — نفس تقسيمة محرر الفاتورة.
+  // الأصناف وبنود الشحن: البنود من جدول بنود الشحن (نولون / تحميل / شفتنة …)، ومعاها
+  // الأصناف الخدمية القديمة (service). بتتعرض في قسم منفصل تحت الأصناف بإجمالي خاص بيها.
   const goods = invoice.items.filter((it) => !it.product?.service);
-  const services = invoice.items.filter((it) => !!it.product?.service);
+  const services = [
+    ...(invoice.charges ?? []).map((c) => ({ id: c.id, qty: c.qty, price: c.price, product: { name: c.chargeType?.name ?? '—' } })),
+    ...invoice.items.filter((it) => !!it.product?.service),
+  ];
   const goodsTotal = goods.reduce((s, it) => s + it.qty * it.price, 0);
   const servicesTotal = services.reduce((s, it) => s + it.qty * it.price, 0);
+  const total = goodsTotal + servicesTotal;
+  const netTotal = total - discount; // الصافي بعد الخصم
 
 
-  const [showCommission, setShowCommission] = useState(false);
-  const [commAmount, setCommAmount] = useState('');
-  const [commPartyId, setCommPartyId] = useState('');
-  const [commError, setCommError] = useState('');
   const deleteInvoice = useDeleteInvoice();
-  const updateCommission = useUpdateInvoiceCommission();
 
-  const saveCommission = () => {
-    setCommError('');
-    if (!commPartyId) return setCommError('اختر صاحب commission');
-    updateCommission.mutate(
-      { id: invoice.id, dto: { commissionAmount: Number(commAmount) || undefined, commissionPartyId: commPartyId || undefined } },
-      {
-        onSuccess: () => { setShowCommission(false); setCommAmount(''); setCommPartyId(''); },
-        onError: (e: any) => setCommError(e.message),
-      },
-    );
-  };
 
   const openEdit = () => open({
     id: `invoice:${invoice.id}`,
@@ -64,12 +50,9 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
     <>
       <div className="toolbar no-print" style={{ flexWrap: 'wrap' }}>
         <button className="btn btn-ghost btn-sm" onClick={onBack}>→ رجوع</button>
-        {invoice.fake && <span className="pill" style={{ background: 'var(--debit)', color: '#fff' }}>⚠️ فاتورة وهمية — مش مسجّلة في الحسابات</span>}
+        {invoice.fake && <span className="pill" style={{ background: 'var(--debit)', color: '#fff' }}>فاتورة وهمية — غير مسجلة في الحسابات</span>}
         {can('invoices.edit') && (
           <button className="btn btn-ghost btn-sm" onClick={openEdit}>تعديل</button>
-        )}
-        {can('invoices.commission') && (
-          <button className="btn btn-ghost btn-sm" onClick={() => setShowCommission((v) => !v)}>commission</button>
         )}
         {can('invoices.delete') && (
           <button className="btn btn-danger btn-sm" onClick={handleDelete} disabled={deleteInvoice.isPending}>حذف</button>
@@ -78,26 +61,6 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
         <button className="btn btn-primary btn-sm" onClick={() => window.print()}>🖨 طباعة</button>
       </div>
 
-      {showCommission && can('invoices.commission') && (
-        <div className="card no-print" style={{ padding: 16, marginBottom: 12 }}>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>إضافة / تعديل commission</div>
-          <div className="form-grid">
-            <Field label="مبلغ commission">
-              <MoneyInput value={commAmount} onChange={setCommAmount} placeholder="0.00" />
-            </Field>
-            <Field label="لصالح">
-              <CommissionPicker value={commPartyId} onChange={setCommPartyId} />
-            </Field>
-          </div>
-          {commError && <div className="err-text">{commError}</div>}
-          <div className="toolbar" style={{ marginTop: 8 }}>
-            <button className="btn btn-primary btn-sm" onClick={saveCommission} disabled={updateCommission.isPending}>
-              {updateCommission.isPending ? '...' : 'حفظ'}
-            </button>
-            <button className="btn btn-ghost btn-sm" onClick={() => { setShowCommission(false); setCommError(''); }}>إلغاء</button>
-          </div>
-        </div>
-      )}
 
 
       <div ref={sheetRef} className="card print-sheet inv-sheet">
@@ -147,7 +110,7 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
               )}
               {services.map((it) => (
                 <tr key={it.id} className="inv-bnd">
-                  <td><span className="inv-bnd-tag">بند</span>{it.product?.name ?? '—'}</td>
+                  <td><span className="inv-bnd-tag">شحن</span>{it.product?.name ?? '—'}</td>
                   <td className="num">{it.qty}</td>
                   <td className="num">{money(it.price, cur)}</td>
                   <td className="num">{money(it.qty * it.price, cur)}</td>
@@ -155,12 +118,12 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
               ))}
               {services.length > 0 && (
                 <tr className="inv-sub">
-                  <td colSpan={3}>إجمالي البنود</td>
+                  <td colSpan={3}>إجمالي بنود الشحن</td>
                   <td className="num">{money(servicesTotal, cur)}</td>
                 </tr>
               )}
-              {invoice.items.length === 0 && (
-                <tr><td colSpan={4} className="empty">مفيش أصناف على الفاتورة دي</td></tr>
+              {invoice.items.length === 0 && services.length === 0 && (
+                <tr><td colSpan={4} className="empty">لا توجد أصناف في هذه الفاتورة</td></tr>
               )}
             </tbody>
           </table>

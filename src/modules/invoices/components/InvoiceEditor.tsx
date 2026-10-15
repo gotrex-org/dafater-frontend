@@ -16,6 +16,7 @@ import { invoicesApi } from '../api';
 import { ProductCombobox } from '../../products/components/ProductCombobox';
 import { PartyCombobox } from './PartyCombobox';
 import { CommissionPicker } from './CommissionPicker';
+import { useChargeTypes } from '../../charge-types/hooks';
 import type { Invoice, InvoiceKind } from '../dtos';
 import type { InvoiceDraft } from '../draftTypes';
 
@@ -27,9 +28,11 @@ interface Line {
   showFreight?: boolean; showTea?: boolean; showComm?: boolean; // أي إضافات مفعّلة من زر الثلاث نقاط
   bnd?: boolean;
 }
+// سطر بند شحن (نولون/تحميل/شفتنة…) — جدول منفصل عن الأصناف ولا يؤثر على المخزون.
+interface ChargeLine { _key: number; chargeTypeId: string; qty: string; price: string; note: string; manifestId?: string }
 let _nextKey = 0;
 const blankLine = (): Line => ({ _key: _nextKey++, productId: '', qty: '', price: '', freight: '', freightTreasuryId: '', freightNote: '', tea: '', teaTreasuryId: '', teaNote: '', commQty: '', commPrice: '', commPartyId: '' });
-const bndBlank = (): Line => ({ ...blankLine(), bnd: true }); // بند إضافي (خدمة/رسوم) منفصل عن الأصناف
+const blankCharge = (chargeTypeId = ''): ChargeLine => ({ _key: _nextKey++, chargeTypeId, qty: '1', price: '', note: '' });
 let _draftSeq = 0;
 const newDraftId = () => `draft_${++_draftSeq}_${Date.now()}`;
 
@@ -55,6 +58,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   const { data: products } = useAllProducts();
   const { data: warehouses } = useAllWarehouses();
   const { data: treasury } = useAllTreasury();
+  const { data: chargeTypes } = useChargeTypes();
   const createInvoice = useCreateInvoice();
   const updateInvoice = useUpdateInvoice();
   const createProduct = useCreateProduct();
@@ -140,6 +144,16 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
             showFreight: !!it.freight, showTea: !!it.tea, showComm: !!(it.commissionQty || it.commissionParty) }))
         : [blankLine()],
   );
+  const [charges, setCharges] = useState<ChargeLine[]>(
+    d?.charges
+      ? d.charges.map((c) => ({ _key: _nextKey++, chargeTypeId: c.chargeTypeId, qty: c.qty, price: c.price, note: c.note ?? '', manifestId: c.manifestId }))
+      : (invoice?.charges ?? []).map((c) => ({
+          _key: _nextKey++, chargeTypeId: c.chargeType?.id ?? '', qty: String(c.qty), price: String(c.price),
+          note: c.note ?? '', manifestId: c.manifest?.id,
+        })),
+  );
+  const setCharge = (i: number, patch: Partial<ChargeLine>) =>
+    setCharges((cs) => cs.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
   // A restored draft already carries its lines — don't re-inject pinned defaults over them.
   const [prefilled, setPrefilled] = useState(isEdit || !!initialDraft);
   const [error, setError] = useState('');
@@ -152,15 +166,16 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   useEffect(() => {
     if (prefilled || !products) return;
     const pinned = products.data.filter((p) => (kind === 'SALE' ? p.pinSale : p.pinPurchase));
-    // Pinned defaults become extra "بنود" that sit AFTER the products (a blank product line first).
+    // الأصناف المثبّتة بتظهر كسطور جاهزة بعد سطر صنف فاضي. بنود الشحن (نولون/تحميل/
+    // شفتنة) بقت جدول منفصل تحت، مش أصناف.
     if (pinned.length) setLines([blankLine(), ...pinned.map((p) => {
       const fixed = kind === 'SALE' ? p.salePrice : p.purchasePrice;
-      return { ...blankLine(), productId: p.id, bnd: true, price: fixed && fixed > 0 ? String(fixed) : '' };
+      return { ...blankLine(), productId: p.id, price: fixed && fixed > 0 ? String(fixed) : '' };
     })]);
     setPrefilled(true);
   }, [products, prefilled, kind]);
 
-  const isDirty = isEdit || !!partyId || lines.some((l) => !!(l.productId || l.qty || l.price));
+  const isDirty = isEdit || !!partyId || lines.some((l) => !!(l.productId || l.qty || l.price)) || charges.some((c) => !!(c.chargeTypeId && c.price));
   useNavigationGuard(isDirty);
   const handleClose = () => {
     if (isDirty && !window.confirm('في بيانات لم تُحفظ — هل تريد المغادرة بدون حفظ؟')) return;
@@ -183,6 +198,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
         no, date, partyId, directSale, warehouseId, treasuryId, paid, discount, fake, note,
         exchangeRate,
         lines: lines.map((l) => ({ productId: l.productId, qty: l.qty, price: l.price, bnd: l.bnd, freight: l.freight, freightTreasuryId: l.freightTreasuryId, freightNote: l.freightNote, tea: l.tea, teaTreasuryId: l.teaTreasuryId, teaNote: l.teaNote, commQty: l.commQty, commPrice: l.commPrice, commPartyId: l.commPartyId })),
+        charges: charges.map((c) => ({ chargeTypeId: c.chargeTypeId, qty: c.qty, price: c.price, note: c.note, manifestId: c.manifestId })),
       },
     };
   };
@@ -192,7 +208,11 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   const isUSD = selectedParty?.currency === 'USD';
   const cur = isUSD ? 'USD' : 'EGP';
 
-  const total = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.price) || 0), 0);
+  // إجمالي الفاتورة = إجمالي الأصناف (تجارة) + إجمالي بنود الشحن (شحن)
+  const itemsTotal = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.price) || 0), 0);
+  const chargeQty = (c: ChargeLine) => (c.qty === '' ? 1 : Number(c.qty) || 0);
+  const chargesTotal = charges.reduce((s, c) => s + chargeQty(c) * (Number(c.price) || 0), 0);
+  const total = itemsTotal + chargesTotal;
   const disc = Math.min(Number(discount) || 0, total); // الخصم لا يتجاوز الإجمالي
   const netTotal = total - disc;
   const rate = Number(exchangeRate) || 0;
@@ -242,10 +262,17 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
         commissionPrice: Number(l.commPrice) || 0,
         ...(l.commPartyId && Number(l.commQty) > 0 && Number(l.commPrice) > 0 ? { commissionPartyId: l.commPartyId } : {}),
       }));
+    const chargeRows = charges.filter((c) => c.chargeTypeId && chargeQty(c) * (Number(c.price) || 0) !== 0);
+    if (charges.some((c) => !c.chargeTypeId && Number(c.price) > 0)) return setError('اختر اسم البند في جدول بنود الشحن');
+    const chargesDto = chargeRows.map((c) => ({
+      chargeTypeId: c.chargeTypeId, qty: chargeQty(c), price: Number(c.price) || 0,
+      ...(c.note.trim() ? { note: c.note.trim() } : {}),
+      ...(c.manifestId ? { manifestId: c.manifestId } : {}),
+    }));
     if (!partyId) return setError('اختر الطرف');
     if (!warehouseId) return setError('اختر المخزن');
-    if (items.length === 0) return setError('أضف صنفًا واحدًا على الأقل');
-    if (!fake && Number(paid) > 0 && !treasuryId) return setError('اخترت مبلغ مدفوع — لازم تختار الخزنة اللي المبلغ خارج/داخل منها');
+    if (items.length === 0 && chargesDto.length === 0) return setError('أضف صنفاً أو بند شحن واحداً على الأقل');
+    if (!fake && Number(paid) > 0 && !treasuryId) return setError('حددت مبلغاً مدفوعاً. اختر الخزنة التي يخرج منها المبلغ أو يدخل إليها');
     if (!fake && isUSD && !(rate > 0)) return setError('فاتورة دولارية — اكتب سعر صرف الدولار اليوم');
 
     const usdRate = isUSD && rate > 0 ? { exchangeRate: rate } : {};
@@ -255,7 +282,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
         {
           id: editInvoiceId!,
           dto: {
-            date, partyId, warehouseId, items,
+            date, partyId, warehouseId, items, charges: chargesDto,
             paid: fake ? 0 : Number(paid) || 0,
             discount: fake ? undefined : disc || undefined,
             fake,
@@ -273,7 +300,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
       createInvoice.mutate(
         {
           kind, no: no.trim() || undefined, date, partyId, warehouseId, fake,
-          items, paid: fake ? 0 : Number(paid) || 0, discount: fake ? undefined : disc || undefined, treasuryId: fake ? undefined : treasuryId || undefined, note: note || undefined,
+          items, charges: chargesDto, paid: fake ? 0 : Number(paid) || 0, discount: fake ? undefined : disc || undefined, treasuryId: fake ? undefined : treasuryId || undefined, note: note || undefined,
           ...usdRate,
         },
         // Purchase invoices never make a vehicle manifest — just close. Sales offer it.
@@ -320,7 +347,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
       <div className="toolbar" style={{ marginBottom: 0 }}>
         <button className="btn btn-ghost btn-sm" onClick={handleClose}>→ رجوع لقائمة الفواتير</button>
         {onMinimize && (
-          <button className="btn btn-ghost btn-sm" title="تصغير الفاتورة — تفضل مفتوحة وتقدر تكمّلها بعدين" onClick={handleMinimize}>🗕 تصغير</button>
+          <button className="btn btn-ghost btn-sm" title="تصغير الفاتورة — تبقى مفتوحة ويمكن إكمالها لاحقاً" onClick={handleMinimize}>🗕 تصغير</button>
         )}
       </div>
       <PageTitle title={isEdit ? `تعديل ${kind === 'SALE' ? 'فاتورة بيع' : 'فاتورة شراء'} رقم ${invoice?.no ?? no}` : kind === 'SALE' ? 'فاتورة بيع جديدة' : 'فاتورة شراء جديدة'} />
@@ -415,7 +442,6 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
             </tr></thead>
             <tbody>
               {lines.map((l, i) => {
-                if (l.bnd) return null; // البنود الإضافية ليها قسم منفصل تحت
                 const prod = l.productId ? products?.data.find((p) => p.id === l.productId) : undefined;
                 const stockRow = prod && !prod.service ? stockByProduct.get(l.productId) : undefined;
                 const lastPrice = prod ? lastPriceByProduct.get(l.productId) : undefined;
@@ -537,13 +563,12 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
                         )}
                         <button
                           className="btn btn-ghost btn-sm"
-                          title="إضافة كوميشن / ناولون / شاي على الصنف"
+                          title="إضافة ناولون / شاي على الصنف"
                           style={{ fontSize: 17, fontWeight: 800, lineHeight: 1 }}
                           onClick={() => setMenuFor((k) => (k === l._key ? null : l._key))}
                         >⋮</button>
                         {menuFor === l._key && (
                           <div style={{ position: 'absolute', top: '100%', insetInlineEnd: 0, zIndex: 20, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,.12)', padding: 4, display: 'grid', gap: 2, minWidth: 130 }}>
-                            <button className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { setLine(i, { showComm: true }); setMenuFor(null); }}>➕ كوميشن</button>
                             <button className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { setLine(i, { showFreight: true }); setMenuFor(null); }}>➕ ناولون</button>
                             <button className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { setLine(i, { showTea: true }); setMenuFor(null); }}>➕ شاي</button>
                           </div>
@@ -557,38 +582,68 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
             </tbody>
           </table>
         </div>
-        <div style={{ padding: '10px 16px' }}>
-          <button className="btn btn-ghost btn-sm" onClick={() => setLines((ls) => {
-            // keep new product lines above the بنود block in the array
-            const idx = ls.findIndex((l) => l.bnd);
-            const nl = blankLine();
-            return idx === -1 ? [...ls, nl] : [...ls.slice(0, idx), nl, ...ls.slice(idx)];
-          })}>+ إضافة صنف</button>
+        <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => setLines((ls) => [...ls, blankLine()])}>+ إضافة صنف</button>
+          <span className="num" style={{ marginInlineStart: 'auto', fontWeight: 700 }}>إجمالي الأصناف: {money(itemsTotal, cur)}</span>
         </div>
 
-        {/* البنود الإضافية — قسم منفصل عن الأصناف، بحجم أصغر ولون قريب من سطح الكارت */}
-        <div style={{ margin: '4px 16px 14px', padding: 9, borderRadius: 10, background: 'var(--line-soft)', border: '1px solid var(--line)' }}>
-          <div style={{ fontWeight: 700, fontSize: 11.5, marginBottom: 6, color: 'var(--ink-soft)' }}>🧾 بنود إضافية (خدمات ورسوم)</div>
-          <div style={{ display: 'grid', gap: 4 }}>
-            {lines.map((l, i) => {
-              if (!l.bnd) return null;
-              return (
-                <div key={l._key} style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', background: 'var(--surface)', borderRadius: 6, padding: '4px 6px', fontSize: 12 }}>
-                  <div style={{ flex: 1, minWidth: 150 }}>
-                    <ProductCombobox products={products?.data ?? []} value={l.productId} onChange={(id) => pickProduct(i, id)} />
-                  </div>
-                  <MoneyInput value={l.qty} onChange={(v) => setLine(i, { qty: v })} placeholder="كمية" style={{ width: 56 }} />
-                  <span className="muted" style={{ fontSize: 11 }}>×</span>
-                  <MoneyInput value={l.price} onChange={(v) => setLine(i, { price: v })} placeholder="سعر" style={{ width: 78 }} />
-                  <span className="num" style={{ minWidth: 74, fontWeight: 700, textAlign: 'end', fontSize: 12 }}>{money(Number(l.qty) * Number(l.price), cur)}</span>
-                  <button className="btn btn-danger btn-sm" onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}>×</button>
-                </div>
-              );
-            })}
-            {!lines.some((l) => l.bnd) && <div className="muted" style={{ fontSize: 11.5 }}>لا توجد بنود إضافية</div>}
+        {/* بنود الشحن — جدول منفصل عن الأصناف، نشاطه شحن، ولا يؤثر على المخزون.
+            بتتحصّل من العميل على فاتورة البيع (الإيجار بيتدفع للسائق من كشف السائقين)،
+            فمش ظاهرة في فاتورة الشراء إلا لو فاتورة قديمة عليها بنود بالفعل. */}
+        {(kind === 'SALE' || charges.length > 0) && (
+        <div style={{ margin: '4px 16px 14px', padding: 10, borderRadius: 10, background: 'var(--line-soft)', border: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+            <b style={{ fontSize: 13 }}>🚛 بنود الشحن</b>
+            <span className="muted" style={{ fontSize: 11.5 }}>لا تؤثر على المخزون</span>
+            <span style={{ marginInlineStart: 'auto', display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {(chargeTypes ?? []).map((ct) => (
+                <button key={ct.id} type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 12 }}
+                  onClick={() => setCharges((cs) => [...cs, blankCharge(ct.id)])}>+ {ct.name}</button>
+              ))}
+            </span>
           </div>
-          <button className="btn btn-ghost btn-sm" style={{ marginTop: 6, fontSize: 12 }} onClick={() => setLines((ls) => [...ls, bndBlank()])}>+ بند إضافي</button>
+          {charges.length > 0 ? (
+            <div className="tbl-wrap">
+              <table>
+                <thead><tr>
+                  <th>البند</th><th>الكمية</th><th>السعر {isUSD ? '($)' : '(ج.م)'}</th><th>الإجمالي</th><th>البيان</th><th></th>
+                </tr></thead>
+                <tbody>
+                  {charges.map((c, i) => (
+                    <tr key={c._key}>
+                      <td style={{ minWidth: 130 }}>
+                        <select
+                          value={c.chargeTypeId}
+                          onChange={(e) => setCharge(i, { chargeTypeId: e.target.value })}
+                          style={{ width: '100%', padding: '7px 9px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 13 }}
+                        >
+                          <option value="">اختر البند</option>
+                          {(chargeTypes ?? []).map((ct) => <option key={ct.id} value={ct.id}>{ct.name}</option>)}
+                          {/* بند مؤرشف على فاتورة قديمة بيفضل ظاهر باسمه */}
+                          {c.chargeTypeId && !(chargeTypes ?? []).some((ct) => ct.id === c.chargeTypeId) && (
+                            <option value={c.chargeTypeId}>{invoice?.charges?.find((x) => x.chargeType?.id === c.chargeTypeId)?.chargeType?.name ?? 'بند مؤرشف'}</option>
+                          )}
+                        </select>
+                      </td>
+                      <td><MoneyInput value={c.qty} onChange={(v) => setCharge(i, { qty: v })} placeholder="1" style={{ width: 70 }} /></td>
+                      <td><MoneyInput value={c.price} onChange={(v) => setCharge(i, { price: v })} placeholder="0" style={{ width: 100 }} /></td>
+                      <td className="num" style={{ fontWeight: 700 }}>{money(chargeQty(c) * (Number(c.price) || 0), cur)}</td>
+                      <td><input value={c.note} onChange={(e) => setCharge(i, { note: e.target.value })} placeholder="اختياري" style={{ width: 140, padding: '7px 9px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 13 }} /></td>
+                      <td><button className="btn btn-danger btn-sm" onClick={() => setCharges((cs) => cs.filter((_, idx) => idx !== i))}>×</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="muted" style={{ fontSize: 12 }}>لا توجد بنود شحن على هذه الفاتورة</div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+            <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 12 }} onClick={() => setCharges((cs) => [...cs, blankCharge()])}>+ بند شحن</button>
+            <span className="num" style={{ marginInlineStart: 'auto', fontWeight: 700 }}>إجمالي بنود الشحن: {money(chargesTotal, cur)}</span>
+          </div>
         </div>
+        )}
 
         {!fake && (
         <div className="form-grid">
@@ -616,6 +671,11 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
         </div>
         )}
 
+        {(kind === 'SALE' || charges.length > 0) && (
+          <div className="num" style={{ padding: '0 16px', fontSize: 13, color: 'var(--ink-soft)' }}>
+            الأصناف: {money(itemsTotal, cur)} · بنود الشحن: {money(chargesTotal, cur)}
+          </div>
+        )}
         <div className="page-title num" style={{ padding: '0 16px' }}>
           {disc > 0 ? <>الإجمالي: {money(total, cur)} · خصم: {money(disc, cur)} · <b>الصافي: {money(netTotal, cur)}</b></> : <>الإجمالي: {money(total, cur)}</>}
         </div>

@@ -174,7 +174,7 @@ export function AgentDetail({ agentUid, onBack, initialMode }: { agentUid: strin
               onClick={() => {
                 setStErr('');
                 if (!stAmt || Number(stAmt) <= 0) return setStErr('اكتب المبلغ');
-                if (!stTreasuryId) return setStErr('اختر الخزنة اللي المبلغ خارج/داخل منها');
+                if (!stTreasuryId) return setStErr('اختر الخزنة التي يخرج منها المبلغ أو يدخل إليها');
                 settle.mutate(
                   { date: stDate, egpAmount: Number(stAmt), direction: stDir, treasuryId: stTreasuryId, note: stNote || undefined },
                   {

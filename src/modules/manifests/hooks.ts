@@ -45,3 +45,25 @@ export function useDeleteManifest() {
     onSuccess: () => qc.invalidateQueries({ queryKey: manifestKeys.all }),
   });
 }
+
+/** تكاليف الشحن وربح العربية — بتتحدّث مع أي حركة تخليص/مصروف (مفتاح manifests). */
+export function useVehicleShipping(id: string | null) {
+  return useQuery({
+    queryKey: ['manifests', 'shipping', id],
+    queryFn: () => manifestsApi.shipping(id as string),
+    enabled: !!id,
+  });
+}
+
+export function useAssignCharge() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, chargeId, assign }: { id: string; chargeId: string; assign: boolean }) =>
+      manifestsApi.assignCharge(id, chargeId, assign),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: manifestKeys.all });
+      qc.invalidateQueries({ queryKey: ['invoices'] });
+      qc.invalidateQueries({ queryKey: ['reports'] });
+    },
+  });
+}

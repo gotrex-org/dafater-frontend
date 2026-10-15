@@ -37,6 +37,7 @@ const ENTITY: Record<string, string> = {
   warehouses: 'مخزن', 'expense-categories': 'بند مصروف', users: 'مستخدم', orders: 'طلبية عميل',
   config: 'إعدادات', 'driver-trips': 'رحلة سائق', drivers: 'سائق', loans: 'سلفة',
   'dollar-agents': 'وكيل دولار', returns: 'مرتجع', discounts: 'خصم',
+  settlement: 'تصفية',
 };
 const ACTION: Record<string, string> = { CREATE: 'إضافة', UPDATE: 'تعديل', DELETE: 'حذف' };
 const ACTION_CLASS: Record<string, string> = { CREATE: 'cre', UPDATE: '', DELETE: 'deb' };
@@ -368,7 +369,7 @@ export function AuditView() {
 
   return (
     <>
-      <PageTitle title="سجل النشاط" subtitle="كل التعديلات اللي بتحصل في النظام — مين عمل إيه وإمتى" />
+      <PageTitle title="سجل النشاط" subtitle="كل التعديلات في النظام — من قام بها ومتى" />
       {restoreErr && (
         <div className="err-text" style={{ marginBottom: 12, padding: '10px 14px', background: 'rgba(178,58,46,.08)', borderRadius: 8 }}>
           {restoreErr}

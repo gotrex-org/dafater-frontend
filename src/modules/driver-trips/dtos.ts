@@ -39,7 +39,7 @@ export interface DriverTrip {
   trulyClosed?: boolean;
   // الفاتورة المربوطة — اللي الناولون اتحصّل فيها من العميل
   invoiceId?: number | null;
-  invoice?: { uid: string; no: string; date: string; items: { qty: number; price: number; product: { name: string } | null }[] } | null;
+  invoice?: { uid: string; no: string; date: string; items: { qty: number; price: number; product: { name: string } | null }[]; charges?: { qty: number; price: number; chargeType: { name: string } | null }[] } | null;
   collectedFreight?: number;
   collectedLines?: TripInvoiceLine[];
   tripProfit?: number;
@@ -95,4 +95,5 @@ export interface TripInvoiceCandidate {
   no: string;
   date: string;
   items: { qty: number; price: number; product: { name: string } | null }[];
+  charges?: { qty: number; price: number; chargeType: { name: string } | null }[];
 }

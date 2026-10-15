@@ -78,3 +78,37 @@ export interface UpdateManifestDto {
   note?: string;
   items?: ManifestItem[];
 }
+
+/** سطر إيراد (بند شحن على فاتورة) في تكاليف الشحن للعربية */
+export interface VehicleRevenueLine {
+  id: string; name: string; qty: number; price: number; total: number;
+  note: string | null; invoiceNo: string | null;
+}
+
+/** قسم «تكاليف الشحن» في كشف العربية — GET /manifests/:id/shipping */
+export interface VehicleShipping {
+  id: string;
+  no: string;
+  date: string;
+  clientName: string;
+  vehicleNo?: string | null;
+  trailerNo?: string | null;
+  vehicleLabel?: string | null;
+  driverName?: string | null;
+  vehicleSource: VehicleSource;
+  invoice: { id: string; no: string; kind: 'SALE' | 'PURCHASE'; currency: 'EGP' | 'USD' } | null;
+  revenue: VehicleRevenueLine[];
+  revenueTotal: number;
+  /** بنود على فاتورة العربية غير مربوطة بعربية (الفاتورة عليها أكثر من عربية) */
+  unassignedCharges: VehicleRevenueLine[];
+  rent: { total: number; lines: { id: string; driverName: string; amount: number; departureDate: string; arrivalDate: string | null }[] };
+  customs: { total: number; lines: { id: string; date: string; amount: number; office: { id: string; name: string } | null; note: string | null }[] };
+  vehicleExpenses: {
+    total: number;
+    lines: { id: string; date: string; category: string | null; amount: number; note: string | null; treasury: string | null }[];
+    byCategory: { name: string; total: number }[];
+  };
+  otherExpenses: { total: number; lines: { id: string; date: string; category: string | null; amount: number; note: string | null; treasury: string | null }[] };
+  costs: number;
+  profit: number;
+}

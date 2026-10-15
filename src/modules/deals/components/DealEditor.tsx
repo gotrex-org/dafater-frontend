@@ -128,7 +128,7 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
     if (!clientId) return setError('اختر العميل');
     if (!supplierId) return setError('اختر المورد');
     if (items.length === 0) return setError('أضف صنفًا واحدًا على الأقل');
-    if ((num(paidIn) > 0 || num(paidOut) > 0) && !treasuryId) return setError('اخترت مبلغ محصّل/مدفوع — لازم تختار الخزنة اللي المبلغ خارج/داخل منها');
+    if ((num(paidIn) > 0 || num(paidOut) > 0) && !treasuryId) return setError('حددت مبلغاً محصلاً أو مدفوعاً. اختر الخزنة التي يخرج منها المبلغ أو يدخل إليها');
 
     const dto = {
       date, no: no.trim() || undefined, clientId, supplierId, items,
@@ -274,10 +274,9 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
                             onClick={() => updateProduct.mutate({ id: prod.id, dto: { service: !prod.service } })}
                           >📌</button>
                         )}
-                        <button className="btn btn-ghost btn-sm" title="إضافة ناولون خارجي / شاي / عمولة" style={{ fontSize: 17, fontWeight: 800, lineHeight: 1 }} onClick={() => setMenuFor((k) => (k === l._key ? null : l._key))}>⋮</button>
+                        <button className="btn btn-ghost btn-sm" title="إضافة ناولون خارجي / شاي" style={{ fontSize: 17, fontWeight: 800, lineHeight: 1 }} onClick={() => setMenuFor((k) => (k === l._key ? null : l._key))}>⋮</button>
                         {menuFor === l._key && (
                           <div style={{ position: 'absolute', top: '100%', insetInlineEnd: 0, zIndex: 20, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,.12)', padding: 4, display: 'grid', gap: 2, minWidth: 140 }}>
-                            <button className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { setLine(i, { showComm: true }); setMenuFor(null); }}>➕ عمولة</button>
                             <button className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { setLine(i, { showFreight: true }); setMenuFor(null); }}>➕ ناولون خارجي</button>
                             <button className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { setLine(i, { showTea: true }); setMenuFor(null); }}>➕ شاي</button>
                           </div>

@@ -10,6 +10,7 @@ import { useAllParties } from '../../parties/hooks';
 import { useAllTreasury, useTreasuryNames } from '../../treasury/hooks';
 import { useAllWarehouses } from '../../warehouses/hooks';
 import { useAllExpenseCategories } from '../../expense-categories/hooks';
+import { useManifests } from '../../manifests/hooks';
 import { ExpenseCategoriesManager } from '../../expense-categories/components/ExpenseCategoriesManager';
 import { WarehouseSchedulesManager } from '../../warehouse-expenses/components/WarehouseSchedulesManager';
 import { GoodsCostPicker } from './GoodsCostPicker';
@@ -258,6 +259,10 @@ export function EntryForm() {
   const [treasuryId, setTreasuryId] = useState('');
   const [treasuryId2, setTreasuryId2] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  // العربية المربوطة بالمصروف (اختياري) — للبنود المعلَّمة «يُربط بعربية» زي التحميل والشفتنة
+  const [manifestId, setManifestId] = useState('');
+  const vehicleCategory = !!(cats?.data ?? []).find((c) => c.id === categoryId)?.vehicleLink;
+  const { data: vehiclesPage } = useManifests({ pageSize: 200 });
   const [warehouseId, setWarehouseId] = useState('');
   const [cashDir, setCashDir] = useState<CashDir>('out');
   const [cashTarget, setCashTarget] = useState<CashTarget>('warehouse');
@@ -309,7 +314,7 @@ export function EntryForm() {
 
   const reset = () => {
     setAmount(''); setNote(''); setClientNote(''); setPartyId(''); setPartyId2('');
-    setTreasuryId(''); setTreasuryId2(''); setCategoryId(''); setWarehouseId('');
+    setTreasuryId(''); setTreasuryId2(''); setCategoryId(''); setWarehouseId(''); setManifestId('');
     setRate(''); setAddFee(false); setFeeAmount('500'); setForexAgentId(''); setExpensePartyId('');
     setInvoiceIds([]); setGoodsItems([]); setHolderName(''); setHolderId('');
   };
@@ -333,8 +338,8 @@ export function EntryForm() {
     // Ledger-only transfer between any two parties (client↔supplier↔client) — moves the
     // balance from one party to another without touching a treasury.
     if (type === 'balanceTransfer') {
-      if (!partyId) return setError('اختر الطرف اللي له (هيتسجّل له)');
-      if (!partyId2) return setError('اختر الطرف اللي عليه (هيتسجّل عليه)');
+      if (!partyId) return setError('اختر الطرف الدائن (سيُسجل له)');
+      if (!partyId2) return setError('اختر الطرف المدين (سيُسجل عليه)');
       if (partyId === partyId2) return setError('لا يمكن التحويل لنفس الطرف');
       if (!amount || Number(amount) <= 0) return setError('اكتب المبلغ');
       postEntry.mutate(
@@ -358,7 +363,7 @@ export function EntryForm() {
       if ((cashTarget === 'client' || cashTarget === 'supplier') && !partyId) return setError(cashTarget === 'client' ? 'اختر العميل' : 'اختر المورد');
       if (cashTarget === 'account' && !partyId) return setError('اختر الحساب');
       if (cashTarget === 'custody' && !holderName.trim()) return setError('اختر صاحب العهدة (أو ضيفه بالزرار)');
-      if (custodySettleClient && !partyId) return setError('اختر العميل اللي هتتحوّل عليه العهدة');
+      if (custodySettleClient && !partyId) return setError('اختر العميل الذي ستُحوّل إليه العهدة');
       if (custodySettleCategory && !categoryId) return setError('اختر بند المصروف');
       if (cashTarget === 'warehouse' && !warehouseId) return setError('اختر المخزن');
       if (cashTarget === 'external' && !categoryId) return setError('اختر بند المصروف الخارجي');
@@ -372,6 +377,7 @@ export function EntryForm() {
           custodyDest: cashTarget === 'custody' && cashDir === 'in' ? custodyDest : undefined,
           warehouseId: (cashTarget === 'warehouse' || cashTarget === 'goods') ? warehouseId || undefined : undefined,
           categoryId: (cashTarget === 'warehouse' || cashTarget === 'external' || custodySettleCategory) ? categoryId || undefined : undefined,
+          manifestId: (cashTarget === 'warehouse' || cashTarget === 'external') && vehicleCategory && manifestId ? manifestId : undefined,
           ...(cashTarget === 'goods' ? {
             goodsMode,
             invoiceIds: goodsMode === 'invoices' ? invoiceIds : undefined,
@@ -522,7 +528,7 @@ export function EntryForm() {
                   )}
 
                   {cashTarget === 'custody' && cashDir === 'in' && custodyDest === 'client' && (
-                    <Field label="العميل (هيتحمّل العهدة)">
+                    <Field label="العميل (تُحمّل عليه العهدة)">
                       <PartyCombobox parties={clients?.data ?? []} value={partyId} onChange={setPartyId} role="CLIENT" />
                     </Field>
                   )}
@@ -578,8 +584,26 @@ export function EntryForm() {
                         placeholder={cashTarget === 'external' ? 'اختر البند' : 'اختياري'}
                       />
                       <div style={{ marginTop: 8 }}>
-                        <ExpenseCategoriesManager canManage addOnly />
+                        <ExpenseCategoriesManager
+                          canManage addOnly
+                          allowDelete={cashTarget === 'warehouse'}
+                          onlyGroup={cashTarget === 'external' ? 'EXTERNAL' : 'WAREHOUSE'}
+                        />
                       </div>
+                    </Field>
+                  )}
+
+                  {(cashTarget === 'warehouse' || cashTarget === 'external') && vehicleCategory && (
+                    <Field label="العربية (اختياري)" full>
+                      <Combobox
+                        options={(vehiclesPage?.data ?? []).map((m) => ({
+                          id: m.id,
+                          name: `كشف ${m.no} — ${[m.vehicleNo, m.trailerNo].filter(Boolean).join(' / ') || 'بدون رقم'} — ${m.clientName} — ${fmtDate(m.date)}`,
+                        }))}
+                        value={manifestId}
+                        onChange={setManifestId}
+                        placeholder="اختر العربية لربط المصروف بتكاليف شحنها"
+                      />
                     </Field>
                   )}
                 </>
@@ -609,10 +633,10 @@ export function EntryForm() {
 
               {type === 'balanceTransfer' && (
                 <>
-                  <Field label="الطرف اللي له (يتسجّل له / دائن)">
+                  <Field label="الطرف الدائن (يُسجل له)">
                     <PartyCombobox parties={allParties} value={partyId} onChange={setPartyId} role="CLIENT" />
                   </Field>
-                  <Field label="الطرف اللي عليه (يتسجّل عليه / مدين)">
+                  <Field label="الطرف المدين (يُسجل عليه)">
                     <PartyCombobox parties={allParties} value={partyId2} onChange={setPartyId2} role="CLIENT" />
                   </Field>
                   <div className="muted" style={{ fontSize: 12, gridColumn: '1/-1' }}>

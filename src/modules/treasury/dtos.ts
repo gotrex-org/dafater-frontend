@@ -19,6 +19,9 @@ export interface TreasuryMovement {
   cashOut: number;
   cashIn2: number;
   cashOut2: number;
+  /** نشاط الحركة: تجارة / شحن / مشترك */
+  activity?: import('@/lib/activity').Activity;
+  shippingPct?: number | null;
   invoiceId?: string | null;
   dealId?: string | null;
   party?: { id?: string; name: string } | null;

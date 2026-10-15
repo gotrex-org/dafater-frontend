@@ -17,6 +17,7 @@ import { AuditView } from '@/modules/audit/components/AuditView';
 import { ReportsSection } from '@/modules/reports/components/ReportsView';
 import { ForexView } from '@/modules/forex/components/ForexView';
 import { OrdersView } from '@/modules/orders/components/OrdersView';
+import { SettlementView } from '@/modules/settlement/components/SettlementView';
 
 // Every app section. `nav` marks the ones shown in the top bar (in this order); `view` is
 // the permission key. `primaryOnly` restricts to the owner account. Sections stay mounted
@@ -37,13 +38,14 @@ export const SECTIONS: SectionDef[] = [
   { view: 'deals',        href: '/deals',        label: 'البيع الخارجي',     Component: DealsView },
   { view: 'manifests',    href: '/manifests',    label: 'كشوفات العربيات',   Component: ManifestsView,  nav: true },
   { view: 'driver-trips', href: '/driver-trips', label: 'كشف السائقين',      Component: DriverTripsView, nav: true },
-  { view: 'clearance',    href: '/clearance',    label: 'التخليص والجمارك',  Component: ClearanceView,  nav: true },
+  { view: 'clearance',    href: '/clearance',    label: 'مكاتب التخليص',  Component: ClearanceView,  nav: true },
   { view: 'requests',     href: '/requests',     label: 'الطلبيات',          Component: RequestsView,   nav: true },
   { view: 'ledger',       href: '/ledger',       label: 'كشف الحساب',        Component: LedgerView,     nav: true },
   { view: 'inventory',    href: '/inventory',    label: 'المخازن',           Component: InventoryView,  nav: true },
   { view: 'treasury',     href: '/treasury',     label: 'الخزنة',            Component: TreasuryView,   nav: true },
   { view: 'settings',     href: '/settings',     label: 'الإعدادات',         Component: SettingsView,   nav: true },
   { view: 'audit',        href: '/audit',        label: 'سجل النشاط',        Component: AuditView,      nav: true },
+  { view: 'settlement',   href: '/settlement',   label: 'تصفية',             Component: SettlementView, nav: true },
   { view: 'today',        href: '/today',        label: 'التقارير',          Component: ReportsSection, nav: true, primaryOnly: true },
   { view: 'forex',        href: '/forex',        label: 'الدولار',           Component: ForexView },
   { view: 'orders',       href: '/orders',       label: 'الطلبيات',          Component: OrdersView },
@@ -51,3 +53,19 @@ export const SECTIONS: SectionDef[] = [
 
 export const sectionByHref = (path: string): SectionDef | undefined =>
   SECTIONS.find((s) => path === s.href || path.startsWith(s.href + '/'));
+
+/** هل المستخدم مسموح له يفتح السكشن ده؟ */
+export const canOpenSection = (
+  s: SectionDef,
+  can: (view: string) => boolean,
+  isPrimary: boolean,
+) => (s.primaryOnly ? isPrimary : can(s.view));
+
+/**
+ * أول تاب المستخدم مسموح له بيه — بيستخدمها التوجيه بعد الدخول وبعد أي محاولة فتح
+ * صفحة مش من حقه. حساب زي اللي بيشوف «تصفية» بس مابيشوفش لوحة التحكم أصلاً.
+ */
+export const firstAllowedSection = (
+  can: (view: string) => boolean,
+  isPrimary: boolean,
+): SectionDef | undefined => SECTIONS.find((s) => s.nav && canOpenSection(s, can, isPrimary));

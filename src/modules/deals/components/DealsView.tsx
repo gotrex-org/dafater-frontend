@@ -7,8 +7,7 @@ import { useTableState } from '@/lib/useTableState';
 import { useAuth } from '@/lib/auth';
 import { useWindows } from '@/lib/windows';
 import { PageTitle, DataTable, SearchInput, Spinner, Field, MoneyInput, type Column } from '@/components/common';
-import { CommissionPicker } from '../../invoices/components/CommissionPicker';
-import { useDeals, useDeal, useDeleteDeal, useUpdateDealCommission } from '../hooks';
+import { useDeals, useDeal, useDeleteDeal } from '../hooks';
 import type { Deal } from '../dtos';
 import { DealEditor } from './DealEditor';
 
@@ -31,57 +30,18 @@ function DealDetail({ deal, onBack, onEdit, onDelete }: {
 }) {
   const { can } = useAuth();
   const sheetRef = useRef<HTMLDivElement>(null);
-  const [showCommission, setShowCommission] = useState(false);
-  const [commAmount, setCommAmount] = useState('');
-  const [commPartyId, setCommPartyId] = useState('');
-  const [commError, setCommError] = useState('');
-  const updateCommission = useUpdateDealCommission();
 
-  const saveCommission = () => {
-    setCommError('');
-    if (!commPartyId) return setCommError('اختر صاحب commission');
-    updateCommission.mutate(
-      { id: deal.id, dto: { commissionAmount: Number(commAmount) || undefined, commissionPartyId: commPartyId || undefined } },
-      {
-        onSuccess: () => { setShowCommission(false); setCommAmount(''); setCommPartyId(''); },
-        onError: (e: any) => setCommError(e.message),
-      },
-    );
-  };
 
   return (
     <>
       <div className="toolbar no-print">
         <button className="btn btn-ghost btn-sm" onClick={onBack}>→ رجوع للبيع الخارجي</button>
         {onEdit && <button className="btn btn-ghost btn-sm" onClick={onEdit}>تعديل</button>}
-        {can('invoices.commission') && (
-          <button className="btn btn-ghost btn-sm" onClick={() => setShowCommission((v) => !v)}>commission</button>
-        )}
         {onDelete && <button className="btn btn-danger btn-sm" onClick={onDelete}>حذف</button>}
         <button className="btn btn-ghost btn-sm sp" onClick={() => sheetRef.current && downloadElementAsPdf(sheetRef.current, `بيع-خارجي-${deal.no}`)}>⬇ تحميل PDF</button>
         <button className="btn btn-primary btn-sm" onClick={() => window.print()}>🖨 طباعة</button>
       </div>
 
-      {showCommission && can('invoices.commission') && (
-        <div className="card no-print" style={{ padding: 16, marginBottom: 12 }}>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>إضافة / تعديل commission</div>
-          <div className="form-grid">
-            <Field label="مبلغ commission">
-              <MoneyInput value={commAmount} onChange={setCommAmount} placeholder="0.00" />
-            </Field>
-            <Field label="لصالح">
-              <CommissionPicker value={commPartyId} onChange={setCommPartyId} />
-            </Field>
-          </div>
-          {commError && <div className="err-text">{commError}</div>}
-          <div className="toolbar" style={{ marginTop: 8 }}>
-            <button className="btn btn-primary btn-sm" onClick={saveCommission} disabled={updateCommission.isPending}>
-              {updateCommission.isPending ? '...' : 'حفظ'}
-            </button>
-            <button className="btn btn-ghost btn-sm" onClick={() => { setShowCommission(false); setCommError(''); }}>إلغاء</button>
-          </div>
-        </div>
-      )}
 
       <div ref={sheetRef} className="card print-sheet">
         <div className="mf-logo">أبو شامة</div>

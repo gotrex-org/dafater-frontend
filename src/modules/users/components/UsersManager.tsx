@@ -291,7 +291,7 @@ function UserRow({ user, canDelete }: { user: User; canDelete: boolean }) {
                   allItems={ledgerParties}
                   title="إخفاء أطراف من كشف الحساب"
                   unitLabel="طرف مخفي"
-                  emptyHint="مفيش إخفاء — الموظف يشوف كل العملاء والموردين"
+                  emptyHint="بدون إخفاء — الموظف يرى كل العملاء والموردين"
                   addPlaceholder="ابحث عن عميل أو مورد لإخفائه…"
                 />
               )}

@@ -159,7 +159,7 @@ export function DriverTripDetail({ trip, onBack }: Props) {
   const savePayment = () => {
     setPayErr('');
     if (!Number(payAmt) || Number(payAmt) <= 0) return setPayErr('اكتب المبلغ');
-    if (!payTreasuryId) return setPayErr('اختر الخزنة اللي المبلغ خارج منها');
+    if (!payTreasuryId) return setPayErr('اختر الخزنة التي يخرج منها المبلغ');
     addPayment.mutate(
       { id: trip.id, dto: { date: payDate, amount: Number(payAmt), note: payNote || undefined, paymentType: payType, treasuryId: payTreasuryId || undefined } },
       {
@@ -224,7 +224,7 @@ export function DriverTripDetail({ trip, onBack }: Props) {
               <span>كشف العربية:</span>
               {trip.manifest
                 ? <b style={{ color: 'var(--ink)' }}>كشف {trip.manifest.no}</b>
-                : <span>مستقلة — مش مربوطة بكشف</span>}
+                : <span>مستقلة — غير مرتبطة بكشف</span>}
               <button
                 className="btn btn-ghost btn-sm"
                 style={{ fontSize: 11, padding: '2px 7px' }}
@@ -638,7 +638,7 @@ function InvoiceLink({ trip }: { trip: DriverTrip }) {
         </div>
       ) : (
         <div className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>
-          لسه مش مربوطة بفاتورة — الناولون المدفوع للسواق ({EGP(trip.agreedFreight)}) من غير اللي اتحصّل من العميل.
+          غير مرتبطة بفاتورة — النولون المدفوع للسائق ({EGP(trip.agreedFreight)}) بدون المحصل من العميل.
         </div>
       )}
 
@@ -651,19 +651,19 @@ function InvoiceLink({ trip }: { trip: DriverTrip }) {
       {picking && (
         <div style={{ marginTop: 10, borderTop: '1.5px solid var(--line)', paddingTop: 10 }}>
           {isLoading ? <Spinner /> : !candidates?.length ? (
-            <div className="empty">مفيش فواتير بيع فيها ناولون لـ {trip.clientName} من غير ربط</div>
+            <div className="empty">لا توجد فواتير بيع تحتوي نولون لـ {trip.clientName} بدون ربط</div>
           ) : (
             <div className="tbl-wrap">
               <table>
                 <thead><tr><th>الفاتورة</th><th>التاريخ</th><th>البنود</th><th style={{ width: 120 }}>الإجمالي</th><th style={{ width: 80 }}></th></tr></thead>
                 <tbody>
                   {candidates.map((c) => {
-                    const total = c.items.reduce((s, it) => s + it.qty * it.price, 0);
+                    const total = c.items.reduce((s, it) => s + it.qty * it.price, 0) + (c.charges ?? []).reduce((s, x) => s + x.qty * x.price, 0);
                     return (
                       <tr key={c.uid}>
                         <td><b>#{c.no}</b></td>
                         <td>{fmtDate(c.date)}</td>
-                        <td className="muted">{c.items.map((it) => it.product?.name ?? '—').join('، ')}</td>
+                        <td className="muted">{[...(c.charges ?? []).map((x) => x.chargeType?.name ?? '—'), ...c.items.map((it) => it.product?.name ?? '—')].join('، ')}</td>
                         <td className="num">{EGP(total)}</td>
                         <td>
                           <button className="btn btn-primary btn-sm" onClick={() => choose(c.uid)} disabled={link.isPending}>

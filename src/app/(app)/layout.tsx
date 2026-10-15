@@ -6,7 +6,9 @@ import { useAuth } from '@/lib/auth';
 import { CustomerPortal } from '@/modules/portal/CustomerPortal';
 import { UnsavedProvider } from '@/lib/unsaved';
 import { WindowsProvider, SectionOutlet, useWindows } from '@/lib/windows';
-import { SECTIONS, sectionByHref, type SectionDef } from '@/lib/sections';
+import {
+  SECTIONS, canOpenSection, firstAllowedSection, sectionByHref, type SectionDef,
+} from '@/lib/sections';
 import { useReminderDueCount } from '@/modules/reminders/hooks';
 import { useWarehouseDueCount } from '@/modules/warehouse-expenses/hooks';
 import { RemindersView } from '@/modules/reminders/components/RemindersView';
@@ -28,13 +30,18 @@ function Desktop({ userName, isPrimary, onLogout }: { userName: string; isPrimar
 
   // Any navigation (nav click, dashboard tile, login redirect, direct URL) shows that
   // section's page. navigateSection keeps it mounted so its state survives.
+  // A URL the user has no permission for is bounced to their first allowed tab — the nav
+  // already hides those tabs, but a typed/bookmarked address would otherwise open them.
   useEffect(() => {
     const s = sectionByHref(pathname);
-    if (s) openSection(s);
+    if (!s) return;
+    if (canOpenSection(s, can, isPrimary)) { openSection(s); return; }
+    const fallback = firstAllowedSection(can, isPrimary);
+    if (fallback && fallback.href !== pathname) router.replace(fallback.href);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
-  const navSections = SECTIONS.filter((s) => s.nav && (s.primaryOnly ? isPrimary : can(s.view)));
+  const navSections = SECTIONS.filter((s) => s.nav && canOpenSection(s, can, isPrimary));
   const dueCount = (due?.count ?? 0) + (whDue?.count ?? 0);
 
   return (
@@ -45,7 +52,7 @@ function Desktop({ userName, isPrimary, onLogout }: { userName: string; isPrimar
           {isPrimary && (
             <button
               className="rem-bell"
-              title={dueCount > 0 ? `${dueCount} تذكير قريب/مستحق` : 'مفيش تذكيرات قريبة'}
+              title={dueCount > 0 ? `${dueCount} تذكير قريب/مستحق` : 'لا توجد تذكيرات قريبة'}
               onClick={() => setRemindersOpen(true)}
             >
               <span className="rem-bell-dot" data-due={dueCount > 0}>{dueCount > 0 ? dueCount : '!'}</span>

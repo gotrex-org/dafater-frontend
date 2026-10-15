@@ -42,7 +42,7 @@ export function ProductMovements({ productId, name, onBack, backLabel = 'رجو�
   return (
     <>
       <button className="btn btn-ghost btn-sm" onClick={onBack}>→ {backLabel}</button>
-      <PageTitle title={`تقرير الصنف: ${name}`} subtitle="كل الكميات اللي اتشريت واتباعت، ومن مين وله مين" />
+      <PageTitle title={`تقرير الصنف: ${name}`} subtitle="كل الكميات المشتراة والمباعة، ومن أي طرف وإلى أي طرف" />
 
       {product !== undefined && (
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg2)', borderRadius: 8, cursor: 'pointer', marginBottom: 8 }}>

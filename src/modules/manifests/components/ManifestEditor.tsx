@@ -192,7 +192,7 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
                 value={no}
                 onChange={(e) => setNo(e.target.value)}
                 placeholder=""
-                title="رقم تلقائي — تقدر تغيّره"
+                title="رقم تلقائي — يمكن تغييره"
                 className="num-fit"
                 style={{ width: `${Math.max(no?.length || 0, 3) + 1}ch` }}
               />
@@ -225,7 +225,7 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
               style={{ width: '100%', padding: '11px 12px', border: '1.5px solid var(--line)', borderRadius: 10, background: '#fff' }}
             >
               <option value="">
-                {!clientName.trim() ? 'اختر العميل أولاً' : loadingInvoices ? 'بيحمّل…' : 'كشف مستقل — مش مربوط بفاتورة'}
+                {!clientName.trim() ? 'اختر العميل أولاً' : loadingInvoices ? 'بيحمّل…' : 'كشف مستقل — غير مرتبط بفاتورة'}
               </option>
               {clientInvoices.map((inv) => (
                 <option key={inv.id} value={inv.id}>
@@ -251,7 +251,7 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
               <input
                 value={shippingOffice}
                 onChange={(e) => setShippingOffice(e.target.value)}
-                placeholder="اسم المكتب اللي شحن عنده العميل"
+                placeholder="اسم المكتب الذي شحن عنده العميل"
               />
             </Field>
           )}

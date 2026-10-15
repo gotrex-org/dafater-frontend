@@ -6,10 +6,10 @@ import { PageTitle } from '@/components/common';
 import { assistantApi, type ChatMessage } from '../api';
 
 const SUGGESTIONS = [
-  'حلّل أرقام الشهر ده وقولّي رأيك',
+  'حلل أرقام هذا الشهر واذكر رأيك',
   'إيه أكتر بنود المصاريف عليّا؟',
-  'مين العملاء اللي عليهم فلوس؟',
-  'إيه اللي ممكن يتحسّن في البرنامج؟',
+  'من هم العملاء المدينون؟',
+  'ما الذي يمكن تحسينه في البرنامج؟',
 ];
 
 export function AssistantView() {

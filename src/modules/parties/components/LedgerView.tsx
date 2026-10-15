@@ -10,7 +10,7 @@ import { useAuth } from '@/lib/auth';
 import { useSectionActive } from '@/lib/windowed';
 import { InvoiceDetailById } from '../../invoices/components/InvoiceDetail';
 import { DealDetailById } from '../../deals/components/DealsView';
-import { usePostEntry, useUpdateTransaction, useDeleteTransaction } from '../../transactions/hooks';
+import { useUpdateTransaction, useDeleteTransaction } from '../../transactions/hooks';
 import { useParties, useParty, usePartyLedger, useDeleteParty } from '../hooks';
 import { useDeleteWithRelated } from '@/lib/deleteWithRelated';
 import { NewPartyModal } from './NewPartyModal';
@@ -58,7 +58,7 @@ function LedgerTab() {
   const isCustody = role === 'PERSON';
   const canAddPerson = isCustody && (!!user?.admin || can('settings'));
   const canDeletePerson = isCustody && !!user?.admin;
-  const [moreOpen, setMoreOpen] = useState(false); // قائمة الثلاث نقاط (commission / عهدة)
+  const [moreOpen, setMoreOpen] = useState(false); // قائمة الثلاث نقاط (عهدة / مكاتب التخليص)
   const [selected, setSelected] = useState<Party | null>(null);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortKey>('balance');
@@ -123,18 +123,17 @@ function LedgerTab() {
           {!isRestricted && (
             <div style={{ position: 'relative' }}>
               <button
-                className={`btn btn-sm ${role === 'AGENT' || role === 'PERSON' || role === 'CLEARANCE' ? 'btn-primary' : 'btn-ghost'}`}
+                className={`btn btn-sm ${role === 'PERSON' || role === 'CLEARANCE' ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => setMoreOpen((o) => !o)}
-                title="commission / عهدة"
-                style={{ fontWeight: 800, fontSize: role === 'AGENT' || role === 'PERSON' ? 13 : 17, lineHeight: 1 }}
+                title="عهدة / مكاتب التخليص"
+                style={{ fontWeight: 800, fontSize: role === 'PERSON' || role === 'CLEARANCE' ? 13 : 17, lineHeight: 1 }}
               >
-                {role === 'AGENT' ? 'commission' : role === 'PERSON' ? 'عهدة' : role === 'CLEARANCE' ? 'مخلّص' : '⋮'}
+                {role === 'PERSON' ? 'عهدة' : role === 'CLEARANCE' ? 'تخليص' : '⋮'}
               </button>
               {moreOpen && (
                 <div style={{ position: 'absolute', top: '100%', insetInlineStart: 0, zIndex: 30, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,.12)', padding: 4, display: 'grid', gap: 2, minWidth: 150, marginTop: 4 }}>
-                  <button className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { setRole('AGENT'); setMoreOpen(false); }}>أصحاب commission</button>
                   <button className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { setRole('PERSON'); setMoreOpen(false); }}>عهدة (أمانات/سلف)</button>
-                  <button className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { setRole('CLEARANCE'); setMoreOpen(false); }}>المخلّصين</button>
+                  <button className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { setRole('CLEARANCE'); setMoreOpen(false); }}>مكاتب التخليص</button>
                 </div>
               )}
             </div>
@@ -224,14 +223,6 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const [dealUid, setDealUid] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const sheetRef = useRef<HTMLDivElement>(null);
-  const [showSettle, setShowSettle] = useState(false);
-  const [wDate, setWDate] = useState(() => todayISO());
-  const [wAmount, setWAmount] = useState('');
-  const [wDir, setWDir] = useState<'debit' | 'credit'>('debit');
-  const [wNote, setWNote] = useState('');
-  const [wError, setWError] = useState('');
-  const [wMsg, setWMsg] = useState('');
-  const postEntry = usePostEntry();
   const sectionActive = useSectionActive();
 
   // الكشف بياخد عرض الشاشة كله وبيلغي حشو أسفل الصفحة (المحجوز لشريط النوافذ
@@ -309,70 +300,13 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
         <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={{ padding: '8px 10px', border: '1.5px solid var(--line)', borderRadius: 10 }} />
         {(from || to) && <button className="btn btn-ghost btn-sm" onClick={() => { setFrom(''); setTo(''); }}>كل الفترة</button>}
         <div style={{ flex: 1 }} />
-        {party.role === 'AGENT' && can('invoices.commission') && (
-          <button className="btn btn-ghost btn-sm" onClick={() => setShowSettle((v) => !v)}>+ تسوية commission</button>
-        )}
         {data && <button className="btn btn-ghost btn-sm sp" onClick={() => sheetRef.current && downloadElementAsPdf(sheetRef.current, `كشف-حساب-${party.name}`)}>⬇ تحميل PDF</button>}
         {data && <button className="btn btn-primary btn-sm" onClick={() => sheetRef.current && printElementOnePage(sheetRef.current, `كشف-حساب-${party.name}`)}>🖨 طباعة</button>}
       </div>
 
-      {showSettle && can('invoices.commission') && (
-        <div className="card no-print" style={{ padding: 16, marginBottom: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 15 }}>تسوية حساب — {party.name}</span>
-            {data && (
-              <span className="muted" style={{ fontSize: 13 }}>
-                الرصيد الحالي:{' '}
-                <span style={{ fontWeight: 700, color: (data.balance ?? 0) >= 0 ? 'var(--credit)' : 'var(--debit)' }}>
-                  {money(data.balance, cur)}
-                </span>
-              </span>
-            )}
-          </div>
-          <div className="form-grid">
-            <Field label="التاريخ"><input type="date" value={wDate} onChange={(e) => setWDate(e.target.value)} /></Field>
-            <Field label="المبلغ"><MoneyInput value={wAmount} onChange={setWAmount} placeholder="0.00" /></Field>
-            <Field label="النوع">
-              <select
-                value={wDir}
-                onChange={(e) => setWDir(e.target.value as 'debit' | 'credit')}
-                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid var(--line)', borderRadius: 10 }}
-              >
-                <option value="debit">خصم من الرصيد (يقلل ما له عندنا)</option>
-                <option value="credit">إضافة للرصيد (يزيد ما له عندنا)</option>
-              </select>
-            </Field>
-            <Field label="البيان" full><input value={wNote} onChange={(e) => setWNote(e.target.value)} placeholder="تسوية حساب" /></Field>
-          </div>
-          {wError && <div className="err-text">{wError}</div>}
-          {wMsg && <div style={{ color: 'var(--credit)', fontWeight: 700 }}>{wMsg}</div>}
-          <div className="toolbar" style={{ marginTop: 8 }}>
-            <button
-              className="btn btn-primary btn-sm"
-              disabled={postEntry.isPending}
-              onClick={() => {
-                setWError(''); setWMsg('');
-                if (!wAmount || Number(wAmount) <= 0) return setWError('اكتب المبلغ');
-                postEntry.mutate(
-                  { type: 'adjust', date: wDate, amount: Number(wAmount), partyId: party.id, direction: wDir, note: wNote || 'تسوية حساب' },
-                  {
-                    onSuccess: () => { setWMsg('تم التسجيل ✓'); setWAmount(''); setWNote(''); },
-                    onError: (e: any) => setWError(e.message),
-                  },
-                );
-              }}
-            >
-              {postEntry.isPending ? '...' : 'حفظ'}
-            </button>
-            <button className="btn btn-ghost btn-sm" onClick={() => { setShowSettle(false); setWError(''); setWMsg(''); }}>إلغاء</button>
-          </div>
-        </div>
-      )}
 
       <div className="toolbar no-print">
-        {(party.role === 'AGENT'
-          ? [['all', 'كل الحركات'], ['commission', 'commission مكتسب'], ['withdraw', 'مسحوب']] as [LedgerKind, string][]
-          : [['all', 'كشف الكل'], ['invoices', 'الفواتير فقط'], ['collect', 'التحصيل فقط']] as [LedgerKind, string][]
+        {([['all', 'كشف الكل'], ['invoices', 'الفواتير فقط'], ['collect', 'التحصيل فقط']] as [LedgerKind, string][]
         ).map(([k, label]) => (
           <button key={k} className={`btn btn-sm ${kind === k ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setKind(k)}>{label}</button>
         ))}

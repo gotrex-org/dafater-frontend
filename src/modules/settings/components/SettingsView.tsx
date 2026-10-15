@@ -9,6 +9,7 @@ import { UsersManager } from '../../users/components/UsersManager';
 import { PartiesRegistry } from '../../parties/components/PartiesRegistry';
 import { ProductsManager } from '../../products/components/ProductsManager';
 import { ExpenseCategoriesManager } from '../../expense-categories/components/ExpenseCategoriesManager';
+import { ChargeTypesManager } from '../../charge-types/components/ChargeTypesManager';
 
 export function SettingsView() {
   const { user, can } = useAuth();
@@ -21,12 +22,15 @@ export function SettingsView() {
   const [feePerDay, setFeePerDay] = useState<number>(1200);
   const [tripsMsg, setTripsMsg] = useState('');
   const [productsOpen, setProductsOpen] = useState(false);
+  const [salaryPct, setSalaryPct] = useState<number>(50);
+  const [activityMsg, setActivityMsg] = useState('');
 
   useEffect(() => {
     if (config) {
       setEmail(config.orderEmail);
       setGraceDays(config.delayGraceDays);
       setFeePerDay(config.delayFeePerDay);
+      setSalaryPct(config.salaryShippingPct ?? 50);
     }
   }, [config]);
 
@@ -46,6 +50,15 @@ export function SettingsView() {
     );
   };
 
+  const saveActivityConfig = () => {
+    setActivityMsg('');
+    if (!(salaryPct >= 0 && salaryPct <= 100)) return setActivityMsg('النسبة من 0 إلى 100');
+    updateConfig.mutate(
+      { salaryShippingPct: salaryPct },
+      { onSuccess: () => setActivityMsg('تم الحفظ ✓'), onError: (e: any) => setActivityMsg(e.message) },
+    );
+  };
+
   const counts = dash?.counts;
 
   return (
@@ -61,7 +74,7 @@ export function SettingsView() {
 
       <CollapsibleSection title="إعدادات الطلبيات">
         <div className="card" style={{ padding: 16, display: 'grid', gap: 10 }}>
-          <Field label="الإيميل اللي توصله طلبيات العملاء">
+          <Field label="البريد الإلكتروني الذي تصل إليه طلبيات العملاء">
             <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="example@gmail.com" />
           </Field>
           <div className="toolbar">
@@ -96,12 +109,32 @@ export function SettingsView() {
         </div>
       </CollapsibleSection>
 
+      <CollapsibleSection title="بنود الشحن في الفواتير" defaultOpen={false}>
+        <ChargeTypesManager />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="تقسيم المصاريف بين التجارة والشحن" defaultOpen={false}>
+        <div className="card" style={{ padding: 16, display: 'grid', gap: 10 }}>
+          <div className="muted" style={{ fontSize: 13 }}>
+            المرتبات (وأي بند نشاطه «مشترك») تُقسَّم تلقائياً بين النشاطين بهذه النسبة. النسبة تُثبَّت على الحركة وقت تسجيلها، فتغييرها لا يغيّر الحركات السابقة.
+          </div>
+          <Field label="نصيب الشحن من المرتبات %">
+            <input type="number" min={0} max={100} value={salaryPct} onChange={(e) => setSalaryPct(Number(e.target.value))} />
+          </Field>
+          <div className="muted" style={{ fontSize: 12.5 }}>نصيب التجارة: {Math.max(0, 100 - (salaryPct || 0))}%</div>
+          <div className="toolbar">
+            <button className="btn btn-primary btn-sm" onClick={saveActivityConfig} disabled={updateConfig.isPending}>حفظ</button>
+            {activityMsg && <span className="muted">{activityMsg}</span>}
+          </div>
+        </div>
+      </CollapsibleSection>
+
       <CollapsibleSection title="سجل العملاء والموردين وأصحاب العهد" defaultOpen={false}>
         <PartiesRegistry />
       </CollapsibleSection>
 
       <CollapsibleSection title="بنود المصاريف (إضافة وتعديل وحذف)" defaultOpen={false}>
-        <div className="muted" style={{ fontSize: 13, marginBottom: 10 }}>البنود دي بتظهر في تقرير المصاريف. تقدر تضيف بند من هنا أو من الحركة اليومية، لكن التعديل والحذف من هنا بس.</div>
+        <div className="muted" style={{ fontSize: 13, marginBottom: 10 }}>تظهر هذه البنود في تقرير المصاريف. لكل بند نشاط (شحن / تجارة / مشترك) — اضغط على النشاط لتغييره، وعلامة 🚛 تعني أن البند يُربط بعربية. يمكن إضافة بند من هنا أو من الحركة اليومية، أما التعديل والحذف فمن هنا فقط.</div>
         <ExpenseCategoriesManager canManage />
       </CollapsibleSection>
 

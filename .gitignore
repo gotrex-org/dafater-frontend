@@ -1,0 +1,8 @@
+node_modules
+.next
+out
+*.log
+.env*
+tsconfig.tsbuildinfo
+# worktrees وأدوات محلية — مش من كود المشروع
+.claude/

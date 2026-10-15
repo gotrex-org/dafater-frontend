@@ -62,7 +62,7 @@ export function RecurringDiscounts() {
 
       {adding && (
         <div className="card" style={{ padding: 16, marginBottom: 12 }}>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>خصم دوري للشركات (بيتخصم أوتوماتيك في ميعاده)</div>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>خصم دوري للشركات (يُخصم تلقائياً في موعده)</div>
           <div className="form-grid">
             <Field label="الشركة / الطرف"><PartyCombobox parties={allParties} value={partyId} onChange={setPartyId} role="SUPPLIER" /></Field>
             <Field label="التكرار">
@@ -84,7 +84,7 @@ export function RecurringDiscounts() {
             {mode === 'cartons' && <Field label="سعر الكرتونة"><MoneyInput value={cartonPrice} onChange={setCartonPrice} placeholder="0.00" /></Field>}
             <Field label="البيان (اختياري)" full><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="خصم شهري…" /></Field>
           </div>
-          <div className="muted" style={{ fontSize: 12 }}>النسبة بتتحسب على صافي مشترياتك من الطرف خلال الفترة السابقة للميعاد.</div>
+          <div className="muted" style={{ fontSize: 12 }}>تُحسب النسبة على صافي المشتريات من الطرف خلال الفترة السابقة للموعد.</div>
           {error && <div className="err-text">{error}</div>}
           <div className="toolbar" style={{ marginTop: 8 }}>
             <button className="btn btn-primary btn-sm" onClick={save} disabled={createS.isPending}>حفظ الخصم الدوري</button>
@@ -105,7 +105,7 @@ export function RecurringDiscounts() {
                   <td className="num">{s.cartons > 0 ? `${s.cartons} كرتونة × ${EGP(s.cartonPrice)}` : s.percent > 0 ? `${s.percent}%` : EGP(s.amount)}</td>
                   <td>{fmtDate(s.startDate)}</td>
                   <td className="muted">{s.lastApplied ? fmtDate(s.lastApplied) : '—'}</td>
-                  <td>{can('invoices.delete') && <button className="btn btn-danger btn-sm" onClick={() => { if (window.confirm('حذف الخصم الدوري؟ (الخصومات اللي اتطبّقت قبل كده بتفضل)')) deleteS.mutate(s.id); }}>حذف</button>}</td>
+                  <td>{can('invoices.delete') && <button className="btn btn-danger btn-sm" onClick={() => { if (window.confirm('حذف الخصم الدوري؟ (الخصومات المطبقة سابقاً تبقى كما هي)')) deleteS.mutate(s.id); }}>حذف</button>}</td>
                 </tr>
               ))}
             </tbody>

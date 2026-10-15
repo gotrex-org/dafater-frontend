@@ -65,7 +65,7 @@ export function RemindersView({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <>
-      {!embedded && <PageTitle title="التذكيرات" subtitle="أقساط ومصاريف شهرية، نقدية تتحصّل أو تتدفع، مواعيد، وأي حاجة شخصية — خاصة بيك أنت بس" />}
+      {!embedded && <PageTitle title="التذكيرات" subtitle="أقساط ومصاريف شهرية، نقدية للتحصيل أو الدفع، مواعيد، وأي بند شخصي — خاص بك وحدك" />}
 
       <div style={{ marginBottom: 12 }}><WarehouseDuesPanel compact /></div>
 

@@ -37,6 +37,8 @@ export interface PostEntryDto {
   transferFee?: number;
   note?: string;
   clientNote?: string; // ملاحظة تظهر للعميل في بوابته بدل "استلام نقدية"
+  // مصروف مربوط بعربية (تحميل/شفتنة) — يظهر في تكاليف الشحن في كشفها
+  manifestId?: string;
 }
 
 export interface Transaction {

@@ -8,6 +8,7 @@ import { Spinner } from '@/components/common';
 import { RecordOpener } from '../../records/RecordOpener';
 import { useManifest, useDeleteManifest } from '../hooks';
 import { ManifestEditor } from './ManifestEditor';
+import { ShippingCosts } from './ShippingCosts';
 
 const DOTS = '..........................';
 // full A4 at 96dpi (210mm × 297mm) — the sheet is sized to fill the whole page
@@ -83,7 +84,7 @@ export function ManifestPrint({ id, onClose }: { id: string; onClose: () => void
             <b>{m.invoice.kind === 'SALE' ? 'بيع' : 'شراء'} {m.invoice.no}</b>
           </button>
         ) : (
-          <span className="chain-chip is-empty"><span className="l">الفاتورة</span><b>مش مربوط</b></span>
+          <span className="chain-chip is-empty"><span className="l">الفاتورة</span><b>غير مرتبط</b></span>
         )}
 
         <span className="chain-sep" aria-hidden="true" />
@@ -118,6 +119,9 @@ export function ManifestPrint({ id, onClose }: { id: string; onClose: () => void
           </span>
         )}
       </div>
+
+      {/* تكاليف الشحن وربح العربية — للشاشة فقط، ماتطلعش في الورقة المطبوعة */}
+      <ShippingCosts manifestId={m.id} />
 
       <div className="print-scale" ref={outerRef}>
         {/* الديزاين القديم (app_4.html): ترويسة اسم الشركة + العنوان ورقم الكشف،
@@ -177,7 +181,7 @@ export function ManifestPrint({ id, onClose }: { id: string; onClose: () => void
                   </tr>
                 ))}
                 {m.items.length === 0 && (
-                  <tr><td colSpan={3} className="empty">مفيش أصناف في الكشف</td></tr>
+                  <tr><td colSpan={3} className="empty">لا توجد أصناف في الكشف</td></tr>
                 )}
                 <tr className="mf-total">
                   <td />

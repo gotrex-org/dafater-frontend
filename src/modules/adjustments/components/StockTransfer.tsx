@@ -43,7 +43,7 @@ export function StockTransfer({ defaultFrom }: { defaultFrom?: string }) {
 
   return (
     <div className="card" style={{ padding: 16 }}>
-      <div style={{ fontWeight: 700, marginBottom: 10 }}>تحويل بضاعة بين المخازن (بيحرّك المخزن بس — مفيش أثر مالي)</div>
+      <div style={{ fontWeight: 700, marginBottom: 10 }}>تحويل بضاعة بين المخازن (يحرك المخزن فقط — بدون أثر مالي)</div>
       <div className="form-grid">
         <Field label="التاريخ"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
         <Field label="من مخزن"><Combobox options={warehouses?.data ?? []} value={from} onChange={setFrom} /></Field>

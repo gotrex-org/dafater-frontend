@@ -40,3 +40,9 @@ export const useExpensesByCategory = ({ from, to }: R) =>
 
 export const useBusiestFor = (type: 'client' | 'supplier' | 'product', id: string | null, { from, to }: R) =>
   useQuery({ queryKey: ['reports', 'busiest-for', type, id, from, to], queryFn: () => reportsApi.busiestFor(type, id as string, from, to), enabled: !!id });
+
+export const useTradeReport = ({ from, to }: R) =>
+  useQuery({ queryKey: ['reports', 'trade', from, to], queryFn: () => reportsApi.trade(from, to) });
+
+export const useVehicleProfits = ({ from, to }: R) =>
+  useQuery({ queryKey: ['reports', 'vehicles', from, to], queryFn: () => reportsApi.vehicles(from, to) });

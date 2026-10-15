@@ -19,6 +19,14 @@ export interface InvoiceDraftLine {
   commPartyId?: string;
 }
 
+export interface InvoiceDraftCharge {
+  chargeTypeId: string;
+  qty: string;
+  price: string;
+  note?: string;
+  manifestId?: string;
+}
+
 export interface InvoiceDraftState {
   no: string;
   date: string;
@@ -32,6 +40,7 @@ export interface InvoiceDraftState {
   note: string;
   exchangeRate: string;
   lines: InvoiceDraftLine[];
+  charges?: InvoiceDraftCharge[];
 }
 
 export interface InvoiceDraft {

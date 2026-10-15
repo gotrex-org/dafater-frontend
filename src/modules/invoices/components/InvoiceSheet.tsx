@@ -146,7 +146,7 @@ export function InvoiceSheetPayments({
             </tr>
           ))}
           {payments.length === 0 && (
-            <tr><td colSpan={3} className="empty">مفيش استلامات في الفترة دي</td></tr>
+            <tr><td colSpan={3} className="empty">لا توجد استلامات في هذه الفترة</td></tr>
           )}
         </tbody>
         <tfoot>

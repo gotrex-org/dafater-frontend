@@ -39,8 +39,8 @@ export function DiscountsView() {
   const selectedParty = allParties.find((p) => p.id === partyId);
   const effectHint = selectedParty
     ? selectedParty.role === 'SUPPLIER'
-      ? 'خصم على مورد — يقلّل اللي عليك له (اللي مدين له)'
-      : 'خصم لعميل — يقلّل اللي عليه (اللي مدين لك بيه)'
+      ? 'خصم على مورد — يقلل المبلغ المستحق له'
+      : 'خصم لعميل — يقلل المبلغ المستحق عليه'
     : '';
 
   const reset = () => { setPartyId(''); setAmount(''); setPercent(''); setCartons(''); setCartonPrice(''); setNote(''); setError(''); setAdding(false); };
@@ -98,7 +98,7 @@ export function DiscountsView() {
 
       {adding && (
         <div className="card" style={{ padding: 16, marginBottom: 12 }}>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>خصم غير مباشر (مش على فاتورة معيّنة)</div>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>خصم غير مباشر (غير مرتبط بفاتورة معينة)</div>
           <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>مثلاً خصم شهري من مورد على مسحوباتك، أو خصم بتديه لعميل.</div>
           <div className="form-grid">
             <Field label="التاريخ"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
