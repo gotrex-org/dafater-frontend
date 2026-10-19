@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { fmtDate, fmtDateTime, EGP, money } from '@/lib/format';
 import { downloadElementAsPdf, printElementOnePage } from '@/lib/pdf';
+import { normalizeAr } from '@/lib/arabicSearch';
 
 // أول يوم في الشهر الحالي (توقيت محلي) — الكشف يبدأ منه افتراضيًا
 function portalStartOfMonth() {
@@ -508,6 +509,8 @@ function LedgerTab({ partyName }: { partyName?: string }) {
   const [from, setFrom] = useState(portalStartOfMonth());
   const [to, setTo] = useState('');
   const [kind, setKind] = useState<LedgerKind>('all');
+  // بحث باسم الصنف: يُبقي الفواتير والصفقات التي فيها الصنف فقط
+  const [itemSearch, setItemSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // الفاتورة بتتفتح صفحة كاملة بشكل الشيت؛ البيع الخارجي (صفقة) لسه بينفتح تحت السطر.
   const [openInvoice, setOpenInvoice] = useState<{ uid: string; docNo: number | null } | null>(null);
@@ -542,8 +545,12 @@ function LedgerTab({ partyName }: { partyName?: string }) {
   if (!data) return null;
 
   // الباك بيرجّع الأحدث فوق — نعكسها لترتيب زمني صح (شامل ترتيب نفس اليوم)
+  const q = normalizeAr(itemSearch);
+  const matchedItems = (r: LedgerRow) =>
+    q ? (r.invoiceItems ?? []).filter((it) => normalizeAr(it.name).includes(q)) : [];
   const visibleRows = (data.rows ?? [])
     .filter((r) => {
+      if (q && matchedItems(r).length === 0) return false;
       if (kind === 'invoices') return !!(r.invoiceUid || r.dealUid);
       if (kind === 'collect') return !r.invoiceUid && !r.dealUid;
       return true;
@@ -552,11 +559,13 @@ function LedgerTab({ partyName }: { partyName?: string }) {
 
   // الرصيد الافتتاحي بيتحسب جوّه الإجمالي تحت — عشان الصافي يطلع "له/عليه" صح
   // حتى لو العميل فلتر على الفواتير بس أو اختار "كل الفترة".
-  const opening = data.opening || 0;
+  // مع البحث الكشف يعرض فواتير الصنف فقط، فلا معنى للرصيد الافتتاحي ولا للرصيد التراكمي
+  const opening = q ? 0 : data.opening || 0;
   const totalDebit = visibleRows.reduce((s, r) => s + (r.debit || 0), 0) + (opening > 0 ? opening : 0);
   const totalCredit = visibleRows.reduce((s, r) => s + (r.credit || 0), 0) + (opening < 0 ? -opening : 0);
   const net = totalDebit - totalCredit;
-  const cols = kind === 'all' ? 5 : 4;
+  const showBalance = kind === 'all' && !q;
+  const cols = showBalance ? 5 : 4;
 
   // الفواتير بقت بتتفتح صفحة لوحدها — الكشف السريع ده بقى للصفقات (البيع الخارجي) بس
   const detailRowIds = visibleRows.filter((r) => r.invoiceItems?.length && !r.invoiceUid).map((r) => r.id);
@@ -580,6 +589,13 @@ function LedgerTab({ partyName }: { partyName?: string }) {
         {([['all', 'كشف الكل'], ['invoices', 'الفواتير فقط'], ['collect', 'التحصيل فقط']] as [LedgerKind, string][]).map(([k, label]) => (
           <button key={k} className={`btn btn-sm ${kind === k ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setKind(k)}>{label}</button>
         ))}
+        <input
+          value={itemSearch}
+          onChange={(e) => setItemSearch(e.target.value)}
+          placeholder="بحث باسم الصنف…"
+          style={{ minWidth: 180, padding: '7px 10px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 13 }}
+        />
+        {itemSearch && <button className="btn btn-ghost btn-sm" title="مسح البحث" onClick={() => setItemSearch('')}>×</button>}
         {detailRowIds.length > 0 && (
           <button className="btn btn-ghost btn-sm sp" onClick={toggleAllDetails}>
             {allExpanded ? '▾ إخفاء التفاصيل' : '▸ كشف كل التفاصيل'}
@@ -609,7 +625,7 @@ function LedgerTab({ partyName }: { partyName?: string }) {
             <thead>
               <tr>
                 <th>التاريخ</th><th>البيان</th><th>عليه</th><th>له</th>
-                {kind === 'all' && <th>الرصيد</th>}
+                {showBalance && <th>الرصيد</th>}
               </tr>
             </thead>
             <tbody>
@@ -619,7 +635,7 @@ function LedgerTab({ partyName }: { partyName?: string }) {
                   <td className="pl-note" style={{ fontWeight: 700 }}>رصيد افتتاحي</td>
                   <td className="num deb pl-deb" data-l="عليه">{opening > 0 ? EGP(opening) : ''}</td>
                   <td className="num cre pl-cre" data-l="له">{opening < 0 ? EGP(-opening) : ''}</td>
-                  {kind === 'all' && (
+                  {showBalance && (
                     <td className="num pl-bal" style={{ fontWeight: 700, color: opening <= 0 ? 'var(--credit)' : 'var(--debit)' }}>
                       {EGP(Math.abs(opening))} {opening <= 0 ? 'له' : 'عليه'}
                     </td>
@@ -639,10 +655,15 @@ function LedgerTab({ partyName }: { partyName?: string }) {
                           : r.invoiceItems?.length
                             ? <button className="btn btn-ghost btn-sm" onClick={() => toggle(r.id)}>{open ? '▾' : '▸'} {r.note || 'صفقة'}</button>
                             : (r.note ?? '—')}
+                        {q && matchedItems(r).map((it, j) => (
+                          <div key={j} className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+                            {it.name}: <span className="num">{it.qty}</span> × <span className="num">{EGP(it.price)}</span>
+                          </div>
+                        ))}
                       </td>
                       <td className="num deb pl-deb" data-l="عليه">{r.debit ? EGP(r.debit) : ''}</td>
                       <td className="num cre pl-cre" data-l="له">{r.credit ? EGP(r.credit) : ''}</td>
-                      {kind === 'all' && (
+                      {showBalance && (
                         <td className="num pl-bal" style={{ fontWeight: 700, color: r.balance <= 0 ? 'var(--credit)' : 'var(--debit)' }}>
                           {EGP(Math.abs(r.balance))} {r.balance <= 0 ? 'له' : 'عليه'}
                         </td>
@@ -678,13 +699,13 @@ function LedgerTab({ partyName }: { partyName?: string }) {
                     </td>
                     <td className="num deb">{EGP(totalDebit)}</td>
                     <td className="num cre">{EGP(totalCredit)}</td>
-                    {kind === 'all' && (
+                    {showBalance && (
                       <td className="num" style={{ fontWeight: 800, color: net <= 0 ? 'var(--credit)' : 'var(--debit)' }}>
                         {EGP(Math.abs(net))} {net <= 0 ? 'له' : 'عليه'}
                       </td>
                     )}
                   </tr>
-                  {kind !== 'all' && (
+                  {!showBalance && (
                     <tr className="mf-total">
                       <td colSpan={cols} style={{ fontWeight: 800, textAlign: 'left' }}>
                         الصافي:{' '}
@@ -696,7 +717,9 @@ function LedgerTab({ partyName }: { partyName?: string }) {
                   )}
                 </>
               )}
-              {visibleRows.length === 0 && opening === 0 && <tr><td colSpan={cols} className="empty">لا توجد حركات</td></tr>}
+              {visibleRows.length === 0 && opening === 0 && (
+                <tr><td colSpan={cols} className="empty">{q ? 'لا توجد فواتير بهذا الصنف في الفترة المحددة' : 'لا توجد حركات'}</td></tr>
+              )}
             </tbody>
           </table>
         </div>
