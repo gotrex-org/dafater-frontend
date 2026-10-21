@@ -551,6 +551,18 @@ function LedgerTab({ partyName }: { partyName?: string }) {
     try { localStorage.setItem(LEDGER_VIEW_KEY, v); } catch { /* تخزين مقفول */ }
   };
 
+  // تقسيم الفواتير: باليوم (الافتراضي) أو كل 10 أصناف في صندوق — برضه بيتحفظ على الجهاز.
+  const [groupBy, setGroupByState] = useState<LedgerGroupBy>('day');
+  useEffect(() => {
+    let saved: string | null = null;
+    try { saved = localStorage.getItem(LEDGER_GROUP_KEY); } catch { /* تخزين مقفول */ }
+    if (saved === 'day' || saved === 'ten') setGroupByState(saved);
+  }, []);
+  const setGroupBy = (g: LedgerGroupBy) => {
+    setGroupByState(g);
+    try { localStorage.setItem(LEDGER_GROUP_KEY, g); } catch { /* تخزين مقفول */ }
+  };
+
   // أول ما البيانات تحمّل، انزل لآخر الكشف (أحدث معاملة) — والمستخدم يسكرول فوق للأقدم
   useEffect(() => {
     if (data && !didScroll.current && bottomRef.current) {
@@ -596,6 +608,11 @@ function LedgerTab({ partyName }: { partyName?: string }) {
   const goodsTotal = periodRows.reduce((s, r) => s + (r.debit || 0), 0);
   const receiptsTotal = periodRows.reduce((s, r) => s + (r.credit || 0), 0);
   const grandTotal = opening + goodsTotal - receiptsTotal;
+  const entries = buildLedgerEntries(visibleRows, groupBy, q);
+  const openInvoiceOf = (r: LedgerRow) => setOpenInvoice({ uid: r.invoiceUid!, docNo: r.docNo ?? null });
+  const renderEntries = (variant: LedgerView) => entries.map((e) => (e.type === 'receipt'
+    ? <LedgerReceiptBox key={e.key} r={e.r} variant={variant} />
+    : <LedgerGroupBox key={e.key} rows={e.rows} lines={e.lines} groupBy={groupBy} q={q} variant={variant} onOpenInvoice={openInvoiceOf} />));
   const emptyText = q ? 'لا توجد فواتير بهذا الصنف في الفترة المحددة'
     : kind === 'collect' ? 'لا توجد استلامات في الفترة المحددة'
     : kind === 'invoices' ? 'لا توجد فواتير في الفترة المحددة'
@@ -613,6 +630,20 @@ function LedgerTab({ partyName }: { partyName?: string }) {
         <ItemSearchBox value={itemSearch} onChange={setItemSearch} names={productNames} full={view === 'mobile'} />
         {itemSearch && <button className="btn btn-ghost btn-sm" title="مسح البحث" onClick={() => setItemSearch('')}>×</button>}
         <div style={{ flex: 1 }} />
+        {kind !== 'collect' && (
+          <div role="group" aria-label="تقسيم الفواتير" style={{ display: 'inline-flex', border: '1.5px solid var(--line)', borderRadius: 8, overflow: 'hidden' }}>
+            {([['day', 'باليوم'], ['ten', 'كل 10 أصناف']] as [LedgerGroupBy, string][]).map(([g, label]) => (
+              <button key={g} onClick={() => setGroupBy(g)} aria-pressed={groupBy === g}
+                style={{
+                  border: 'none', padding: '6px 12px', fontSize: 13, fontFamily: 'inherit', cursor: 'pointer',
+                  fontWeight: groupBy === g ? 800 : 500,
+                  background: groupBy === g ? 'var(--ink)' : 'var(--surface)', color: groupBy === g ? '#fff' : 'var(--ink-soft)',
+                }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         <div role="group" aria-label="شكل العرض" style={{ display: 'inline-flex', border: '1.5px solid var(--line)', borderRadius: 8, overflow: 'hidden' }}>
           {([['mobile', 'موبايل'], ['pc', 'كمبيوتر']] as [LedgerView, string][]).map(([v, label]) => (
             <button key={v} onClick={() => setView(v)} aria-pressed={view === v}
@@ -656,10 +687,7 @@ function LedgerTab({ partyName }: { partyName?: string }) {
               <div style={{ fontSize: 13, opacity: 0.85 }}>من {from ? fmtDate(from) : '…'} إلى {to ? fmtDate(to) : '…'}</div>
             )}
           </div>
-          {visibleRows.map((r) => (
-            <LedgerDayBox key={r.id} r={r} q={q} variant="mobile"
-              onOpenInvoice={() => setOpenInvoice({ uid: r.invoiceUid!, docNo: r.docNo ?? null })} />
-          ))}
+          {renderEntries('mobile')}
           {visibleRows.length === 0 && <div className="empty">{emptyText}</div>}
           {(periodRows.length > 0 || opening !== 0) && (
             <div style={{ background: 'var(--surface)', borderRadius: 14, padding: '14px 16px' }}>
@@ -683,10 +711,7 @@ function LedgerTab({ partyName }: { partyName?: string }) {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
-          {visibleRows.map((r) => (
-            <LedgerDayBox key={r.id} r={r} q={q}
-              onOpenInvoice={() => setOpenInvoice({ uid: r.invoiceUid!, docNo: r.docNo ?? null })} />
-          ))}
+          {renderEntries('pc')}
           {visibleRows.length === 0 && <div className="empty">{emptyText}</div>}
         </div>
 
@@ -791,36 +816,123 @@ const BOX_THEME = {
 };
 const NAWLON_RE = /نا?ولون/;
 
-/** صندوق حركة في كشف حساب العميل: الفاتورة بأصنافها وبنود شحنها، أو استلام، أو حركة تانية. */
-function LedgerDayBox({ r, q, onOpenInvoice, variant = 'pc' }: {
-  r: LedgerRow; q: string; onOpenInvoice: () => void; variant?: LedgerView;
-}) {
-  const shipped = !!r.shipped;
-  const isReceipt = (r.credit || 0) > 0 && !r.invoiceUid && !r.dealUid;
-  const allItems = r.invoiceItems ?? [];
-  const items = q ? allItems.filter((it) => wordMatchScore(it.name, q) != null) : allItems;
-  const charges = q ? [] : (r.invoiceCharges ?? []);
-  const amount = r.debit ? EGP(r.debit) : `− ${EGP(r.credit || 0)}`;
-  const theme = shipped ? BOX_THEME.shipped : isReceipt ? BOX_THEME.receipt : null;
-  const ship = BOX_THEME.shipped;
+type LedgerGroupBy = 'day' | 'ten';
+const LEDGER_GROUP_KEY = 'portal-ledger-group';
+const GROUP_SIZE = 10;
 
-  // الاستلام سطر واحد: التاريخ ← الملاحظة في النص (لو فيه) ← المبلغ.
-  // «استلام نقدية» هو البيان الافتراضي من الباك، مش ملاحظة، فمابيظهرش.
-  if (isReceipt) {
-    const note = r.note && r.note !== 'استلام نقدية' ? r.note : '';
-    return (
-      <div style={{ border: `2.5px solid ${theme!.frame}`, borderRadius: variant === 'mobile' ? 14 : 12, overflow: 'hidden', breakInside: 'avoid' }}>
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto', alignItems: 'center', gap: 12,
-          background: theme!.head, padding: '10px 14px', fontWeight: 700,
-        }}>
-          <span style={{ fontSize: 15 }}>{fmtDate(r.date)}</span>
-          <span className="muted" style={{ fontWeight: 500, textAlign: 'center' }}>{note}</span>
-          <span className="num">{amount}</span>
-        </div>
-      </div>
-    );
+/** سطر جوّه صندوق: صنف أو بند شحن أو فرق الخصم، ومعاه الفاتورة اللي جاي منها. */
+interface GroupLine {
+  name: string;
+  qty?: number;
+  price?: number;
+  amount: number;
+  charge?: boolean;
+  nawlon?: boolean;
+  row: LedgerRow;
+}
+
+type LedgerEntry =
+  | { type: 'receipt'; key: string; r: LedgerRow }
+  | { type: 'group'; key: string; rows: LedgerRow[]; lines: GroupLine[] };
+
+const isReceiptRow = (r: LedgerRow) => (r.credit || 0) > 0 && !r.invoiceUid && !r.dealUid;
+
+/** أسطر الفاتورة: الأصناف، ثم بنود الشحن، ثم فرق الخصم (عشان مجموع الأسطر = مبلغ الفاتورة). */
+function rowLines(r: LedgerRow, q: string): GroupLine[] {
+  const items = (r.invoiceItems ?? []).filter((it) => !q || wordMatchScore(it.name, q) != null);
+  const lines: GroupLine[] = items.map((it) => ({ name: it.name, qty: it.qty, price: it.price, amount: it.qty * it.price, row: r }));
+  if (q) return lines; // مع البحث أسطر الصنف بس
+  for (const c of r.invoiceCharges ?? []) {
+    lines.push({ name: c.name, amount: c.amount, charge: true, nawlon: NAWLON_RE.test(c.name), row: r });
   }
+  const diff = (r.debit || 0) - lines.reduce((s, l) => s + l.amount, 0);
+  if (Math.abs(diff) >= 0.01) lines.push({ name: diff < 0 ? 'خصم' : 'أخرى', amount: diff, charge: true, row: r });
+  return lines;
+}
+
+/**
+ * تقسيم الكشف لصناديق حسب اختيار العميل: «باليوم» = كل فواتير اليوم في صندوق، و«كل 10
+ * أصناف» = أسطر الفواتير ورا بعض كل 10 في صندوق. الاستلام صندوق لوحده دايماً وبيقفل
+ * الصندوق اللي قبله، عشان الترتيب الزمني يفضل مظبوط.
+ */
+function buildLedgerEntries(rows: LedgerRow[], groupBy: LedgerGroupBy, q: string): LedgerEntry[] {
+  const out: LedgerEntry[] = [];
+  type Acc = { rows: LedgerRow[]; lines: GroupLine[] };
+  // «as» عشان TypeScript مايضيّقش النوع لـ null ويتجاهل اللي flush بتعمله
+  let cur = null as Acc | null;
+  const flush = () => {
+    const c = cur;
+    if (c && (c.rows.length || c.lines.length)) {
+      out.push({ type: 'group', key: `g${out.length}-${c.rows[0]?.id}`, rows: c.rows, lines: c.lines });
+    }
+    cur = null;
+  };
+
+  for (const r of rows) {
+    if (isReceiptRow(r)) { flush(); out.push({ type: 'receipt', key: r.id, r }); continue; }
+    const lines = rowLines(r, q);
+    const isDoc = !!(r.invoiceUid || r.dealUid);
+    if (!isDoc) { flush(); out.push({ type: 'group', key: r.id, rows: [r], lines }); continue; }
+
+    if (groupBy === 'day') {
+      if (cur && fmtDate(cur.rows[0].date) !== fmtDate(r.date)) flush();
+      cur ??= { rows: [], lines: [] };
+      cur.rows.push(r);
+      cur.lines.push(...lines);
+    } else {
+      for (const line of lines) {
+        cur ??= { rows: [], lines: [] };
+        if (!cur.rows.includes(r)) cur.rows.push(r);
+        cur.lines.push(line);
+        if (cur.lines.length >= GROUP_SIZE) flush();
+      }
+      // فاتورة اتفلترت أسطرها كلها بالبحث مابتظهرش
+    }
+  }
+  flush();
+  return out;
+}
+
+/** استلام: سطر واحد، التاريخ ← الملاحظة في النص (لو فيه) ← المبلغ. */
+function LedgerReceiptBox({ r, variant }: { r: LedgerRow; variant: LedgerView }) {
+  const theme = BOX_THEME.receipt;
+  // «استلام نقدية» هو البيان الافتراضي من الباك، مش ملاحظة، فمابيظهرش.
+  const note = r.note && r.note !== 'استلام نقدية' ? r.note : '';
+  return (
+    <div style={{ border: `2.5px solid ${theme.frame}`, borderRadius: variant === 'mobile' ? 14 : 12, overflow: 'hidden', breakInside: 'avoid' }}>
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto', alignItems: 'center', gap: 12,
+        background: theme.head, padding: '10px 14px', fontWeight: 700,
+      }}>
+        <span style={{ fontSize: 15 }}>{fmtDate(r.date)}</span>
+        <span className="muted" style={{ fontWeight: 500, textAlign: 'center' }}>{note}</span>
+        <span className="num">− {EGP(r.credit || 0)}</span>
+      </div>
+    </div>
+  );
+}
+
+/** صندوق فواتير: فواتير يوم، أو 10 أسطر ورا بعض، أو حركة تانية لوحدها. */
+function LedgerGroupBox({ rows, lines, groupBy, q, variant, onOpenInvoice }: {
+  rows: LedgerRow[]; lines: GroupLine[]; groupBy: LedgerGroupBy; q: string; variant: LedgerView;
+  onOpenInvoice: (r: LedgerRow) => void;
+}) {
+  const ship = BOX_THEME.shipped;
+  const shipped = groupBy === 'day' ? rows.some((r) => r.shipped) : lines.some((l) => l.row.shipped);
+  const docs = rows.filter((r) => r.invoiceUid || r.dealUid);
+  const multiDoc = docs.length > 1;
+  // باليوم المبلغ هو مبلغ الفواتير، ومع البحث أو كل 10 أسطر هو مجموع الأسطر الظاهرة
+  const amount = groupBy === 'day' && !q && docs.length
+    ? rows.reduce((s, r) => s + (r.debit || 0), 0)
+    : lines.length ? lines.reduce((s, l) => s + l.amount, 0) : (rows[0]?.debit || 0);
+  const first = fmtDate(rows[0].date);
+  const last = fmtDate(rows[rows.length - 1].date);
+  const dateLabel = first === last ? first : `${first} ← ${last}`;
+  const docLabel = docs.length ? docs.map((r) => r.note || r.type).join('، ') : (rows[0].note || rows[0].type);
+  const totalLabel = !docs.length ? 'المبلغ' : groupBy === 'day' ? (multiDoc ? 'إجمالي اليوم' : 'إجمالي الفاتورة') : 'إجمالي الأسطر';
+  // في صندوق فيه أكتر من فاتورة كل سطر بيقول جاي منين
+  const lineSource = (l: GroupLine) =>
+    !multiDoc ? null : groupBy === 'ten' && first !== last ? `${fmtDate(l.row.date)} · ${l.row.note || ''}` : (l.row.note || '');
 
   const badge = shipped && (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: ship.dark, color: '#fff', borderRadius: 999, padding: '3px 10px', fontSize: 12 }}>
@@ -830,48 +942,43 @@ function LedgerDayBox({ r, q, onOpenInvoice, variant = 'pc' }: {
       شحن من عندنا
     </span>
   );
+  const invoiceButtons = docs.filter((r) => r.invoiceUid).map((r) => (
+    <button key={r.id} className="btn btn-ghost btn-sm no-print" onClick={() => onOpenInvoice(r)}>
+      {multiDoc ? `عرض ${r.note || 'الفاتورة'}` : 'عرض الفاتورة'}
+    </button>
+  ));
+  const frame = shipped ? `2.5px solid ${ship.frame}` : '1px solid var(--line)';
+  const head = shipped ? ship.head : 'var(--line-soft)';
+  const lineStyle = (l: GroupLine, j: number) => (l.nawlon
+    ? { borderTop: `1px dashed ${ship.frame}`, background: ship.row, color: ship.dark }
+    : j ? { borderTop: '1px solid var(--line-soft)' } : {});
 
-  // كارت الموبايل: كل صنف سطر «الاسم · الكمية × السعر» والإجمالي على الشمال،
-  // وتحت «إجمالي الفاتورة».
   if (variant === 'mobile') {
     return (
-      <div style={{
-        background: 'var(--surface)', border: theme ? `2.5px solid ${theme.frame}` : '1px solid var(--line)',
-        borderRadius: 14, overflow: 'hidden',
-      }}>
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6,
-          background: theme ? theme.head : 'var(--line-soft)', padding: '12px 16px',
-        }}>
-          <b>{fmtDate(r.date)}</b>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ background: 'var(--surface)', border: frame, borderRadius: 14, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6, background: head, padding: '12px 16px' }}>
+          <b>{dateLabel}</b>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             {badge}
-            <span className="muted" style={{ fontSize: 12 }}>{r.note || r.type}</span>
+            <span className="muted" style={{ fontSize: 12 }}>{docLabel}</span>
           </span>
         </div>
-        <div style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {items.map((it, j) => (
-            <div key={`i${j}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-              <span>{it.name} <span className="muted num">· {it.qty} × {EGP(it.price)}</span></span>
-              <span className="num">{EGP(it.qty * it.price)}</span>
+        <div style={{ padding: '4px 16px 10px', display: 'flex', flexDirection: 'column' }}>
+          {lines.map((l, j) => (
+            <div key={j} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '7px 0', fontWeight: l.charge ? 700 : 400, ...lineStyle(l, j), ...(l.nawlon ? { margin: '0 -16px', padding: '8px 16px' } : {}) }}>
+              <span>
+                {l.name}
+                {l.qty != null && <span className="muted num"> · {l.qty} × {EGP(l.price ?? 0)}</span>}
+                {lineSource(l) && <span className="muted" style={{ display: 'block', fontSize: 11, fontWeight: 400 }}>{lineSource(l)}</span>}
+              </span>
+              <span className="num">{EGP(l.amount)}</span>
             </div>
           ))}
-          {charges.map((c, j) => {
-            const nawlon = NAWLON_RE.test(c.name);
-            return (
-              <div key={`c${j}`} style={{
-                display: 'flex', justifyContent: 'space-between', fontWeight: 700,
-                ...(nawlon ? { borderTop: `1px dashed ${ship.frame}`, background: ship.row, margin: '0 -16px', padding: '8px 16px', color: ship.dark } : {}),
-              }}>
-                <span>{c.name}</span><span className="num">{EGP(c.amount)}</span>
-              </div>
-            );
-          })}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--line-soft)', paddingTop: 8, fontWeight: 700 }}>
-            <span>{r.invoiceUid || r.dealUid ? 'إجمالي الفاتورة' : 'المبلغ'}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span className="num">{amount}</span>
-              {r.invoiceUid && <button className="btn btn-ghost btn-sm no-print" onClick={onOpenInvoice}>عرض الفاتورة</button>}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6, borderTop: '1px solid var(--line-soft)', paddingTop: 8, fontWeight: 700 }}>
+            <span>{totalLabel}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span className="num">{EGP(amount)}</span>
+              {invoiceButtons}
             </span>
           </div>
         </div>
@@ -880,49 +987,42 @@ function LedgerDayBox({ r, q, onOpenInvoice, variant = 'pc' }: {
   }
 
   return (
-    <div style={{
-      border: theme ? `2.5px solid ${theme.frame}` : '1px solid var(--line)',
-      borderRadius: 12, overflow: 'hidden', breakInside: 'avoid',
-    }}>
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8,
-        background: theme ? theme.head : 'var(--line-soft)', padding: '10px 14px', fontWeight: 700,
-      }}>
+    <div style={{ border: frame, borderRadius: 12, overflow: 'hidden', breakInside: 'avoid' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, background: head, padding: '10px 14px', fontWeight: 700 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 15 }}>{fmtDate(r.date)}</span>
-          <span className="muted" style={{ fontWeight: 500 }}>· {r.note || r.type}</span>
+          <span style={{ fontSize: 15 }}>{dateLabel}</span>
+          <span className="muted" style={{ fontWeight: 500 }}>· {docLabel}</span>
           {badge}
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span className="num">{amount}</span>
-          {r.invoiceUid && (
-            <button className="btn btn-ghost btn-sm no-print" onClick={onOpenInvoice}>عرض الفاتورة</button>
-          )}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span className="num">{EGP(amount)}</span>
+          {invoiceButtons}
         </span>
       </div>
 
-      {(items.length > 0 || charges.length > 0) && (
+      {lines.length > 0 && (
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <tbody>
-            {items.map((it, j) => (
-              <tr key={`i${j}`} style={j ? { borderTop: '1px solid var(--line-soft)' } : undefined}>
-                <td style={{ padding: '7px 14px', fontWeight: 700 }}>{it.name}</td>
-                <td className="num" style={{ padding: '7px 8px' }}>{it.qty}</td>
-                <td className="num" style={{ padding: '7px 8px' }}>× {EGP(it.price)}</td>
-                <td className="num" style={{ padding: '7px 14px', textAlign: 'left' }}>{EGP(it.qty * it.price)}</td>
+            {lines.map((l, j) => (
+              <tr key={j} style={lineStyle(l, j)}>
+                {l.charge ? (
+                  <td colSpan={3} style={{ padding: '7px 14px', fontWeight: 700 }}>
+                    {l.name}
+                    {lineSource(l) && <span className="muted" style={{ fontSize: 11, fontWeight: 400, marginInlineStart: 8 }}>{lineSource(l)}</span>}
+                  </td>
+                ) : (
+                  <>
+                    <td style={{ padding: '7px 14px', fontWeight: 700 }}>
+                      {l.name}
+                      {lineSource(l) && <span className="muted" style={{ fontSize: 11, fontWeight: 400, marginInlineStart: 8 }}>{lineSource(l)}</span>}
+                    </td>
+                    <td className="num" style={{ padding: '7px 8px' }}>{l.qty}</td>
+                    <td className="num" style={{ padding: '7px 8px' }}>× {EGP(l.price ?? 0)}</td>
+                  </>
+                )}
+                <td className="num" style={{ padding: '7px 14px', textAlign: 'left' }}>{EGP(l.amount)}</td>
               </tr>
             ))}
-            {charges.map((c, j) => {
-              const nawlon = NAWLON_RE.test(c.name);
-              return (
-                <tr key={`c${j}`} style={nawlon
-                  ? { borderTop: `1px dashed ${ship.frame}`, background: ship.row }
-                  : { borderTop: '1px solid var(--line-soft)' }}>
-                  <td colSpan={3} style={{ padding: '7px 14px', fontWeight: 700, color: nawlon ? ship.dark : undefined }}>{c.name}</td>
-                  <td className="num" style={{ padding: '7px 14px', textAlign: 'left' }}>{EGP(c.amount)}</td>
-                </tr>
-              );
-            })}
           </tbody>
         </table>
       )}
