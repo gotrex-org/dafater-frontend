@@ -1,11 +1,11 @@
 'use client';
 
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { fmtDate, fmtDateTime, EGP, money } from '@/lib/format';
 import { downloadElementAsPdf, printElementOnePage } from '@/lib/pdf';
-import { normalizeAr } from '@/lib/arabicSearch';
+import { normalizeAr, wordMatchScore } from '@/lib/arabicSearch';
 
 // أول يوم في الشهر الحالي (توقيت محلي) — الكشف يبدأ منه افتراضيًا
 function portalStartOfMonth() {
@@ -46,6 +46,10 @@ interface LedgerRow {
   docNo?: number | null;
   invoiceUid?: string | null; dealUid?: string | null;
   invoiceItems?: { name: string; qty: number; price: number }[] | null;
+  /** بنود الشحن على الفاتورة (نولون/تحميل…) بمبلغ كل بند */
+  invoiceCharges?: { name: string; amount: number }[] | null;
+  /** الفاتورة عليها ناولون = البضاعة اتشحنت من عندنا */
+  shipped?: boolean;
 }
 
 interface LedgerResponse { opening: number; balance: number; rows: LedgerRow[] }
@@ -345,6 +349,8 @@ function OrdersTab({ products }: { products: CatalogProduct[] }) {
 // ─── ledger tab ───────────────────────────────────────────────────────────────
 
 type LedgerKind = 'all' | 'invoices' | 'collect';
+type LedgerView = 'mobile' | 'pc';
+const LEDGER_VIEW_KEY = 'portal-ledger-view';
 
 // فاتورة العميل بشكل الشيت: الأصناف على اليمين، ملخّص جنبها، والاستلامات تحتها.
 // مبنية للموبايل الأول — على الشاشة الصغيرة الجداول بتبقى كروت (شوف .portal-sheet في globals.css)،
@@ -508,16 +514,42 @@ function LedgerTab({ partyName }: { partyName?: string }) {
   // افتراضيًا من أول الشهر — قابل للتغيير من الفلتر
   const [from, setFrom] = useState(portalStartOfMonth());
   const [to, setTo] = useState('');
-  const [kind, setKind] = useState<LedgerKind>('all');
+  // الافتراضي تاب الفواتير
+  const [kind, setKind] = useState<LedgerKind>('invoices');
   // بحث باسم الصنف: يُبقي الفواتير والصفقات التي فيها الصنف فقط
   const [itemSearch, setItemSearch] = useState('');
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  // الفاتورة بتتفتح صفحة كاملة بشكل الشيت؛ البيع الخارجي (صفقة) لسه بينفتح تحت السطر.
+  // الفاتورة بتتفتح صفحة كاملة بشكل الشيت من زرار «عرض الفاتورة» في صندوقها.
   const [openInvoice, setOpenInvoice] = useState<{ uid: string; docNo: number | null } | null>(null);
   const { data, isLoading } = useMyLedger({ from: from || undefined, to: to || undefined });
   const sheetRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const didScroll = useRef(false);
+  // بار التاريخ والبحث والتابات بيتثبّت تحت البار العلوي وتابات البوابة (الاتنين sticky)،
+  // وارتفاعهم بيختلف بين الموبايل والكمبيوتر فبيتقاس.
+  const [stickyTop, setStickyTop] = useState(0);
+  useEffect(() => {
+    const measure = () => {
+      const h = document.querySelector('header.appbar')?.getBoundingClientRect().height ?? 0;
+      const n = document.querySelector('nav.tabs')?.getBoundingClientRect().height ?? 0;
+      setStickyTop(h + n);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+
+  // شكل العرض: كروت موبايل أو صناديق كمبيوتر. الافتراضي حسب عرض الشاشة، واختيار العميل
+  // بيتحفظ على جهازه. بيتحدد بعد التحميل عشان مايختلفش عن اللي اترسم على السيرفر.
+  const [view, setViewState] = useState<LedgerView>('pc');
+  useEffect(() => {
+    let saved: string | null = null;
+    try { saved = localStorage.getItem(LEDGER_VIEW_KEY); } catch { /* تخزين مقفول */ }
+    setViewState(saved === 'mobile' || saved === 'pc' ? saved : window.innerWidth < 700 ? 'mobile' : 'pc');
+  }, []);
+  const setView = (v: LedgerView) => {
+    setViewState(v);
+    try { localStorage.setItem(LEDGER_VIEW_KEY, v); } catch { /* تخزين مقفول */ }
+  };
 
   // أول ما البيانات تحمّل، انزل لآخر الكشف (أحدث معاملة) — والمستخدم يسكرول فوق للأقدم
   useEffect(() => {
@@ -526,9 +558,6 @@ function LedgerTab({ partyName }: { partyName?: string }) {
       didScroll.current = true;
     }
   }, [data]);
-
-  const toggle = (id: string) =>
-    setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   if (openInvoice) {
     return (
@@ -547,66 +576,99 @@ function LedgerTab({ partyName }: { partyName?: string }) {
   // الباك بيرجّع الأحدث فوق — نعكسها لترتيب زمني صح (شامل ترتيب نفس اليوم)
   const q = normalizeAr(itemSearch);
   const matchedItems = (r: LedgerRow) =>
-    q ? (r.invoiceItems ?? []).filter((it) => normalizeAr(it.name).includes(q)) : [];
+    q ? (r.invoiceItems ?? []).filter((it) => wordMatchScore(it.name, q) != null) : [];
+  // أسماء الأصناف اللي في كشف العميل نفسه — منها اقتراحات البحث
+  const productNames = Array.from(new Set((data.rows ?? []).flatMap((r) => (r.invoiceItems ?? []).map((it) => it.name)).filter(Boolean)));
   const visibleRows = (data.rows ?? [])
     .filter((r) => {
       if (q && matchedItems(r).length === 0) return false;
       if (kind === 'invoices') return !!(r.invoiceUid || r.dealUid);
-      if (kind === 'collect') return !r.invoiceUid && !r.dealUid;
+      // استلامات = الفلوس اللي العميل دفعها بس
+      if (kind === 'collect') return (r.credit || 0) > 0 && !r.invoiceUid && !r.dealUid;
       return true;
     })
     .reverse();
 
-  // الرصيد الافتتاحي بيتحسب جوّه الإجمالي تحت — عشان الصافي يطلع "له/عليه" صح
-  // حتى لو العميل فلتر على الفواتير بس أو اختار "كل الفترة".
-  // مع البحث الكشف يعرض فواتير الصنف فقط، فلا معنى للرصيد الافتتاحي ولا للرصيد التراكمي
-  const opening = q ? 0 : data.opening || 0;
-  const totalDebit = visibleRows.reduce((s, r) => s + (r.debit || 0), 0) + (opening > 0 ? opening : 0);
-  const totalCredit = visibleRows.reduce((s, r) => s + (r.credit || 0), 0) + (opening < 0 ? -opening : 0);
-  const net = totalDebit - totalCredit;
-  const showBalance = kind === 'all' && !q;
-  const cols = showBalance ? 5 : 4;
-
-  // الفواتير بقت بتتفتح صفحة لوحدها — الكشف السريع ده بقى للصفقات (البيع الخارجي) بس
-  const detailRowIds = visibleRows.filter((r) => r.invoiceItems?.length && !r.invoiceUid).map((r) => r.id);
-  const allExpanded = detailRowIds.length > 0 && detailRowIds.every((id) => expanded.has(id));
-  const toggleAllDetails = () => setExpanded(allExpanded ? new Set() : new Set(detailRowIds));
+  // الإجماليات تحت ثابتة لكل الفترة مهما كان التاب أو البحث: إجمالي البضاعة، إجمالي
+  // الاستلامات، والإجمالي (شامل الرصيد الافتتاحي) = رصيد آخر الفترة.
+  const opening = data.opening || 0;
+  const periodRows = data.rows ?? [];
+  const goodsTotal = periodRows.reduce((s, r) => s + (r.debit || 0), 0);
+  const receiptsTotal = periodRows.reduce((s, r) => s + (r.credit || 0), 0);
+  const grandTotal = opening + goodsTotal - receiptsTotal;
+  const emptyText = q ? 'لا توجد فواتير بهذا الصنف في الفترة المحددة'
+    : kind === 'collect' ? 'لا توجد استلامات في الفترة المحددة'
+    : kind === 'invoices' ? 'لا توجد فواتير في الفترة المحددة'
+    : 'لا توجد حركات';
 
   return (
     <>
-      <div className="toolbar no-print" style={{ marginBottom: 12, flexWrap: 'wrap' }}>
+      <div className="no-print" style={{ position: 'sticky', top: stickyTop, zIndex: 15, background: 'var(--paper)', paddingTop: 8, marginBottom: 16 }}>
+      <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
         <span className="muted" style={{ fontSize: 13 }}>من</span>
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ padding: '7px 10px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 13 }} />
         <span className="muted" style={{ fontSize: 13 }}>إلى</span>
         <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={{ padding: '7px 10px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 13 }} />
         {(from || to) && <button className="btn btn-ghost btn-sm" onClick={() => { setFrom(''); setTo(''); }}>كل الفترة</button>}
+        <ItemSearchBox value={itemSearch} onChange={setItemSearch} names={productNames} full={view === 'mobile'} />
+        {itemSearch && <button className="btn btn-ghost btn-sm" title="مسح البحث" onClick={() => setItemSearch('')}>×</button>}
         <div style={{ flex: 1 }} />
+        <div role="group" aria-label="شكل العرض" style={{ display: 'inline-flex', border: '1.5px solid var(--line)', borderRadius: 8, overflow: 'hidden' }}>
+          {([['mobile', 'موبايل'], ['pc', 'كمبيوتر']] as [LedgerView, string][]).map(([v, label]) => (
+            <button key={v} onClick={() => setView(v)} aria-pressed={view === v}
+              style={{
+                border: 'none', padding: '6px 12px', fontSize: 13, fontFamily: 'inherit', cursor: 'pointer',
+                fontWeight: view === v ? 800 : 500,
+                background: view === v ? 'var(--ink)' : 'var(--surface)', color: view === v ? '#fff' : 'var(--ink-soft)',
+              }}>
+              {label}
+            </button>
+          ))}
+        </div>
         <button className="btn btn-ghost btn-sm" onClick={() => sheetRef.current && downloadElementAsPdf(sheetRef.current, `كشف-حساب${partyName ? '-' + partyName : ''}`)}>⬇ تحميل PDF</button>
         <button className="btn btn-primary btn-sm" onClick={() => sheetRef.current && printElementOnePage(sheetRef.current, `كشف-حساب${partyName ? '-' + partyName : ''}`)}>🖨 طباعة</button>
       </div>
 
-      <div className="toolbar no-print" style={{ marginBottom: 12 }}>
-        {([['all', 'كشف الكل'], ['invoices', 'الفواتير فقط'], ['collect', 'التحصيل فقط']] as [LedgerKind, string][]).map(([k, label]) => (
-          <button key={k} className={`btn btn-sm ${kind === k ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setKind(k)}>{label}</button>
-        ))}
-        <input
-          value={itemSearch}
-          onChange={(e) => setItemSearch(e.target.value)}
-          placeholder="بحث باسم الصنف…"
-          style={{ minWidth: 180, padding: '7px 10px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 13 }}
-        />
-        {itemSearch && <button className="btn btn-ghost btn-sm" title="مسح البحث" onClick={() => setItemSearch('')}>×</button>}
-        {detailRowIds.length > 0 && (
-          <button className="btn btn-ghost btn-sm sp" onClick={toggleAllDetails}>
-            {allExpanded ? '▾ إخفاء التفاصيل' : '▸ كشف كل التفاصيل'}
+      {/* التابات فلاتر على نفس الكشف: الفواتير بأصنافها / الاستلامات / الكل — بنفس طريقة العرض. */}
+      <nav className="tabs" style={{ position: 'static' }}>
+        {([['invoices', 'فواتير'], ['collect', 'استلامات'], ['all', 'كشف حساب']] as [LedgerKind, string][]).map(([k, label]) => (
+          <button key={k} className={kind === k ? 'active' : ''} onClick={() => setKind(k)}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer', fontWeight: kind === k ? 800 : 500,
+              ...(kind === k ? { color: 'var(--ink)', borderBottom: '3px solid var(--ink)' } : {}),
+            }}>
+            {label}
           </button>
-        )}
+        ))}
+      </nav>
       </div>
 
-      {/* نفس ورقة كشف الحساب اللي في السيستم الداخلي بالحرف: ترويسة الديزاين القديم
-          (أبو شامة على جنب، والعنوان على الجنب التاني وتحتهم خط عريض)، وسطر بيانات
-          الطرف. .portal-sheet بتفضل عشان الصفوف تتحوّل كروت على الموبايل، و.lg-tbl
-          جنب .pl-tbl عشان حدود الجدول تيجي من ستايل الكشف القديم. */}
+      {view === 'mobile' ? (
+        <div ref={sheetRef} style={{ maxWidth: 480, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* رصيد العميل: أخضر لو له، أحمر لو عليه */}
+          <div style={{ background: grandTotal <= 0 ? 'var(--credit)' : 'var(--debit)', color: '#fff', borderRadius: 16, padding: 18 }}>
+            <div style={{ fontSize: 13, opacity: 0.85 }}>رصيدك الحالي{partyName ? ` — ${partyName}` : ''}</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+              <span className="num" style={{ fontSize: 28, fontWeight: 800 }}>{EGP(Math.abs(grandTotal))}</span>
+              <span style={{ fontSize: 18, fontWeight: 800 }}>{grandTotal <= 0 ? 'لك' : 'عليك'}</span>
+            </div>
+            {(from || to) && (
+              <div style={{ fontSize: 13, opacity: 0.85 }}>من {from ? fmtDate(from) : '…'} إلى {to ? fmtDate(to) : '…'}</div>
+            )}
+          </div>
+          {visibleRows.map((r) => (
+            <LedgerDayBox key={r.id} r={r} q={q} variant="mobile"
+              onOpenInvoice={() => setOpenInvoice({ uid: r.invoiceUid!, docNo: r.docNo ?? null })} />
+          ))}
+          {visibleRows.length === 0 && <div className="empty">{emptyText}</div>}
+          {(periodRows.length > 0 || opening !== 0) && (
+            <div style={{ background: 'var(--surface)', borderRadius: 14, padding: '14px 16px' }}>
+              <LedgerTotals goods={goodsTotal} receipts={receiptsTotal} total={grandTotal} opening={opening} />
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+      ) : (
       <div ref={sheetRef} className="card print-sheet ledger-sheet ledger-old portal-sheet">
         <div className="pr-head">
           <div className="co">أبو شامة</div>
@@ -620,116 +682,251 @@ function LedgerTab({ partyName }: { partyName?: string }) {
           </div>
         </div>
 
-        <div className="tbl-wrap mf-grow">
-          <table className="pl-tbl lg-tbl">
-            <thead>
-              <tr>
-                <th>التاريخ</th><th>البيان</th><th>عليه</th><th>له</th>
-                {showBalance && <th>الرصيد</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {opening !== 0 && (
-                <tr className="pl-row">
-                  <td className="muted pl-date" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>—</td>
-                  <td className="pl-note" style={{ fontWeight: 700 }}>رصيد افتتاحي</td>
-                  <td className="num deb pl-deb" data-l="عليه">{opening > 0 ? EGP(opening) : ''}</td>
-                  <td className="num cre pl-cre" data-l="له">{opening < 0 ? EGP(-opening) : ''}</td>
-                  {showBalance && (
-                    <td className="num pl-bal" style={{ fontWeight: 700, color: opening <= 0 ? 'var(--credit)' : 'var(--debit)' }}>
-                      {EGP(Math.abs(opening))} {opening <= 0 ? 'له' : 'عليه'}
-                    </td>
-                  )}
-                </tr>
-              )}
-              {visibleRows.map((r) => {
-                // الفاتورة بتفتح صفحة كاملة؛ الصفقة بس هي اللي لسه بتتفرد تحت السطر
-                const open = expanded.has(r.id) && !!r.invoiceItems?.length && !r.invoiceUid;
-                return (
-                  <Fragment key={r.id}>
-                    <tr className="pl-row">
-                      <td className="muted pl-date" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(r.date)}</td>
-                      <td className="pl-note">
-                        {r.invoiceUid
-                          ? <button className="btn btn-ghost btn-sm" onClick={() => setOpenInvoice({ uid: r.invoiceUid!, docNo: r.docNo ?? null })}>📄 {r.note || 'فاتورة'}</button>
-                          : r.invoiceItems?.length
-                            ? <button className="btn btn-ghost btn-sm" onClick={() => toggle(r.id)}>{open ? '▾' : '▸'} {r.note || 'صفقة'}</button>
-                            : (r.note ?? '—')}
-                        {q && matchedItems(r).map((it, j) => (
-                          <div key={j} className="muted" style={{ fontSize: 12, marginTop: 2 }}>
-                            {it.name}: <span className="num">{it.qty}</span> × <span className="num">{EGP(it.price)}</span>
-                          </div>
-                        ))}
-                      </td>
-                      <td className="num deb pl-deb" data-l="عليه">{r.debit ? EGP(r.debit) : ''}</td>
-                      <td className="num cre pl-cre" data-l="له">{r.credit ? EGP(r.credit) : ''}</td>
-                      {showBalance && (
-                        <td className="num pl-bal" style={{ fontWeight: 700, color: r.balance <= 0 ? 'var(--credit)' : 'var(--debit)' }}>
-                          {EGP(Math.abs(r.balance))} {r.balance <= 0 ? 'له' : 'عليه'}
-                        </td>
-                      )}
-                    </tr>
-                    {open && (
-                      <tr className="pi-row">
-                        <td colSpan={cols} style={{ background: '#eef4fa', borderInlineStart: '3px solid var(--blue, #2c5a86)', padding: '8px 16px' }}>
-                          <table className="pi-items" style={{ width: '100%', color: 'var(--ink)' }}>
-                            <thead><tr><th>الكمية</th><th>الصنف</th><th>السعر</th><th>الإجمالي</th></tr></thead>
-                            <tbody>
-                              {r.invoiceItems!.map((it, j) => (
-                                <tr key={j}>
-                                  <td className="num" data-l="عدد">{it.qty}</td>
-                                  <td>{it.name}</td>
-                                  <td className="num" data-l="سعر">{EGP(it.price)}</td>
-                                  <td className="num">{EGP(it.qty * it.price)}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-              {(visibleRows.length > 0 || opening !== 0) && (
-                <>
-                  <tr className="mf-total">
-                    <td colSpan={2} style={{ fontWeight: 800 }}>
-                      الإجمالي{opening !== 0 ? ' (شامل الرصيد الافتتاحي)' : ''}
-                    </td>
-                    <td className="num deb">{EGP(totalDebit)}</td>
-                    <td className="num cre">{EGP(totalCredit)}</td>
-                    {showBalance && (
-                      <td className="num" style={{ fontWeight: 800, color: net <= 0 ? 'var(--credit)' : 'var(--debit)' }}>
-                        {EGP(Math.abs(net))} {net <= 0 ? 'له' : 'عليه'}
-                      </td>
-                    )}
-                  </tr>
-                  {!showBalance && (
-                    <tr className="mf-total">
-                      <td colSpan={cols} style={{ fontWeight: 800, textAlign: 'left' }}>
-                        الصافي:{' '}
-                        <span className="num" style={{ color: net <= 0 ? 'var(--credit)' : 'var(--debit)' }}>
-                          {EGP(Math.abs(net))} {net <= 0 ? 'له' : 'عليه'}
-                        </span>
-                      </td>
-                    </tr>
-                  )}
-                </>
-              )}
-              {visibleRows.length === 0 && opening === 0 && (
-                <tr><td colSpan={cols} className="empty">{q ? 'لا توجد فواتير بهذا الصنف في الفترة المحددة' : 'لا توجد حركات'}</td></tr>
-              )}
-            </tbody>
-          </table>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
+          {visibleRows.map((r) => (
+            <LedgerDayBox key={r.id} r={r} q={q}
+              onOpenInvoice={() => setOpenInvoice({ uid: r.invoiceUid!, docNo: r.docNo ?? null })} />
+          ))}
+          {visibleRows.length === 0 && <div className="empty">{emptyText}</div>}
         </div>
 
-        <div className="page-title num" style={{ marginTop: 14, textAlign: 'left' }}>
-          الرصيد الجاري: {EGP(Math.abs(data.balance))} {data.balance <= 0 ? 'له' : 'عليه'}
-        </div>
+        {(periodRows.length > 0 || opening !== 0) && (
+          <div style={{ borderTop: '2px solid var(--ink)', marginTop: 16, paddingTop: 12 }}>
+            <LedgerTotals goods={goodsTotal} receipts={receiptsTotal} total={grandTotal} opening={opening} />
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
+      )}
     </>
+  );
+}
+
+/** الإجماليات تحت الكشف — اللي على العميل بالأحمر واللي ليه بالأخضر. */
+function LedgerTotals({ goods, receipts, total, opening }: { goods: number; receipts: number; total: number; opening: number }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '6px 24px', fontSize: 14 }}>
+      <div>إجمالي البضاعة</div><div className="num" style={{ color: 'var(--debit)' }}>{EGP(goods)}</div>
+      <div>إجمالي الاستلامات</div><div className="num" style={{ color: 'var(--credit)' }}>{EGP(receipts)}</div>
+      <div style={{ fontWeight: 800, fontSize: 16 }}>
+        الإجمالي
+        {opening !== 0 && (
+          <span className="muted" style={{ fontWeight: 500, fontSize: 12, marginInlineStart: 6 }}>
+            (شامل الرصيد الافتتاحي {EGP(Math.abs(opening))} {opening <= 0 ? 'له' : 'عليه'})
+          </span>
+        )}
+      </div>
+      <div className="num" style={{ fontWeight: 800, fontSize: 16, color: total <= 0 ? 'var(--credit)' : 'var(--debit)' }}>
+        {EGP(Math.abs(total))} {total <= 0 ? 'له' : 'عليه'}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * بحث باسم الصنف بقايمة منسدلة: بتقترح أقرب أصناف للمكتوب (wordMatchScore — بالكلمات
+ * ومن غير ترتيب)، والكتابة نفسها بتفلتر الكشف حتى من غير اختيار.
+ */
+function ItemSearchBox({ value, onChange, names, full = false }: {
+  value: string; onChange: (v: string) => void; names: string[];
+  /** في شكل الموبايل الخانة بتاخد سطر لوحدها بعرض البار */
+  full?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(0);
+  const suggestions = value.trim()
+    ? names
+        .map((name) => ({ name, score: wordMatchScore(name, value) }))
+        .filter((s): s is { name: string; score: number } => s.score != null)
+        .sort((a, b) => b.score - a.score || a.name.length - b.name.length)
+        .slice(0, 8)
+        .map((s) => s.name)
+    : names.slice().sort((a, b) => a.localeCompare(b, 'ar')).slice(0, 8);
+
+  const pick = (name: string) => { onChange(name); setOpen(false); };
+
+  return (
+    <div style={{ position: 'relative', minWidth: 200, ...(full ? { flex: '1 1 100%' } : {}) }}>
+      <input
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); setHi(0); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={(e) => {
+          if (!open || !suggestions.length) return;
+          if (e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(h + 1, suggestions.length - 1)); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
+          else if (e.key === 'Enter') { e.preventDefault(); pick(suggestions[hi]); }
+          else if (e.key === 'Escape') setOpen(false);
+        }}
+        placeholder="بحث باسم الصنف…"
+        aria-label="بحث باسم الصنف"
+        style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 13 }}
+      />
+      {open && suggestions.length > 0 && (
+        <ul role="listbox" style={{
+          position: 'absolute', top: '100%', insetInlineStart: 0, insetInlineEnd: 0, zIndex: 30, margin: '4px 0 0', padding: 4,
+          listStyle: 'none', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10,
+          boxShadow: 'var(--shadow)', maxHeight: 280, overflowY: 'auto',
+        }}>
+          {suggestions.map((name, i) => (
+            <li key={name} role="option" aria-selected={i === hi}
+              onMouseDown={(e) => { e.preventDefault(); pick(name); }}
+              onMouseEnter={() => setHi(i)}
+              style={{ padding: '9px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 13, background: i === hi ? 'var(--line-soft)' : undefined }}>
+              {name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ألوان صناديق الكشف: الاستلامات بالدهبي، والفاتورة اللي اتشحنت من عندنا (عليها بند
+// ناولون) بالرمادي. باقي الفواتير والحركات بالشكل المحايد (البيج).
+const BOX_THEME = {
+  receipt: { frame: '#b98a2e', head: '#f6ead2' },
+  shipped: { frame: '#5a6b73', head: '#e4e7e9', dark: '#3d4a51', row: '#f1f3f4' },
+};
+const NAWLON_RE = /نا?ولون/;
+
+/** صندوق حركة في كشف حساب العميل: الفاتورة بأصنافها وبنود شحنها، أو استلام، أو حركة تانية. */
+function LedgerDayBox({ r, q, onOpenInvoice, variant = 'pc' }: {
+  r: LedgerRow; q: string; onOpenInvoice: () => void; variant?: LedgerView;
+}) {
+  const shipped = !!r.shipped;
+  const isReceipt = (r.credit || 0) > 0 && !r.invoiceUid && !r.dealUid;
+  const allItems = r.invoiceItems ?? [];
+  const items = q ? allItems.filter((it) => wordMatchScore(it.name, q) != null) : allItems;
+  const charges = q ? [] : (r.invoiceCharges ?? []);
+  const amount = r.debit ? EGP(r.debit) : `− ${EGP(r.credit || 0)}`;
+  const theme = shipped ? BOX_THEME.shipped : isReceipt ? BOX_THEME.receipt : null;
+  const ship = BOX_THEME.shipped;
+
+  // الاستلام سطر واحد: التاريخ ← الملاحظة في النص (لو فيه) ← المبلغ.
+  // «استلام نقدية» هو البيان الافتراضي من الباك، مش ملاحظة، فمابيظهرش.
+  if (isReceipt) {
+    const note = r.note && r.note !== 'استلام نقدية' ? r.note : '';
+    return (
+      <div style={{ border: `2.5px solid ${theme!.frame}`, borderRadius: variant === 'mobile' ? 14 : 12, overflow: 'hidden', breakInside: 'avoid' }}>
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto', alignItems: 'center', gap: 12,
+          background: theme!.head, padding: '10px 14px', fontWeight: 700,
+        }}>
+          <span style={{ fontSize: 15 }}>{fmtDate(r.date)}</span>
+          <span className="muted" style={{ fontWeight: 500, textAlign: 'center' }}>{note}</span>
+          <span className="num">{amount}</span>
+        </div>
+      </div>
+    );
+  }
+
+  const badge = shipped && (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: ship.dark, color: '#fff', borderRadius: 999, padding: '3px 10px', fontSize: 12 }}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M14 17V6H3v11h2" /><path d="M14 9h4l3 4v4h-2" /><circle cx="7" cy="17" r="2" /><circle cx="17" cy="17" r="2" /><path d="M9 17h6" />
+      </svg>
+      شحن من عندنا
+    </span>
+  );
+
+  // كارت الموبايل: كل صنف سطر «الاسم · الكمية × السعر» والإجمالي على الشمال،
+  // وتحت «إجمالي الفاتورة».
+  if (variant === 'mobile') {
+    return (
+      <div style={{
+        background: 'var(--surface)', border: theme ? `2.5px solid ${theme.frame}` : '1px solid var(--line)',
+        borderRadius: 14, overflow: 'hidden',
+      }}>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6,
+          background: theme ? theme.head : 'var(--line-soft)', padding: '12px 16px',
+        }}>
+          <b>{fmtDate(r.date)}</b>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {badge}
+            <span className="muted" style={{ fontSize: 12 }}>{r.note || r.type}</span>
+          </span>
+        </div>
+        <div style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {items.map((it, j) => (
+            <div key={`i${j}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+              <span>{it.name} <span className="muted num">· {it.qty} × {EGP(it.price)}</span></span>
+              <span className="num">{EGP(it.qty * it.price)}</span>
+            </div>
+          ))}
+          {charges.map((c, j) => {
+            const nawlon = NAWLON_RE.test(c.name);
+            return (
+              <div key={`c${j}`} style={{
+                display: 'flex', justifyContent: 'space-between', fontWeight: 700,
+                ...(nawlon ? { borderTop: `1px dashed ${ship.frame}`, background: ship.row, margin: '0 -16px', padding: '8px 16px', color: ship.dark } : {}),
+              }}>
+                <span>{c.name}</span><span className="num">{EGP(c.amount)}</span>
+              </div>
+            );
+          })}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--line-soft)', paddingTop: 8, fontWeight: 700 }}>
+            <span>{r.invoiceUid || r.dealUid ? 'إجمالي الفاتورة' : 'المبلغ'}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="num">{amount}</span>
+              {r.invoiceUid && <button className="btn btn-ghost btn-sm no-print" onClick={onOpenInvoice}>عرض الفاتورة</button>}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      border: theme ? `2.5px solid ${theme.frame}` : '1px solid var(--line)',
+      borderRadius: 12, overflow: 'hidden', breakInside: 'avoid',
+    }}>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8,
+        background: theme ? theme.head : 'var(--line-soft)', padding: '10px 14px', fontWeight: 700,
+      }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 15 }}>{fmtDate(r.date)}</span>
+          <span className="muted" style={{ fontWeight: 500 }}>· {r.note || r.type}</span>
+          {badge}
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span className="num">{amount}</span>
+          {r.invoiceUid && (
+            <button className="btn btn-ghost btn-sm no-print" onClick={onOpenInvoice}>عرض الفاتورة</button>
+          )}
+        </span>
+      </div>
+
+      {(items.length > 0 || charges.length > 0) && (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <tbody>
+            {items.map((it, j) => (
+              <tr key={`i${j}`} style={j ? { borderTop: '1px solid var(--line-soft)' } : undefined}>
+                <td style={{ padding: '7px 14px', fontWeight: 700 }}>{it.name}</td>
+                <td className="num" style={{ padding: '7px 8px' }}>{it.qty}</td>
+                <td className="num" style={{ padding: '7px 8px' }}>× {EGP(it.price)}</td>
+                <td className="num" style={{ padding: '7px 14px', textAlign: 'left' }}>{EGP(it.qty * it.price)}</td>
+              </tr>
+            ))}
+            {charges.map((c, j) => {
+              const nawlon = NAWLON_RE.test(c.name);
+              return (
+                <tr key={`c${j}`} style={nawlon
+                  ? { borderTop: `1px dashed ${ship.frame}`, background: ship.row }
+                  : { borderTop: '1px solid var(--line-soft)' }}>
+                  <td colSpan={3} style={{ padding: '7px 14px', fontWeight: 700, color: nawlon ? ship.dark : undefined }}>{c.name}</td>
+                  <td className="num" style={{ padding: '7px 14px', textAlign: 'left' }}>{EGP(c.amount)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
   );
 }
 
