@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ListParams } from '@/lib/list-params';
 import { auditApi } from './api';
 
-export function useAudit(params: ListParams & { user?: string } = {}) {
+export function useAudit(params: ListParams & { user?: string; action?: string; review?: string } = {}) {
   return useQuery({
     queryKey: ['audit', params],
     queryFn: () => auditApi.list(params),
@@ -25,6 +25,17 @@ export function useUndoAudit() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['audit'] });
       qc.invalidateQueries({ queryKey: ['audit-trash'] });
+    },
+  });
+}
+
+export function useReviewAudit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, approve }: { id: string; approve: boolean }) =>
+      approve ? auditApi.approve(id) : auditApi.reject(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['audit'] });
     },
   });
 }

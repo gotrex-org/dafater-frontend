@@ -7,7 +7,7 @@ import { PageTitle, DataTable, SearchInput, type Column } from '@/components/com
 import { useAuth } from '@/lib/auth';
 import { useUsers } from '../../users/hooks';
 import { RecordOpener, canOpenRecord } from '../../records/RecordOpener';
-import { useAudit, useUndoAudit } from '../hooks';
+import { useAudit, useUndoAudit, useReviewAudit } from '../hooks';
 import { colorFor, rowTint } from '@/lib/userColor';
 import type { AuditLog } from '../dtos';
 
@@ -41,6 +41,32 @@ const ENTITY: Record<string, string> = {
 };
 const ACTION: Record<string, string> = { CREATE: 'إضافة', UPDATE: 'تعديل', DELETE: 'حذف' };
 const ACTION_CLASS: Record<string, string> = { CREATE: 'cre', UPDATE: '', DELETE: 'deb' };
+
+// مراجعة المدير لتعديلات المستخدمين.
+const REVIEW_LABEL: Record<string, { text: string; className: string }> = {
+  PENDING:  { text: 'بانتظار المراجعة', className: '' },
+  APPROVED: { text: 'تمت الموافقة', className: 'cre' },
+  REJECTED: { text: 'مرفوض', className: 'deb' },
+};
+// نفس قائمة REVERTIBLE في الـ backend: الرفض فيها يُرجع القيم القديمة تلقائياً.
+const REVERTIBLE_ENTITIES = new Set([
+  'parties', 'manifests', 'products', 'driver-trips', 'treasury',
+  'warehouses', 'expense-categories', 'drivers', 'orders',
+]);
+const rejectConfirm = (entity: string) =>
+  REVERTIBLE_ENTITIES.has(entity)
+    ? 'سيتم رفض التعديل وإرجاع القيم القديمة. متأكد؟'
+    : 'سيتم تسجيل الرفض فقط، ولن تُرجَع القيم القديمة تلقائياً في هذا القسم. افتح السجل الأصلي وصحّحه يدوياً. متأكد؟';
+
+function ReviewBadge({ status }: { status?: string | null }) {
+  const r = status ? REVIEW_LABEL[status] : null;
+  if (!r) return null;
+  return (
+    <span className={`pill ${r.className}`} style={{ background: 'var(--line-soft)', fontSize: 11, whiteSpace: 'nowrap' }}>
+      {r.text}
+    </span>
+  );
+}
 
 const UNDO_LABEL: Record<string, { btn: string; confirm: string }> = {
   CREATE: { btn: 'إلغاء الإضافة', confirm: 'سيتم حذف هذا العنصر نهائياً. متأكد؟' },
@@ -178,8 +204,19 @@ function InvoiceItemsDetail({ snap }: { snap: any }) {
 function AuditDetail({ log, onBack, onOpen }: { log: AuditLog; onBack: () => void; onOpen: (entity: string, uid: string) => void }) {
   const { user } = useAuth();
   const undoAudit = useUndoAudit();
+  const reviewAudit = useReviewAudit();
   const [confirm, setConfirm] = useState(false);
   const [undoErr, setUndoErr] = useState('');
+
+  const canReview = user?.admin && log.action === 'UPDATE' && log.reviewStatus === 'PENDING';
+  const handleReview = (approve: boolean) => {
+    if (!approve && !window.confirm(rejectConfirm(log.entity))) return;
+    setUndoErr('');
+    reviewAudit.mutate({ id: log.id, approve }, {
+      onSuccess: onBack,
+      onError: (e: any) => setUndoErr(e.message ?? 'حدث خطأ'),
+    });
+  };
 
   const canUndo = user?.admin && (
     (log.action === 'CREATE' && !!log.entityUid) ||
@@ -229,6 +266,18 @@ function AuditDetail({ log, onBack, onOpen }: { log: AuditLog; onBack: () => voi
             </button>
           )
         )}
+        {canReview && (
+          <>
+            <button className="btn btn-sm" style={{ background: 'var(--credit)', color: '#fff' }}
+              onClick={() => handleReview(true)} disabled={reviewAudit.isPending}>
+              ✓ موافقة
+            </button>
+            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--debit)' }}
+              onClick={() => handleReview(false)} disabled={reviewAudit.isPending}>
+              ✗ رفض
+            </button>
+          </>
+        )}
       </div>
       {undoErr && <div className="err-text" style={{ margin: '8px 0' }}>{undoErr}</div>}
       <div className="card" style={{ padding: 20, maxWidth: 680 }}>
@@ -249,6 +298,20 @@ function AuditDetail({ log, onBack, onOpen }: { log: AuditLog; onBack: () => voi
 
           <span className="muted" style={{ fontSize: 13 }}>القسم</span>
           <span>{ENTITY[log.entity] ?? log.entity}</span>
+
+          {log.reviewStatus && (
+            <>
+              <span className="muted" style={{ fontSize: 13 }}>المراجعة</span>
+              <span>
+                <ReviewBadge status={log.reviewStatus} />
+                {log.reviewedBy && (
+                  <span className="muted" style={{ fontSize: 12, marginInlineStart: 8 }}>
+                    {log.reviewedBy}{log.reviewedAt ? ` — ${fmtDateTime(log.reviewedAt)}` : ''}
+                  </span>
+                )}
+              </span>
+            </>
+          )}
 
           {log.summary && (
             <>
@@ -303,6 +366,10 @@ export function AuditView() {
   const [search, setSearch] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  // «كل النشاط» = السجل الكامل كما هو؛ «التعديلات» = حركات UPDATE فقط.
+  const [tab, setTab] = useState<'all' | 'updates'>('all');
+  // فلتر المراجعة داخل تاب التعديلات ('' = الكل).
+  const [review, setReview] = useState('');
   const [selected, setSelected] = useState<AuditLog | null>(null);
   const [target, setTarget] = useState<{ entity: string; uid: string } | null>(null);
   const [restoreErr, setRestoreErr] = useState('');
@@ -314,8 +381,14 @@ export function AuditView() {
     search: search || undefined,
     from: from || undefined,
     to: to || undefined,
+    action: tab === 'updates' ? 'UPDATE' : undefined,
+    review: tab === 'updates' && review ? review : undefined,
   });
+  // عدد التعديلات المنتظرة يظهر على التاب.
+  const { data: pendingData } = useAudit({ page: 1, pageSize: 1, action: 'UPDATE', review: 'PENDING' });
+  const pendingCount = pendingData?.meta?.total ?? 0;
   const undoAudit = useUndoAudit();
+  const reviewAudit = useReviewAudit();
 
   if (target) return <RecordOpener entity={target.entity} uid={target.uid} onClose={() => setTarget(null)} />;
   if (selected) return <AuditDetail log={selected} onBack={() => setSelected(null)} onOpen={(entity, uid) => setTarget({ entity, uid })} />;
@@ -326,6 +399,15 @@ export function AuditView() {
     if (!window.confirm(`استرجاع "${label}"؟`)) return;
     setRestoreErr('');
     undoAudit.mutate(log.id, {
+      onError: (err: any) => setRestoreErr(err.message ?? 'حدث خطأ'),
+    });
+  };
+
+  const handleReview = (log: AuditLog, approve: boolean, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!approve && !window.confirm(rejectConfirm(log.entity))) return;
+    setRestoreErr('');
+    reviewAudit.mutate({ id: log.id, approve }, {
       onError: (err: any) => setRestoreErr(err.message ?? 'حدث خطأ'),
     });
   };
@@ -349,9 +431,24 @@ export function AuditView() {
       ),
       className: 'muted',
     },
+    ...(tab === 'updates' ? [{ header: 'المراجعة', cell: (r: AuditLog) => <ReviewBadge status={r.reviewStatus} /> }] : []),
     {
       header: '',
       cell: (r) => {
+        if (authUser?.admin && r.action === 'UPDATE' && r.reviewStatus === 'PENDING') {
+          return (
+            <span style={{ display: 'inline-flex', gap: 4 }}>
+              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--credit)', fontWeight: 700, whiteSpace: 'nowrap' }}
+                onClick={(e) => handleReview(r, true, e)} disabled={reviewAudit.isPending}>
+                ✓ موافقة
+              </button>
+              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--debit)', fontWeight: 700, whiteSpace: 'nowrap' }}
+                onClick={(e) => handleReview(r, false, e)} disabled={reviewAudit.isPending}>
+                ✗ رفض
+              </button>
+            </span>
+          );
+        }
         if (!authUser?.admin || r.action !== 'DELETE' || !r.snapshot) return null;
         return (
           <button
@@ -370,6 +467,19 @@ export function AuditView() {
   return (
     <>
       <PageTitle title="سجل النشاط" subtitle="كل التعديلات في النظام — من قام بها ومتى" />
+      <nav className="tabs" style={{ marginBottom: 16 }}>
+        <button className={tab === 'all' ? 'active' : ''} onClick={() => { setTab('all'); setPage(1); }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer' }}>كل النشاط</button>
+        <button className={tab === 'updates' ? 'active' : ''} onClick={() => { setTab('updates'); setPage(1); }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+          التعديلات
+          {pendingCount > 0 && (
+            <span className="pill deb" style={{ marginInlineStart: 6, background: 'rgba(178,58,46,.1)', fontSize: 11 }}>
+              {pendingCount}
+            </span>
+          )}
+        </button>
+      </nav>
       {restoreErr && (
         <div className="err-text" style={{ marginBottom: 12, padding: '10px 14px', background: 'rgba(178,58,46,.08)', borderRadius: 8 }}>
           {restoreErr}
@@ -380,6 +490,14 @@ export function AuditView() {
           <option value="">كل المستخدمين</option>
           {users?.data.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
         </select>
+        {tab === 'updates' && (
+          <select value={review} onChange={(e) => { setReview(e.target.value); setPage(1); }} style={{ padding: '10px 12px', border: '1.5px solid var(--line)', borderRadius: 10 }}>
+            <option value="">كل التعديلات</option>
+            <option value="PENDING">بانتظار المراجعة</option>
+            <option value="APPROVED">تمت الموافقة</option>
+            <option value="REJECTED">مرفوض</option>
+          </select>
+        )}
         <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="بحث بالتفاصيل أو المستخدم…" />
         <span className="muted" style={{ fontSize: 12 }}>من</span>
         <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} style={{ padding: '7px 10px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 13 }} />

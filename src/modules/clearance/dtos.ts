@@ -11,7 +11,10 @@ export interface ClearanceMovement {
   groupId?: string | null;
   activity?: import('@/lib/activity').Activity;
   note?: string | null;
-  party?: { id: string; name: string } | null;
+  /** الحساب المرحّل عليه: المكتب، أو المورد المربوط به */
+  party?: { id: string; name: string; role?: string } | null;
+  /** المكتب صاحب الحركة (لو مترحّلة على المورد، party = المورد) */
+  clearanceAgent?: { id: string; name: string } | null;
   manifest?: {
     id: string; no: string; date: string;
     clientName: string; vehicleLabel?: string | null; vehicleNo?: string | null; trailerNo?: string | null;
@@ -29,6 +32,8 @@ export interface ClearanceAgentSummary {
   phone?: string | null;
   note?: string | null;
   hidden?: boolean;
+  /** المورد المربوط: الحركات الجديدة تُرحَّل على حسابه */
+  supplier?: { id: string; name: string } | null;
   expenses: number;  // اترحّل له في الفترة
   paid: number;      // اتدفع له في الفترة
   due: number;       // المستحق له كله (موجب = له عندنا)
@@ -45,10 +50,11 @@ export interface ClearanceAgent {
   phone?: string | null;
   note?: string | null;
   hidden?: boolean;
+  supplier?: { id: string; name: string } | null;
 }
 
 export interface ClearanceStatement {
-  agent: { id: string; name: string; phone?: string | null; note?: string | null; hidden?: boolean };
+  agent: { id: string; name: string; phone?: string | null; note?: string | null; hidden?: boolean; supplier?: { id: string; name: string } | null };
   /** المستحق للمكتب قبل بداية الفترة */
   opening: number;
   rows: ClearanceMovement[];
@@ -80,6 +86,8 @@ export interface ClearanceAgentDto {
   name: string;
   phone?: string;
   note?: string;
+  /** uid المورد — سلسلة فاضية = فك الربط */
+  supplierId?: string;
 }
 
 export interface ClearanceQuery {

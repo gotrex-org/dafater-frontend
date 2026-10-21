@@ -7,6 +7,7 @@ import { PageTitle, Field, Combobox, MoneyInput, Spinner } from '@/components/co
 import { useManifests } from '../../manifests/hooks';
 import { useAllTreasury } from '../../treasury/hooks';
 import { useAllExpenseCategories } from '../../expense-categories/hooks';
+import { useAllParties } from '../../parties/hooks';
 import {
   useAddCashClearance, useAddClearanceExpense, useArchiveClearanceAgent, useClearance, useClearanceAgents,
   useClearanceStatement, useCreateClearanceAgent, useDeleteClearanceAgent, useDeleteClearanceMovement,
@@ -144,6 +145,7 @@ export function ClearanceView() {
                   <td>
                     <b style={{ cursor: 'pointer' }} onClick={() => setStatementId(a.id)}>{a.name}</b>
                     {a.hidden && <span className="pill" style={{ marginInlineStart: 6, fontSize: 11 }}>مؤرشف</span>}
+                    {a.supplier && <div className="muted" style={{ fontSize: 11.5 }}>يُرحَّل على حساب المورد {a.supplier.name}</div>}
                   </td>
                   <td className="muted">{a.phone || '—'}</td>
                   <td className="muted" style={{ maxWidth: 220 }}>{a.note || ''}</td>
@@ -156,7 +158,7 @@ export function ClearanceView() {
                     <button className="btn btn-ghost btn-sm" onClick={() => setStatementId(a.id)}>كشف حساب</button>
                     {can('clearance.offices') && (
                       <>
-                        <button className="btn btn-ghost btn-sm" onClick={() => setEditingOffice({ id: a.id, name: a.name, phone: a.phone, note: a.note })}>تعديل</button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setEditingOffice({ id: a.id, name: a.name, phone: a.phone, note: a.note, supplier: a.supplier })}>تعديل</button>
                         <button
                           className="btn btn-ghost btn-sm"
                           disabled={archive.isPending}
@@ -258,7 +260,12 @@ function MovementsTable({ rows, showOffice, withBalance, onEdit }: {
               </td>
               <td className="num">{vehicleOf(m.manifest)}</td>
               <td>{m.manifest ? `كشف ${m.manifest.no}` : <span className="muted">—</span>}</td>
-              {showOffice && <td>{m.party?.name ?? '—'}</td>}
+              {showOffice && (
+                <td>
+                  {(m.clearanceAgent ?? m.party)?.name ?? '—'}
+                  {m.party?.role === 'SUPPLIER' && <div className="muted" style={{ fontSize: 11.5 }}>حساب المورد {m.party.name}</div>}
+                </td>
+              )}
               <td className="muted">
                 {m.treasury
                   ? `${m.treasury.name}${m.treasury.currency === 'USD' && m.cashOut ? ` (${m.cashOut} $${m.exchangeRate ? ` × ${m.exchangeRate}` : ''})` : ''}`
@@ -333,7 +340,10 @@ function OfficeStatement({ id, onBack, agents }: { id: string; onBack: () => voi
         <>
           <PageTitle
             title={`كشف حساب مكتب التخليص: ${data.agent.name}${archived ? ' (مؤرشف)' : ''}`}
-            subtitle={[data.agent.phone, data.agent.note].filter(Boolean).join(' · ') || undefined}
+            subtitle={[
+              data.agent.phone, data.agent.note,
+              data.agent.supplier && `مربوط بالمورد ${data.agent.supplier.name}: التخليص والدفعات تُرحَّل على حسابه`,
+            ].filter(Boolean).join(' · ') || undefined}
           />
           <div className="grid stats" style={{ marginBottom: 12 }}>
             <div className="card stat"><div className="lbl">رصيد أول الفترة</div><div className="val num" style={{ fontSize: 19 }}>{EGP(data.opening)}</div></div>
@@ -389,13 +399,15 @@ function OfficeForm({ agent, onDone, bare }: { agent?: ClearanceAgent; onDone: (
   const [name, setName] = useState(agent?.name ?? '');
   const [phone, setPhone] = useState(agent?.phone ?? '');
   const [note, setNote] = useState(agent?.note ?? '');
+  const [supplierId, setSupplierId] = useState(agent?.supplier?.id ?? '');
+  const { data: suppliers } = useAllParties('SUPPLIER');
   const [err, setErr] = useState('');
   const pending = create.isPending || update.isPending;
 
   const save = () => {
     setErr('');
     if (!name.trim()) return setErr('اكتب اسم المكتب');
-    const dto = { name: name.trim(), phone: phone.trim(), note: note.trim() };
+    const dto = { name: name.trim(), phone: phone.trim(), note: note.trim(), supplierId };
     const opts = { onSuccess: onDone, onError: (e: any) => setErr(e?.message || 'تعذر الحفظ') };
     if (agent) update.mutate({ id: agent.id, dto }, opts);
     else create.mutate(dto, opts);
@@ -406,7 +418,21 @@ function OfficeForm({ agent, onDone, bare }: { agent?: ClearanceAgent; onDone: (
       <div className="form-grid">
         <Field label="اسم المكتب"><input value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
         <Field label="التليفون"><input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" /></Field>
+        <Field label="المورد المرتبط (اختياري)">
+          <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} style={selectStyle}>
+            <option value="">— بدون مورد —</option>
+            {agent?.supplier && !(suppliers?.data ?? []).some((s) => s.id === agent.supplier!.id) && (
+              <option value={agent.supplier.id}>{agent.supplier.name}</option>
+            )}
+            {(suppliers?.data ?? []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </Field>
         <Field label="ملاحظات" full><input value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+      </div>
+      <div className="muted" style={{ fontSize: 12.5, padding: '0 16px 10px' }}>
+        {supplierId
+          ? 'التخليص والدفعات الجديدة تُرحَّل على حساب المورد مباشرة. الحركات السابقة تبقى على حساب المكتب.'
+          : 'بدون مورد: الحركات تُرحَّل على حساب المكتب.'}
       </div>
       {err && <div className="err-text" style={{ padding: '0 16px' }}>{err}</div>}
       <div className="toolbar" style={{ padding: '0 16px 14px', marginBottom: 0 }}>
@@ -438,7 +464,9 @@ function MovementForm({ mode, agents, fixedAgentId, editing, onDone }: {
   // الدفعة في التخليص النقدي هي الرجل التانية — منها الخزنة وسعر الصرف.
   const payLeg = mode === 'pay' ? m : mode === 'cash' ? editing?.sibling : undefined;
 
-  const [agentId, setAgentId] = useState(fixedAgentId ?? m?.party?.id ?? agents[0]?.id ?? '');
+  // المكتب صاحب الحركة — لو مترحّلة على مورد، party هو المورد والمكتب في clearanceAgent.
+  const office = m ? m.clearanceAgent ?? m.party : undefined;
+  const [agentId, setAgentId] = useState(fixedAgentId ?? office?.id ?? agents[0]?.id ?? '');
   const [date, setDate] = useState(m?.date?.slice(0, 10) ?? todayISO());
   const [manifestId, setManifestId] = useState(m?.manifest?.id ?? '');
   const [treasuryId, setTreasuryId] = useState(payLeg?.treasury?.id ?? '');
@@ -467,7 +495,11 @@ function MovementForm({ mode, agents, fixedAgentId, editing, onDone }: {
     options.unshift({ id: m.manifest.id, name: `كشف ${m.manifest.no} — ${vehicleOf(m.manifest)} — ${m.manifest.clientName}` });
   }
   // المكتب الحالي للحركة يفضل في القائمة حتى لو مؤرشف
-  const agentOptions = m?.party && !agents.some((a) => a.id === m.party!.id) ? [{ id: m.party.id, name: m.party.name }, ...agents] : agents;
+  const agentOptions = office && !agents.some((a) => a.id === office.id) ? [{ id: office.id, name: office.name }, ...agents] : agents;
+  // جديد: يُرحَّل على المورد المربوط حالياً. تعديل: يبقى على حسابه إلا لو تغيّر المكتب.
+  const supplier = editing && agentId === office?.id
+    ? (m?.party?.role === 'SUPPLIER' ? m.party : null)
+    : agents.find((a) => a.id === agentId)?.supplier ?? null;
 
   const pending = addVehicle.isPending || addCash.isPending || pay.isPending || update.isPending;
   const opts = { onSuccess: onDone, onError: (e: any) => setErr(e?.message || 'تعذر الحفظ') };
@@ -509,6 +541,11 @@ function MovementForm({ mode, agents, fixedAgentId, editing, onDone }: {
   return (
     <div>
       <div className="muted" style={{ fontSize: 12.5, padding: '12px 16px 0' }}>{hint}</div>
+      {supplier && (
+        <div style={{ fontSize: 12.5, padding: '4px 16px 0', fontWeight: 700 }}>
+          المكتب مربوط بالمورد {supplier.name}، والحركة تُرحَّل على حساب المورد.
+        </div>
+      )}
       <div className="form-grid">
         {!fixedAgentId && (
           <Field label="مكتب التخليص">
