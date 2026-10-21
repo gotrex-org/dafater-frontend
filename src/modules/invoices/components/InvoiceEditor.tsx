@@ -109,7 +109,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   const [warehouseId, setWarehouseId] = useState(d?.warehouseId ?? invoice?.warehouse?.id ?? '');
   const { data: stock } = useWarehouseStock(warehouseId || undefined);
   const stockByProduct = new Map((stock ?? []).map((r) => [r.productId, r]));
-  const { data: lastPrices } = useLastPrices(kind);
+  const { data: lastPrices, isFetched: lastPricesReady } = useLastPrices(kind);
   const lastPriceByProduct = new Map((lastPrices ?? []).map((r) => [r.productId, r]));
   // في فاتورة بيع بنعرض كمان سعر الشراء — الثابت على الصنف، وإلا آخر سعر اشترينا بيه.
   const { data: lastBuyPrices } = useLastPrices('PURCHASE');
@@ -164,16 +164,17 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
 
   // prefill pinned lines for new invoices — which items pin depends on the invoice kind
   useEffect(() => {
-    if (prefilled || !products) return;
+    // البيع بيستنى آخر الأسعار، لأنها بتسبق السعر الثابت.
+    if (prefilled || !products || (kind === 'SALE' && !lastPricesReady)) return;
     const pinned = products.data.filter((p) => (kind === 'SALE' ? p.pinSale : p.pinPurchase));
-    // الأصناف المثبّتة بتظهر كسطور جاهزة بعد سطر صنف فاضي. بنود الشحن (نولون/تحميل/
-    // شفتنة) بقت جدول منفصل تحت، مش أصناف.
+    // الأصناف المثبّتة بتظهر كسطور جاهزة بعد سطر صنف فاضي، بنفس السعر التلقائي بتاع
+    // اختيار الصنف. بنود الشحن (نولون/تحميل/شفتنة) بقت جدول منفصل تحت، مش أصناف.
     if (pinned.length) setLines([blankLine(), ...pinned.map((p) => {
-      const fixed = kind === 'SALE' ? p.salePrice : p.purchasePrice;
-      return { ...blankLine(), productId: p.id, price: fixed && fixed > 0 ? String(fixed) : '' };
+      const auto = autoPriceFor(p.id);
+      return { ...blankLine(), productId: p.id, price: auto !== undefined ? String(auto) : '' };
     })]);
     setPrefilled(true);
-  }, [products, prefilled, kind]);
+  }, [products, prefilled, kind, lastPricesReady]);
 
   const isDirty = isEdit || !!partyId || lines.some((l) => !!(l.productId || l.qty || l.price)) || charges.some((c) => !!(c.chargeTypeId && c.price));
   useNavigationGuard(isDirty);
@@ -225,14 +226,14 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
     const v = kind === 'SALE' ? p?.salePrice : p?.purchasePrice;
     return v && v > 0 ? v : undefined;
   };
-  // السعر اللي بيتحط تلقائيًا أول ما تختار الصنف: السعر الثابت المحفوظ عليه، ولو
-  // الصنف لسه متسعّرش يقع على آخر سعر اتعامل بيه في فاتورة من نفس النوع — فأول
-  // فاتورة للصنف هي اللي بتسعّره، واللي بعدها بتفتح على نفس السعر.
+  // السعر اللي بيتحط تلقائيًا أول ما تختار الصنف:
+  //   بيع  → آخر سعر بيع للصنف، ولو ماتباعش قبل كده يقع على السعر الثابت.
+  //   شراء → السعر الثابت، ولو مفيش يقع على آخر سعر شراء.
   const autoPriceFor = (id: string) => {
     const fixed = fixedPriceOf(products?.data.find((p) => p.id === id));
-    if (fixed !== undefined) return fixed;
-    const last = lastPriceByProduct.get(id)?.price;
-    return last && last > 0 ? last : undefined;
+    const lastRaw = lastPriceByProduct.get(id)?.price;
+    const last = lastRaw && lastRaw > 0 ? lastRaw : undefined;
+    return kind === 'SALE' ? last ?? fixed : fixed ?? last;
   };
   // اختيار صنف في سطر: بيملا السعر تلقائيًا — وقابل للتعديل بعدها عادي،
   // والتعديل على الفاتورة مبيغيّرش السعر الثابت المحفوظ على الصنف.
