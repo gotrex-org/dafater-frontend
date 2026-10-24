@@ -108,6 +108,10 @@ export function ShippingCosts({ manifestId }: { manifestId: string }) {
           <div key={c.name} style={{ display: 'contents' }}>{row(c.name, c.total, { minus: true })}</div>
         ))}
         {!s.vehicleExpenses.byCategory.length && row(<>التحميل والشفتنة <span className="muted">(لا توجد مصاريف مربوطة)</span></>, 0)}
+        {s.freight.total !== 0 && row(
+          <>الناولون <span className="muted">(فاتورة {s.freight.lines[0]?.invoiceNo}{s.freight.shared ? '، نصيب العربية' : ''})</span></>,
+          s.freight.total, { minus: true },
+        )}
       </div>
 
       {/* تفاصيل الجمرك والتخليص */}

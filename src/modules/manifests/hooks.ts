@@ -22,11 +22,18 @@ export function useManifest(id: string | null) {
   });
 }
 
+/** ربط الكشف بفاتورة أو فكّه بيغيّر ربح العربية وتقرير الشحن — فالتقارير والفواتير بتتحدّث معاه. */
+function invalidateLinked(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: manifestKeys.all });
+  qc.invalidateQueries({ queryKey: ['invoices'] });
+  qc.invalidateQueries({ queryKey: ['reports'] });
+}
+
 export function useCreateManifest() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (dto: CreateManifestDto) => manifestsApi.create(dto),
-    onSuccess: () => qc.invalidateQueries({ queryKey: manifestKeys.all }),
+    onSuccess: () => invalidateLinked(qc),
   });
 }
 
@@ -34,7 +41,7 @@ export function useUpdateManifest() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, dto }: { id: string; dto: UpdateManifestDto }) => manifestsApi.update(id, dto),
-    onSuccess: () => qc.invalidateQueries({ queryKey: manifestKeys.all }),
+    onSuccess: () => invalidateLinked(qc),
   });
 }
 

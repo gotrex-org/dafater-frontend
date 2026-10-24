@@ -27,6 +27,7 @@ export interface ShippingSummary {
     rent: number; customs: number;
     loading: NameTotal[]; loadingTotal: number;   // التحميل والشفتنة (وأي بند مربوط بعربية)
     driverExtras: number;                          // عطلة وفرق وزن وشاي السائقين
+    invoiceFreight: number;                        // ناولون فواتير البيع المربوطة بعربية
     purchaseCharges: NameTotal[]; purchaseChargesTotal: number;
   };
   vehicleCostsTotal: number;
@@ -51,12 +52,12 @@ export interface VehicleProfitRow {
   id: string; no: string; date: string; clientName: string;
   vehicleNo?: string | null; trailerNo?: string | null; vehicleLabel?: string | null; driverName?: string | null;
   invoice: { id: string; no: string } | null;
-  revenue: number; rent: number; customs: number; loading: number; costs: number; profit: number;
+  revenue: number; rent: number; customs: number; loading: number; freight: number; costs: number; profit: number;
   unassigned: number;
 }
 export interface VehicleProfits {
   vehicles: VehicleProfitRow[];
-  totals: { revenue: number; rent: number; customs: number; loading: number; costs: number; profit: number };
+  totals: { revenue: number; rent: number; customs: number; loading: number; freight: number; costs: number; profit: number };
 }
 export interface InactiveClient { id: string; name: string; lastActivity: string | null; daysSince: number | null; }
 export interface ProfitLoss { revenue: number; cost: number; goodsExpenses: number; grossProfit: number; expenses: number; warehouseExpenses: number; settlement: number; netProfit: number; }

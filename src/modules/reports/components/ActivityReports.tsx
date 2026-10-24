@@ -124,6 +124,7 @@ export function ShippingReportSection({ r }: { r: R }) {
                 {data.vehicleCosts.loading.map((c) => <tr key={`l-${c.name}`}><td>{c.name}</td><td /><td className="num deb">{EGP(c.total)}</td></tr>)}
                 {!data.vehicleCosts.loading.length && <tr><td>التحميل والشفتنة</td><td /><td className="num deb">{EGP(0)}</td></tr>}
                 {data.vehicleCosts.driverExtras > 0 && <tr><td>عطلة وفرق وزن وشاي السائقين</td><td /><td className="num deb">{EGP(data.vehicleCosts.driverExtras)}</td></tr>}
+                {data.vehicleCosts.invoiceFreight !== 0 && <tr><td>الناولون <span className="muted">(فواتير بيع مربوطة بعربية)</span></td><td /><td className="num deb">{EGP(data.vehicleCosts.invoiceFreight)}</td></tr>}
                 {data.vehicleCosts.purchaseCharges.map((c) => <tr key={`p-${c.name}`}><td>{c.name} <span className="muted">(على فواتير الشراء)</span></td><td /><td className="num deb">{EGP(c.total)}</td></tr>)}
 
                 <tr><td colSpan={3} style={{ fontWeight: 800 }}>مصاريف المخزن</td></tr>
@@ -161,7 +162,7 @@ export function VehicleProfitsSection({ r }: { r: R }) {
               <tr>
                 <th>الكشف</th><th>التاريخ</th><th>رقم الرأس / المقطورة</th><th>العميل</th>
                 <th className="num">بنود الشحن</th><th className="num">الإيجار</th><th className="num">الجمرك والتخليص</th>
-                <th className="num">تحميل وشفتنة</th><th className="num">الربح</th>
+                <th className="num">تحميل وشفتنة</th><th className="num">ناولون</th><th className="num">الربح</th>
               </tr>
             </thead>
             <tbody>
@@ -178,10 +179,11 @@ export function VehicleProfitsSection({ r }: { r: R }) {
                   <td className="num">{EGP(v.rent)}</td>
                   <td className="num">{EGP(v.customs)}</td>
                   <td className="num">{EGP(v.loading)}</td>
+                  <td className="num">{EGP(v.freight)}</td>
                   <td className={`num ${v.profit >= 0 ? 'cre' : 'deb'}`}><b>{EGP(v.profit)}</b></td>
                 </tr>
               ))}
-              {!data.vehicles.length && <tr><td colSpan={9} className="empty">لا توجد عربيات في الفترة</td></tr>}
+              {!data.vehicles.length && <tr><td colSpan={10} className="empty">لا توجد عربيات في الفترة</td></tr>}
               {!!data.vehicles.length && (
                 <tr className="mf-total">
                   <td colSpan={4}><b>الإجمالي ({data.vehicles.length} عربية)</b></td>
@@ -189,6 +191,7 @@ export function VehicleProfitsSection({ r }: { r: R }) {
                   <td className="num"><b>{EGP(data.totals.rent)}</b></td>
                   <td className="num"><b>{EGP(data.totals.customs)}</b></td>
                   <td className="num"><b>{EGP(data.totals.loading)}</b></td>
+                  <td className="num"><b>{EGP(data.totals.freight)}</b></td>
                   <td className="num"><b>{EGP(data.totals.profit)}</b></td>
                 </tr>
               )}

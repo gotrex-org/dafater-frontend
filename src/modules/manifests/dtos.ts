@@ -108,6 +108,8 @@ export interface VehicleShipping {
     lines: { id: string; date: string; category: string | null; amount: number; note: string | null; treasury: string | null }[];
     byCategory: { name: string; total: number }[];
   };
+  /** ناولون فاتورة البيع المربوطة — نصيب العربية منه (shared = الفاتورة على أكثر من عربية) */
+  freight: { total: number; shared: boolean; lines: { id: string; date: string; amount: number; note: string | null; treasury: string | null; invoiceNo: string }[] };
   otherExpenses: { total: number; lines: { id: string; date: string; category: string | null; amount: number; note: string | null; treasury: string | null }[] };
   costs: number;
   profit: number;
