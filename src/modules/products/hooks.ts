@@ -68,3 +68,12 @@ export function useDeleteProduct() {
     onSuccess: () => qc.invalidateQueries({ queryKey: productKeys.all }),
   });
 }
+
+/** الدمج بيغيّر فواتير ومخزون وقوائم أسعار — فبنبطّل الكاش كله. */
+export function useMergeProducts() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ targetId, sourceIds }: { targetId: string; sourceIds: string[] }) => productsApi.merge(targetId, sourceIds),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}

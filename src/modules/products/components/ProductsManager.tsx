@@ -5,7 +5,7 @@ import { EGP } from '@/lib/format';
 import { SearchInput, MoneyInput } from '@/components/common';
 import { useAuth } from '@/lib/auth';
 import { useWindows } from '@/lib/windows';
-import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from '../hooks';
+import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, useMergeProducts } from '../hooks';
 import { useDeleteWithRelated } from '@/lib/deleteWithRelated';
 import { ProductMovements } from '../../inventory/components/ProductMovements';
 import type { Product } from '../dtos';
@@ -88,12 +88,98 @@ function ProductRow({ product, canManage }: { product: Product; canManage: boole
   );
 }
 
+/**
+ * دمج أصناف: صنف أساسي يفضل، والأصناف المختارة تنتقل كل فواتيرها ومرتجعاتها وحركات
+ * مخزنها وقوائم أسعارها له، ثم تُحذف. الرصيد مشتق، فيتجمع تلقائياً.
+ */
+function MergePanel({ products, onDone }: { products: Product[]; onDone: () => void }) {
+  const merge = useMergeProducts();
+  const [targetId, setTargetId] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState('');
+  const [err, setErr] = useState('');
+
+  const target = products.find((p) => p.id === targetId);
+  const candidates = products
+    .filter((p) => p.id !== targetId && (!search.trim() || p.name.includes(search.trim())))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+  const sources = products.filter((p) => selected.has(p.id) && p.id !== targetId);
+
+  const toggle = (id: string) => setSelected((s) => {
+    const n = new Set(s);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+
+  const run = () => {
+    setErr('');
+    if (!target) return setErr('اختر الصنف الأساسي');
+    if (!sources.length) return setErr('اختر الأصناف المراد دمجها');
+    const names = sources.map((p) => `«${p.name}»`).join('، ');
+    if (!confirm(`دمج ${names} في «${target.name}»؟\nكل الفواتير والحركات تنتقل إلى «${target.name}»، والأصناف المدموجة تُحذف. لا يمكن التراجع.`)) return;
+    merge.mutate(
+      { targetId: target.id, sourceIds: sources.map((p) => p.id) },
+      { onSuccess: onDone, onError: (e: any) => setErr(e.message) },
+    );
+  };
+
+  return (
+    <div className="card" style={{ padding: 14, marginBottom: 12 }}>
+      <b>دمج أصناف</b>
+      <div className="muted" style={{ fontSize: 12.5, margin: '4px 0 10px' }}>
+        الأصناف المختارة تُدمج في الصنف الأساسي: الفواتير والمرتجعات وحركات المخزن وقوائم الأسعار تنتقل له، ثم تُحذف الأصناف المدموجة.
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
+        <span style={{ fontWeight: 600 }}>الصنف الأساسي (الاسم الذي يبقى):</span>
+        <select value={targetId} onChange={(e) => setTargetId(e.target.value)} style={{ minWidth: 200 }}>
+          <option value="">— اختر —</option>
+          {[...products].sort((a, b) => a.name.localeCompare(b.name, 'ar')).map((p) => (
+            <option key={p.id} value={p.id}>{p.name}{p.service ? ' (خدمة)' : ''}</option>
+          ))}
+        </select>
+      </div>
+      {target && (
+        <>
+          <SearchInput value={search} onChange={setSearch} placeholder="بحث عن الأصناف المراد دمجها…" />
+          <div style={{ maxHeight: 260, overflow: 'auto', border: '1px solid var(--line)', borderRadius: 8, padding: 8, margin: '8px 0' }}>
+            {candidates.map((p) => {
+              const mismatch = !!p.service !== !!target.service;
+              return (
+                <label key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '3px 0', cursor: mismatch ? 'not-allowed' : 'pointer', opacity: mismatch ? 0.5 : 1 }}>
+                  <input type="checkbox" disabled={mismatch} checked={selected.has(p.id)} onChange={() => toggle(p.id)} />
+                  {p.name}
+                  {p.unit && <span className="muted" style={{ fontSize: 12 }}>({p.unit})</span>}
+                  {p.service && <span className="pill" style={{ fontSize: 11 }}>خدمة</span>}
+                </label>
+              );
+            })}
+            {!candidates.length && <div className="muted">لا يوجد</div>}
+          </div>
+          {sources.length > 0 && (
+            <div style={{ fontSize: 13, marginBottom: 8 }}>
+              سيتم دمج {sources.length} صنف في <b>«{target.name}»</b>: {sources.map((p) => p.name).join('، ')}
+            </div>
+          )}
+        </>
+      )}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button className="btn btn-primary btn-sm" onClick={run} disabled={merge.isPending || !target || !sources.length}>
+          {merge.isPending ? '…' : 'دمج'}
+        </button>
+        <button className="btn btn-ghost btn-sm" onClick={onDone}>إلغاء</button>
+        {err && <span className="err-text">{err}</span>}
+      </div>
+    </div>
+  );
+}
+
 export function ProductsManager() {
   const { user, can } = useAuth();
   const [search, setSearch] = useState('');
   const { data, isLoading } = useProducts({ all: true });
   const createProduct = useCreateProduct();
   const [adding, setAdding] = useState(false);
+  const [merging, setMerging] = useState(false);
   const [pName, setPName] = useState('');
   const [pUnit, setPUnit] = useState('');
   const [pService, setPService] = useState(false);
@@ -125,7 +211,12 @@ export function ProductsManager() {
         {!adding && canManage && (
           <button className="btn btn-ghost btn-sm" onClick={() => setAdding(true)}>+ صنف جديد</button>
         )}
+        {canManage && all.length > 1 && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setMerging((m) => !m)}>{merging ? '× إلغاء الدمج' : 'دمج أصناف'}</button>
+        )}
       </div>
+
+      {merging && <MergePanel products={all} onDone={() => setMerging(false)} />}
 
       {adding && (
         <div className="card" style={{ padding: 14, marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>

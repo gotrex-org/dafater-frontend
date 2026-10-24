@@ -13,6 +13,9 @@ export const productsApi = {
   lastPrices: (kind: 'SALE' | 'PURCHASE') => api.get<LastPrice[]>(`/products/last-prices?kind=${kind}`),
   create: (dto: CreateProductDto) => api.post<Product>('/products', dto),
   update: (id: string, dto: UpdateProductDto) => api.patch<Product>(`/products/${id}`, dto),
+  /** دمج أصناف في صنف أساسي — حركات المدموجة تنتقل له ثم تُحذف */
+  merge: (targetId: string, sourceIds: string[]) =>
+    api.post<{ merged: string[] }>('/products/merge', { targetId, sourceIds }),
   remove: (id: string, opts: { cascade?: boolean; archive?: boolean } = {}) =>
     api.del<void>(`/products/${id}${opts.archive ? '?archive=true' : opts.cascade ? '?cascade=true' : ''}`, { quietConflict: true }),
 };
