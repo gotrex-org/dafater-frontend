@@ -224,6 +224,12 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const sheetRef = useRef<HTMLDivElement>(null);
   const sectionActive = useSectionActive();
+  // آخر سطر اتفتح (فاتورة/صفقة/حركة) — بيتعلّم عليه، ولما نرجع من الفاتورة الكشف
+  // بيسكرول لحد عنده بدل ما يرجع لأول الصفحة.
+  const [lastOpenedId, setLastOpenedId] = useState<string | null>(null);
+  const scrollToRow = useRef<string | null>(null);
+  // أول ما الكشف يتفتح بيقف على أحدث حركة (آخر سطر) مش أقدمها.
+  const scrolledToLatest = useRef(false);
 
   // الكشف بياخد عرض الشاشة كله وبيلغي حشو أسفل الصفحة (المحجوز لشريط النوافذ
   // المصغّرة) — الصفحة نفسها هي اللي بتسكرول، والجدول بيتفرد على طوله.
@@ -234,6 +240,26 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
     document.body.classList.add('ledger-fit');
     return () => document.body.classList.remove('ledger-fit');
   }, [sectionActive]);
+
+  useEffect(() => {
+    if (invoiceUid || dealUid || !data || !sheetRef.current) return;
+    const sheet = sheetRef.current;
+    let target: Element | null = null;
+    let block: ScrollLogicalPosition = 'center';
+    if (scrollToRow.current) {
+      target = sheet.querySelector(`tr[data-row-id="${CSS.escape(scrollToRow.current)}"]`);
+      scrollToRow.current = null;
+    } else if (!scrolledToLatest.current) {
+      const rows = sheet.querySelectorAll('tr[data-row-id]');
+      target = rows[rows.length - 1] ?? null;
+      block = 'end';
+    }
+    scrolledToLatest.current = true;
+    if (!target) return;
+    const el = target;
+    const raf = requestAnimationFrame(() => el.scrollIntoView({ block }));
+    return () => cancelAnimationFrame(raf);
+  }, [invoiceUid, dealUid, data]);
 
   if (invoiceUid) return <InvoiceDetailById uid={invoiceUid} onBack={() => setInvoiceUid(null)} />;
   if (dealUid) return <DealDetailById uid={dealUid} onBack={() => setDealUid(null)} />;
@@ -367,8 +393,10 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                     <Fragment key={r.id}>
                       <tr
                         className="lg-row"
+                        data-row-id={r.id}
                         style={{
                           cursor: 'pointer',
+                          ...(r.id === lastOpenedId ? { outline: '2px solid var(--gold, #b98a2e)', outlineOffset: -2 } : {}),
                           // أحمر = العربية لسه في الطريق · أخضر = كمّلت الرحلة
                           ...(r.manifestDate && r.manifestArrived === false
                             ? { background: 'rgba(178,58,46,0.10)', borderRight: '3px solid var(--debit)' }
@@ -377,6 +405,8 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                             : {}),
                         }}
                         onClick={() => {
+                          setLastOpenedId(r.id);
+                          if (r.invoiceUid || r.dealUid) scrollToRow.current = r.id;
                           if (r.invoiceUid) { setInvoiceUid(r.invoiceUid); return; }
                           if (r.dealUid) { setDealUid(r.dealUid); return; }
                           setSel(r);
