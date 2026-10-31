@@ -56,8 +56,13 @@ export function TradeReportSection({ r }: { r: R }) {
             </table>
           </div>
           <div className="muted" style={{ fontSize: 12.5, marginTop: 8 }}>
-            {data.salesCount} فاتورة بيع · مشتريات الفترة {money(data.purchases)} · المرتبات محسوب منها نصيب التجارة فقط
+            {data.salesCount} فاتورة بيع (شامل البيع الخارجي) · مشتريات الفترة {money(data.purchases)} · المرتبات محسوب منها نصيب التجارة فقط
           </div>
+          {!!data.dealsWithoutRate && (
+            <div className="deb" style={{ fontSize: 12.5, marginTop: 4, fontWeight: 700 }}>
+              {data.dealsWithoutRate} عملية بيع خارجي من مورد بالدولار بدون سعر صرف، وهي خارج التقرير. أضف سعر الصرف من تعديل العملية.
+            </div>
+          )}
 
           {!!data.products.length && (
             <>

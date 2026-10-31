@@ -11,7 +11,11 @@ import { useDeals, useDeal, useDeleteDeal } from '../hooks';
 import type { Deal } from '../dtos';
 import { DealEditor } from './DealEditor';
 
-const sellTotal = (d: Deal) => (d.items || []).reduce((s, it) => s + it.qty * it.price, 0);
+// الإجمالي على العميل: الأصناف + بنود الشحن + ناولون العملية القديم
+const sellTotal = (d: Deal) =>
+  (d.items || []).reduce((s, it) => s + it.qty * it.price, 0)
+  + (d.charges || []).reduce((s, c) => s + c.qty * c.price, 0)
+  + (d.nawlon || 0);
 
 export function DealDetailById({ uid, onBack }: { uid: string; onBack: () => void }) {
   const { data, isLoading } = useDeal(uid);
@@ -28,8 +32,17 @@ function DealDetail({ deal, onBack, onEdit, onDelete }: {
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
-  const { can } = useAuth();
   const sheetRef = useRef<HTMLDivElement>(null);
+  // زي الفاتورة: الأصناف، وتحتها بنود الشحن (جدول البنود + الأصناف الخدمية القديمة
+  // + ناولون العملية القديم).
+  const goods = deal.items.filter((it) => !it.product?.service);
+  const services = [
+    ...(deal.charges ?? []).map((c) => ({ id: c.id, name: c.chargeType?.name ?? '—', qty: c.qty, price: c.price })),
+    ...deal.items.filter((it) => !!it.product?.service).map((it, i) => ({ id: it.id ?? `svc-${i}`, name: it.product?.name ?? '—', qty: it.qty, price: it.price })),
+    ...((deal.nawlon ?? 0) > 0 ? [{ id: 'nawlon', name: 'ناولون', qty: 1, price: deal.nawlon }] : []),
+  ];
+  const goodsTotal = goods.reduce((s, it) => s + it.qty * it.price, 0);
+  const servicesTotal = services.reduce((s, it) => s + it.qty * it.price, 0);
 
 
   return (
@@ -43,42 +56,78 @@ function DealDetail({ deal, onBack, onEdit, onDelete }: {
       </div>
 
 
-      <div ref={sheetRef} className="card print-sheet">
+      {/* نفس ورقة الفاتورة: الأصناف بإجماليها، وتحتها بنود الشحن بإجماليها. */}
+      <div ref={sheetRef} className="card print-sheet inv-sheet">
         <div className="mf-logo">أبو شامة</div>
         <div className="mf-head">
-          <h2>{deal.client?.name ?? '—'}</h2>
+          <h2 style={{ fontSize: 18 }}>{deal.client?.name ?? '—'}</h2>
           <div className="mf-meta">
-            <span>فاتورة رقم <b>{deal.no}</b></span>
+            <span>فاتورة بيع رقم <b>{deal.no}</b></span>
             <span>التاريخ: <b>{fmtDate(deal.date)}</b></span>
           </div>
         </div>
+
+        {(!!deal.manifests?.length || !!deal.driverTrip) && (
+          <div className="mf-grid no-print">
+            {deal.manifests?.map((m) => (
+              <div key={m.id} className="mf-info"><span className="mf-info-l">كشف عربية</span><span className="mf-info-v">رقم {m.no}{m.vehicleNo ? ` — ${m.vehicleNo}` : ''}{m.driverName ? ` — ${m.driverName}` : ''}</span></div>
+            ))}
+            {deal.driverTrip && (
+              <div className="mf-info"><span className="mf-info-l">رحلة السائق</span><span className="mf-info-v">{deal.driverTrip.driverName} — {fmtDate(deal.driverTrip.departureDate)}</span></div>
+            )}
+          </div>
+        )}
+
         <div className="tbl-wrap">
           <table>
-            <thead><tr><th style={{ width: 90 }}>الكمية</th><th>الصنف</th><th style={{ width: 110 }}>السعر</th><th style={{ width: 120 }}>الإجمالي</th></tr></thead>
+            <thead>
+              <tr>
+                <th>الصنف</th>
+                <th className="num" style={{ width: 80 }}>العدد</th>
+                <th className="num" style={{ width: 104 }}>السعر (ج.م)</th>
+                <th className="num" style={{ width: 116 }}>الاجمالي</th>
+              </tr>
+            </thead>
             <tbody>
-              {deal.items.map((it, i) => (
+              {goods.map((it, i) => (
                 <tr key={it.id ?? i}>
-                  <td className="num">{it.qty}</td>
                   <td>{it.product?.name ?? '—'}</td>
+                  <td className="num">{it.qty}</td>
                   <td className="num">{EGP(it.price)}</td>
                   <td className="num">{EGP(it.qty * it.price)}</td>
                 </tr>
               ))}
+              {services.length > 0 && (
+                <tr className="inv-sub">
+                  <td colSpan={3}>إجمالي الأصناف</td>
+                  <td className="num">{EGP(goodsTotal)}</td>
+                </tr>
+              )}
+              {services.map((it) => (
+                <tr key={it.id} className="inv-bnd">
+                  <td><span className="inv-bnd-tag">شحن</span>{it.name}</td>
+                  <td className="num">{it.qty}</td>
+                  <td className="num">{EGP(it.price)}</td>
+                  <td className="num">{EGP(it.qty * it.price)}</td>
+                </tr>
+              ))}
+              {services.length > 0 && (
+                <tr className="inv-sub">
+                  <td colSpan={3}>إجمالي بنود الشحن</td>
+                  <td className="num">{EGP(servicesTotal)}</td>
+                </tr>
+              )}
+              {goods.length === 0 && services.length === 0 && (
+                <tr><td colSpan={4} className="empty">لا توجد أصناف في هذه العملية</td></tr>
+              )}
             </tbody>
           </table>
         </div>
-        <div style={{ marginTop: 12, textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-          <div className="page-title num">إجمالي البضاعة: {EGP(sellTotal(deal))}</div>
-          {(deal.nawlon ?? 0) > 0 && (
-            <div className="num" style={{ fontSize: 14 }}>ناولون: {EGP(deal.nawlon)}</div>
-          )}
-          {(deal.nawlon ?? 0) > 0 && (
-            <div className="page-title num" style={{ borderTop: '1px solid var(--line)', paddingTop: 4 }}>
-              الإجمالي الكلي: {EGP(sellTotal(deal) + (deal.nawlon ?? 0))}
-            </div>
-          )}
-          {!(deal.nawlon ?? 0) && <div className="page-title num">الإجمالي: {EGP(sellTotal(deal))}</div>}
+
+        <div className="inv-totals">
+          <div className="r end"><span>الإجمالي</span><span className="num">{EGP(goodsTotal + servicesTotal)}</span></div>
         </div>
+
         <div className="mf-grow" />
         <div style={{ borderTop: '1px solid var(--line)', marginTop: 8 }} />
       </div>

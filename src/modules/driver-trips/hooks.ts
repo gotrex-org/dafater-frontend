@@ -40,11 +40,12 @@ export function useTripInvoiceCandidates(id: string, enabled: boolean) {
 export function useLinkTripInvoice() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, invoiceId }: { id: string; invoiceId: string | null }) =>
-      driverTripsApi.linkInvoice(id, invoiceId),
+    mutationFn: ({ id, invoiceId, type }: { id: string; invoiceId: string | null; type?: 'invoice' | 'deal' }) =>
+      driverTripsApi.linkInvoice(id, invoiceId, type),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [KEY] });
       qc.invalidateQueries({ queryKey: ['reports'] });
+      qc.invalidateQueries({ queryKey: ['deals'] });
     },
   });
 }

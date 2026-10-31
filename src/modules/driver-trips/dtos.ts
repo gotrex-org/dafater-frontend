@@ -39,7 +39,10 @@ export interface DriverTrip {
   trulyClosed?: boolean;
   // الفاتورة المربوطة — اللي الناولون اتحصّل فيها من العميل
   invoiceId?: number | null;
-  invoice?: { uid: string; no: string; date: string; items: { qty: number; price: number; product: { name: string } | null }[]; charges?: { qty: number; price: number; chargeType: { name: string } | null }[] } | null;
+  // الـ API بيرجّع uid الطرف المربوط في id (uid-serializer)
+  invoice?: { id: string; no: string; date: string; items: { qty: number; price: number; product: { name: string } | null }[]; charges?: { qty: number; price: number; chargeType: { name: string } | null }[] } | null;
+  /** أو عملية بيع خارجي مربوطة بدل الفاتورة */
+  deal?: { id: string; no: string; date: string; charges?: { qty: number; price: number; chargeType: { name: string } | null }[] } | null;
   collectedFreight?: number;
   collectedLines?: TripInvoiceLine[];
   tripProfit?: number;
@@ -91,9 +94,12 @@ export interface TripInvoiceLine { name: string; total: number; }
 
 /** فاتورة بيع ينفع الرحلة تتربط بيها */
 export interface TripInvoiceCandidate {
-  uid: string;
+  /** uid المستند (الـ API بيرجّعه في id) */
+  id: string;
   no: string;
   date: string;
+  /** فاتورة بيع أو عملية بيع خارجي */
+  type?: 'invoice' | 'deal';
   items: { qty: number; price: number; product: { name: string } | null }[];
   charges?: { qty: number; price: number; chargeType: { name: string } | null }[];
 }

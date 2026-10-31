@@ -13,8 +13,8 @@ export const driverTripsApi = {
   patchWeightDiff: (id: string, amount: number) => api.patch<DriverTrip>(`/driver-trips/${id}/weight-diff`, { amount }),
   invoiceCandidates: (id: string) =>
     http.get<TripInvoiceCandidate[]>(`/driver-trips/${id}/invoice-candidates`).then((r) => r.data),
-  /** سلسلة فاضية = فك الربط */
-  linkInvoice: (id: string, invoiceId: string | null) =>
-    api.patch<DriverTrip>(`/driver-trips/${id}/invoice`, { invoiceId: invoiceId ?? '' }),
+  /** سلسلة فاضية = فك الربط. type = 'deal' يربط بعملية بيع خارجي بدل الفاتورة. */
+  linkInvoice: (id: string, invoiceId: string | null, type: 'invoice' | 'deal' = 'invoice') =>
+    api.patch<DriverTrip>(`/driver-trips/${id}/invoice`, type === 'deal' ? { dealId: invoiceId ?? '' } : { invoiceId: invoiceId ?? '' }),
   remove: (id: string) => api.del<void>(`/driver-trips/${id}`),
 };

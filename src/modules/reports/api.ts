@@ -43,6 +43,8 @@ export interface TradeReport {
   cost: number; grossProfit: number;
   expenses: number; expensesByCategory: NameTotal[];
   netProfit: number; purchases: number;
+  /** عمليات بيع خارجي من مورد بالدولار بدون سعر صرف — خارج التقرير */
+  dealsWithoutRate?: number;
   products: { id: string; name: string; unit: string | null; qty: number; sales: number; cost: number; profit: number }[];
   inventory: { total: number; warehouses: { id: string; name: string; value: number }[] };
 }
@@ -52,6 +54,7 @@ export interface VehicleProfitRow {
   id: string; no: string; date: string; clientName: string;
   vehicleNo?: string | null; trailerNo?: string | null; vehicleLabel?: string | null; driverName?: string | null;
   invoice: { id: string; no: string } | null;
+  deal?: { id: string; no: string } | null;
   revenue: number; rent: number; customs: number; loading: number; freight: number; costs: number; profit: number;
   unassigned: number;
 }

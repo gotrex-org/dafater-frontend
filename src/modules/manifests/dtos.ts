@@ -40,12 +40,16 @@ export interface Manifest {
   clearance?: { total: number; agent?: { uid: string; name: string } | null } | null;
   /** الفاتورة المرتبطة — وجودها هو اللي بيخلّي العربية تظهر كتاب جوّه الفاتورة */
   invoice?: { id: string; no: string; date: string; kind: 'SALE' | 'PURCHASE' } | null;
+  /** أو عملية بيع خارجي مربوطة بدل الفاتورة */
+  deal?: { id: string; no: string; date: string } | null;
 }
 
 export interface CreateManifestDto {
   no?: string;
   /** ربط العربية بفاتورة — بتخلّيها تظهر كتاب جوّه الفاتورة (ManifestTabs) */
   invoiceId?: string;
+  /** أو ربط بعملية بيع خارجي */
+  dealId?: string;
   date: string;
   clientName: string;
   vehicleNo?: string;
@@ -66,6 +70,8 @@ export interface UpdateManifestDto {
   clientName?: string;
   /** ربط بفاتورة — سلسلة فاضية معناها فك الربط */
   invoiceId?: string;
+  /** ربط بعملية بيع خارجي — سلسلة فاضية معناها فك الربط */
+  dealId?: string;
   vehicleNo?: string;
   vehicleLabel?: string;
   trailerNo?: string;
@@ -97,6 +103,8 @@ export interface VehicleShipping {
   driverName?: string | null;
   vehicleSource: VehicleSource;
   invoice: { id: string; no: string; kind: 'SALE' | 'PURCHASE'; currency: 'EGP' | 'USD' } | null;
+  /** عملية البيع الخارجي المربوطة بدل الفاتورة */
+  deal: { id: string; no: string } | null;
   revenue: VehicleRevenueLine[];
   revenueTotal: number;
   /** بنود على فاتورة العربية غير مربوطة بعربية (الفاتورة عليها أكثر من عربية) */

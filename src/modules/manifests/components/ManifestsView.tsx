@@ -117,7 +117,9 @@ export function ManifestsView() {
       // من غير ما ياخد لون الصف (الصف محجوز لحالة الرحلة).
       cell: (m) => m.invoice
         ? <span className="pill">فاتورة {m.invoice.no}</span>
-        : <span className="pill mt-status st-unlinked">مستقل</span>,
+        : m.deal
+          ? <span className="pill">بيع خارجي {m.deal.no}</span>
+          : <span className="pill mt-status st-unlinked">مستقل</span>,
     },
     {
       header: 'الحالة',

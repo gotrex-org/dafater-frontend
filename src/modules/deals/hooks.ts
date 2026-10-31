@@ -28,6 +28,8 @@ export function useCreateDeal() {
       qc.invalidateQueries({ queryKey: ['parties'] });
       qc.invalidateQueries({ queryKey: ['treasury'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['reports'] });
+      qc.invalidateQueries({ queryKey: ['manifests'] });
     },
   });
 }
@@ -41,6 +43,8 @@ export function useUpdateDeal() {
       qc.invalidateQueries({ queryKey: ['parties'] });
       qc.invalidateQueries({ queryKey: ['treasury'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['reports'] });
+      qc.invalidateQueries({ queryKey: ['manifests'] });
     },
   });
 }
@@ -54,6 +58,8 @@ export function useUpdateDealCommission() {
       qc.invalidateQueries({ queryKey: dealKeys.all });
       qc.invalidateQueries({ queryKey: ['parties'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['reports'] });
+      qc.invalidateQueries({ queryKey: ['manifests'] });
     },
   });
 }
@@ -67,6 +73,8 @@ export function useDeleteDeal() {
       qc.invalidateQueries({ queryKey: ['parties'] });
       qc.invalidateQueries({ queryKey: ['treasury'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['reports'] });
+      qc.invalidateQueries({ queryKey: ['manifests'] });
     },
   });
 }

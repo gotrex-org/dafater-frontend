@@ -83,6 +83,11 @@ export function ManifestPrint({ id, onClose }: { id: string; onClose: () => void
             <span className="l">الفاتورة</span>
             <b>{m.invoice.kind === 'SALE' ? 'بيع' : 'شراء'} {m.invoice.no}</b>
           </button>
+        ) : m.deal ? (
+          <button className="chain-chip" onClick={() => setOpenRec({ entity: 'deals', uid: m.deal!.id })}>
+            <span className="l">الفاتورة</span>
+            <b>بيع خارجي {m.deal.no}</b>
+          </button>
         ) : (
           <span className="chain-chip is-empty"><span className="l">الفاتورة</span><b>غير مرتبط</b></span>
         )}

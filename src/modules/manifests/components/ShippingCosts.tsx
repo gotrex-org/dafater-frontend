@@ -66,7 +66,7 @@ export function ShippingCosts({ manifestId }: { manifestId: string }) {
         </div>
       ) : (
         <div className="muted" style={{ fontSize: 12.5, marginBottom: 8 }}>
-          {s.invoice ? 'لا توجد بنود شحن على فاتورة هذه العربية' : 'العربية غير مربوطة بفاتورة، لذلك لا توجد بنود شحن'}
+          {s.invoice || s.deal ? 'لا توجد بنود شحن على فاتورة هذه العربية' : 'العربية غير مربوطة بفاتورة، لذلك لا توجد بنود شحن'}
         </div>
       )}
 
@@ -74,7 +74,7 @@ export function ShippingCosts({ manifestId }: { manifestId: string }) {
       {!!s.unassignedCharges.length && (
         <div style={{ padding: 10, borderRadius: 8, background: 'var(--line-soft)', marginBottom: 10, fontSize: 13 }}>
           <div style={{ fontWeight: 700, marginBottom: 6 }}>
-            بنود على الفاتورة #{s.invoice?.no} غير مربوطة بعربية (الفاتورة عليها أكثر من عربية)
+            بنود على الفاتورة #{s.invoice?.no ?? s.deal?.no} غير مربوطة بعربية (الفاتورة عليها أكثر من عربية)
           </div>
           {s.unassignedCharges.map((c) => (
             <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>

@@ -11,6 +11,7 @@ import { PartyCombobox } from '../../invoices/components/PartyCombobox';
 import { useAllProducts } from '../../products/hooks';
 import { useAllParties } from '../../parties/hooks';
 import { useInvoices } from '../../invoices/hooks';
+import { useDeals } from '../../deals/hooks';
 import { useCreateManifest, useUpdateManifest } from '../hooks';
 import { manifestsApi } from '../api';
 import { DriverTripEditor } from '../../driver-trips/components/DriverTripEditor';
@@ -27,7 +28,8 @@ interface Props {
   /** prefill (e.g. when starting a manifest from a just-saved invoice) */
   // invoiceId بيربط العربية بالفاتورة — من غيره العربية بتفضل كشف مستقل وماتظهرش
   // كتاب في الفاتورة (شوف ManifestTabs).
-  initial?: { clientName?: string; items?: ManifestItem[]; note?: string; invoiceId?: string };
+  // dealId نفس الفكرة لعملية بيع خارجي — الكشف بيتربط بواحد منهم بس.
+  initial?: { clientName?: string; items?: ManifestItem[]; note?: string; invoiceId?: string; dealId?: string };
   /** when editing an existing manifest */
   manifest?: Manifest;
 }
@@ -46,12 +48,23 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
   const [date, setDate] = useState(manifest?.date?.slice(0, 10) ?? todayISO());
   const [clientName, setClientName] = useState(manifest?.clientName ?? initial?.clientName ?? '');
   // الفاتورة المرتبطة — منها بتظهر العربية كتاب جوّه الفاتورة.
-  const [invoiceId, setInvoiceId] = useState(manifest?.invoice?.id ?? initial?.invoiceId ?? '');
+  // المستند المربوط: فاتورة أو عملية بيع خارجي، بقيمة واحدة في الاختيار ('inv:uid' / 'deal:uid').
+  const [link, setLink] = useState(() => {
+    const inv = manifest?.invoice?.id ?? initial?.invoiceId;
+    const deal = manifest?.deal?.id ?? initial?.dealId;
+    return inv ? `inv:${inv}` : deal ? `deal:${deal}` : '';
+  });
+  const invoiceId = link.startsWith('inv:') ? link.slice(4) : '';
+  const dealId = link.startsWith('deal:') ? link.slice(5) : '';
   // فواتير العميل المختار عشان قايمة الاختيار. البحث بيدوّر على اسم الطرف كمان.
   const { data: invoicesPage, isLoading: loadingInvoices } = useInvoices(
     clientName.trim() ? { search: clientName.trim(), pageSize: 200 } : {},
   );
   const clientInvoices = (invoicesPage?.data ?? []).filter((inv) => inv.party?.name === clientName.trim());
+  const { data: dealsPage, isLoading: loadingDeals } = useDeals(
+    clientName.trim() ? { search: clientName.trim(), pageSize: 200 } : {},
+  );
+  const clientDeals = (dealsPage?.data ?? []).filter((d) => d.client?.name === clientName.trim());
 
   // Auto-fill manifest number when clientName is set/changed (create mode only)
   useEffect(() => {
@@ -125,12 +138,12 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
     if (isEdit) {
       // سلسلة فاضية = فك الربط بالفاتورة (الباك بيفهمها كده) — عشان كده بنبعتها دايمًا.
       updateManifest.mutate(
-        { id: manifest!.id, dto: { ...payload, invoiceId } },
+        { id: manifest!.id, dto: { ...payload, invoiceId, dealId } },
         { onSuccess: onCreated, onError: (e: any) => setError(e.message) },
       );
     } else {
       createManifest.mutate(
-        { ...payload, no: no.trim() || undefined, invoiceId: invoiceId || undefined },
+        { ...payload, no: no.trim() || undefined, invoiceId: invoiceId || undefined, dealId: dealId || undefined },
         { onSuccess: (m) => setSaved(m), onError: (e: any) => setError(e.message) },
       );
     }
@@ -219,19 +232,28 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
               ومصاريفها. بيتفعّل بعد اختيار العميل عشان نجيب فواتيره. */}
           <Field label="الفاتورة المرتبطة">
             <select
-              value={invoiceId}
-              onChange={(e) => setInvoiceId(e.target.value)}
-              disabled={!clientName.trim() || loadingInvoices}
+              value={link}
+              onChange={(e) => setLink(e.target.value)}
+              disabled={!clientName.trim() || loadingInvoices || loadingDeals}
               style={{ width: '100%', padding: '11px 12px', border: '1.5px solid var(--line)', borderRadius: 10, background: '#fff' }}
             >
               <option value="">
-                {!clientName.trim() ? 'اختر العميل أولاً' : loadingInvoices ? 'بيحمّل…' : 'كشف مستقل — غير مرتبط بفاتورة'}
+                {!clientName.trim() ? 'اختر العميل أولاً' : loadingInvoices || loadingDeals ? 'جاري التحميل…' : 'كشف مستقل — غير مرتبط بفاتورة'}
               </option>
               {clientInvoices.map((inv) => (
-                <option key={inv.id} value={inv.id}>
+                <option key={inv.id} value={`inv:${inv.id}`}>
                   فاتورة {inv.kind === 'SALE' ? 'بيع' : 'شراء'} رقم {inv.no} — {fmtDate(inv.date)}
                 </option>
               ))}
+              {clientDeals.map((d) => (
+                <option key={d.id} value={`deal:${d.id}`}>
+                  بيع خارجي رقم {d.no} — {fmtDate(d.date)}
+                </option>
+              ))}
+              {/* المستند المربوط يبقى ظاهراً حتى قبل تحميل القائمة */}
+              {dealId && !clientDeals.some((d) => d.id === dealId) && (
+                <option value={link}>بيع خارجي{manifest?.deal?.no ? ` رقم ${manifest.deal.no}` : ''}</option>
+              )}
             </select>
           </Field>
           {/* نوع العربية هو اللي بيحدد السلسلة: من عندنا → كشف سائق وتخليص وجمارك،

@@ -610,10 +610,12 @@ function InvoiceLink({ trip }: { trip: DriverTrip }) {
 
   const collected = trip.collectedFreight ?? 0;
   const profit = trip.tripProfit ?? collected - trip.agreedFreight;
-  const linked = !!trip.invoice;
+  // المستند المربوط: فاتورة بيع أو عملية بيع خارجي
+  const doc = trip.invoice ?? trip.deal ?? null;
+  const linked = !!doc;
 
-  const choose = (invoiceId: string | null) =>
-    link.mutate({ id: trip.id, invoiceId }, { onSuccess: () => setPicking(false) });
+  const choose = (invoiceId: string | null, type: 'invoice' | 'deal' = 'invoice') =>
+    link.mutate({ id: trip.id, invoiceId, type }, { onSuccess: () => setPicking(false) });
 
   return (
     <div className="card" style={{ padding: '12px 16px', marginTop: 14 }}>
@@ -621,7 +623,7 @@ function InvoiceLink({ trip }: { trip: DriverTrip }) {
         <b style={{ flex: 1 }}>الناولون على العميل</b>
         {linked ? (
           <>
-            <span className="pill">فاتورة #{trip.invoice!.no} — {fmtDate(trip.invoice!.date)}</span>
+            <span className="pill">{trip.invoice ? 'فاتورة' : 'بيع خارجي'} #{doc!.no} — {fmtDate(doc!.date)}</span>
             <button className="btn btn-ghost btn-sm" onClick={() => setPicking((p) => !p)}>تغيير</button>
             <button className="btn btn-ghost btn-sm" onClick={() => choose(null)} disabled={link.isPending}>فك الربط</button>
           </>
@@ -651,7 +653,7 @@ function InvoiceLink({ trip }: { trip: DriverTrip }) {
       {picking && (
         <div style={{ marginTop: 10, borderTop: '1.5px solid var(--line)', paddingTop: 10 }}>
           {isLoading ? <Spinner /> : !candidates?.length ? (
-            <div className="empty">لا توجد فواتير بيع تحتوي نولون لـ {trip.clientName} بدون ربط</div>
+            <div className="empty">لا توجد فواتير بيع أو عمليات بيع خارجي تحتوي نولون لـ {trip.clientName} بدون ربط</div>
           ) : (
             <div className="tbl-wrap">
               <table>
@@ -659,15 +661,16 @@ function InvoiceLink({ trip }: { trip: DriverTrip }) {
                 <tbody>
                   {candidates.map((c) => {
                     const total = c.items.reduce((s, it) => s + it.qty * it.price, 0) + (c.charges ?? []).reduce((s, x) => s + x.qty * x.price, 0);
+                    const isCurrent = (c.type === 'deal' ? trip.deal?.id : trip.invoice?.id) === c.id;
                     return (
-                      <tr key={c.uid}>
-                        <td><b>#{c.no}</b></td>
+                      <tr key={`${c.type ?? 'invoice'}:${c.id}`}>
+                        <td><b>{c.type === 'deal' ? 'بيع خارجي ' : ''}#{c.no}</b></td>
                         <td>{fmtDate(c.date)}</td>
                         <td className="muted">{[...(c.charges ?? []).map((x) => x.chargeType?.name ?? '—'), ...c.items.map((it) => it.product?.name ?? '—')].join('، ')}</td>
                         <td className="num">{EGP(total)}</td>
                         <td>
-                          <button className="btn btn-primary btn-sm" onClick={() => choose(c.uid)} disabled={link.isPending}>
-                            {trip.invoice?.uid === c.uid ? 'مربوطة' : 'اربط'}
+                          <button className="btn btn-primary btn-sm" onClick={() => choose(c.id, c.type ?? 'invoice')} disabled={link.isPending}>
+                            {isCurrent ? 'مربوطة' : 'ربط'}
                           </button>
                         </td>
                       </tr>
