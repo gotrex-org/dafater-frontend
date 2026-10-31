@@ -12,7 +12,7 @@ import { useInvoices } from '../../invoices/hooks';
 import { useDeals } from '../../deals/hooks';
 import { DriverTripDetailById } from '../../driver-trips/components/DriverTripDetail';
 import { DriverTripEditor } from '../../driver-trips/components/DriverTripEditor';
-import { useDriverTrip, useDriverTrips, useLinkTripInvoice, useUpdateDriverTrip } from '../../driver-trips/hooks';
+import { useDriverTrips, useUpdateDriverTrip } from '../../driver-trips/hooks';
 import { useDeleteClearanceMovement, useUpdateClearanceMovement } from '../../clearance/hooks';
 import { useUpdateManifest, useVehicleShipping } from '../hooks';
 import { CustomsForm } from './ShippingCosts';
@@ -48,7 +48,6 @@ export function DriverTab({ m, onBack }: { m: Manifest; onBack: () => void }) {
   const [creating, setCreating] = useState(false);
   const { data: trips, isLoading } = useDriverTrips();
   const updateTrip = useUpdateDriverTrip();
-  const linkInvoice = useLinkTripInvoice();
   const [err, setErr] = useState('');
 
   if (m.vehicleSource !== 'OURS') return <OfficeNote what="رحلة في كشف السائقين" />;
@@ -60,12 +59,11 @@ export function DriverTab({ m, onBack }: { m: Manifest; onBack: () => void }) {
     return (
       <DriverTripEditor
         manifest={m}
-        onSaved={(t) => {
-          // الرحلة الجديدة تاخد فاتورة الكشف كمان، عشان الناولون المحصّل يتقرا منها
-          if (m.invoice) linkInvoice.mutate({ id: t.id, invoiceId: m.invoice.id });
-          else if (m.deal) linkInvoice.mutate({ id: t.id, invoiceId: m.deal.id, type: 'deal' });
+        onSaved={() => {
+          // الرحلة الجديدة بتاخد فاتورة الكشف، والكشف بياخد بيانات السائق — من الـ API
           setCreating(false);
           refresh();
+          onBack();
         }}
         onSkip={() => setCreating(false)}
       />
@@ -82,11 +80,8 @@ export function DriverTab({ m, onBack }: { m: Manifest; onBack: () => void }) {
     updateTrip.mutate(
       { id, dto: { manifestId: m.id } },
       {
-        onSuccess: () => {
-          if (m.invoice) linkInvoice.mutate({ id, invoiceId: m.invoice.id });
-          else if (m.deal) linkInvoice.mutate({ id, invoiceId: m.deal.id, type: 'deal' });
-          refresh();
-        },
+        // بعد الربط نرجع لتاب العربية عشان كارت الرحلة يظهر
+        onSuccess: () => { refresh(); onBack(); },
         onError: (e: any) => setErr(e?.message || 'تعذر الربط'),
       },
     );
@@ -107,7 +102,7 @@ export function DriverTab({ m, onBack }: { m: Manifest; onBack: () => void }) {
       ) : (
         <div className="tbl-wrap">
           <table>
-            <thead><tr><th>السائق</th><th>العميل</th><th>العربية</th><th>تاريخ الخروج</th><th className="num">الناولون</th><th /></tr></thead>
+            <thead><tr><th>السائق</th><th>العميل</th><th>العربية</th><th>تاريخ التحميل</th><th>المدة</th><th className="num">الناولون</th><th /></tr></thead>
             <tbody>
               {free.slice(0, 30).map((t) => (
                 <tr key={t.id}>
@@ -115,6 +110,10 @@ export function DriverTab({ m, onBack }: { m: Manifest; onBack: () => void }) {
                   <td>{t.clientName}</td>
                   <td className="muted">{[t.vehicleLabel, t.vehicleNo].filter(Boolean).join(' — ') || '—'}</td>
                   <td className="muted">{fmtDate(t.departureDate)}</td>
+                  <td className="muted">
+                    {Math.max(0, Math.ceil((new Date(t.arrivalDate ?? Date.now()).getTime() - new Date(t.departureDate).getTime()) / 86_400_000))} يوم
+                    {!t.arrivalDate && ' (في الطريق)'}
+                  </td>
                   <td className="num">{EGP(t.agreedFreight)}</td>
                   <td><button className="btn btn-ghost btn-sm" disabled={updateTrip.isPending} onClick={() => link(t.id)}>ربط بهذه العربية</button></td>
                 </tr>
@@ -133,9 +132,6 @@ export function DriverTab({ m, onBack }: { m: Manifest; onBack: () => void }) {
 export function InvoiceTab({ m, onBack }: { m: Manifest; onBack: () => void }) {
   const { can } = useAuth();
   const updateManifest = useUpdateManifest();
-  const linkInvoice = useLinkTripInvoice();
-  const trip = tripOf(m);
-  const { data: tripData } = useDriverTrip(trip?.uid ?? '');
   const client = m.clientName.trim();
   const linked = !!(m.invoice || m.deal);
   const { data: invoicesPage, isLoading: li } = useInvoices(!linked && client ? { search: client, pageSize: 200 } : { pageSize: 1 });
@@ -181,13 +177,8 @@ export function InvoiceTab({ m, onBack }: { m: Manifest; onBack: () => void }) {
     updateManifest.mutate(
       { id: m.id, dto: type === 'deal' ? { dealId: id, invoiceId: '' } : { invoiceId: id, dealId: '' } },
       {
-        onSuccess: () => {
-          // رحلة السائق تتربط بنفس المستند لو لسه مش مربوطة بحاجة
-          setPreview(null);
-          if (trip?.uid && tripData && !tripData.invoice && !tripData.deal) {
-            linkInvoice.mutate({ id: trip.uid, invoiceId: id, type });
-          }
-        },
+        // رحلة السائق بتتربط بنفس المستند من الـ API
+        onSuccess: () => setPreview(null),
         onError: (e: any) => setErr(e?.message || 'تعذر الربط'),
       },
     );

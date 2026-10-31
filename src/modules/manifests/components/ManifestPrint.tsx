@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { EGP, fmtDate } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import { downloadElementAsPdf } from '@/lib/pdf';
@@ -30,7 +30,7 @@ export function ManifestPrint({ id, onClose }: { id: string; onClose: () => void
   return (
     <>
       <LinkTabsNav m={m} tab={tab} onTab={setTab} />
-      {tab === 'vehicle' && <VehicleSheet id={id} onClose={onClose} />}
+      {tab === 'vehicle' && <VehicleSheet id={id} onClose={onClose} onOpenDriver={() => setTab('driver')} />}
       {tab === 'driver' && <DriverTab m={m} onBack={backToVehicle} />}
       {tab === 'invoice' && <InvoiceTab m={m} onBack={backToVehicle} />}
       {tab === 'customs' && <CustomsTab m={m} />}
@@ -73,7 +73,46 @@ function LinkTabsNav({ m, tab, onTab }: { m: Manifest; tab: LinkTab; onTab: (t: 
   );
 }
 
-function VehicleSheet({ id, onClose }: { id: string; onClose: () => void }) {
+type Trip = NonNullable<Manifest['driverTrips']>[number];
+
+/** عدد أيام الرحلة: من التحميل للوصول، أو لليوم لو لسه في الطريق (نفس حساب العطلة). */
+function tripDays(from: string, to?: string | null) {
+  const d = Math.ceil((new Date(to ?? Date.now()).getTime() - new Date(from).getTime()) / 86_400_000);
+  return Math.max(0, d);
+}
+
+/** كارت رحلة السائق المربوطة بالكشف — للشاشة فقط. */
+function TripCard({ m, trip, onOpen }: { m: Manifest; trip: Trip; onOpen: () => void }) {
+  const arrived = !!trip.arrivalDate;
+  const days = trip.departureDate ? tripDays(trip.departureDate, trip.arrivalDate) : null;
+  const cells: { label: string; value: ReactNode }[] = [
+    { label: 'السائق', value: <b>{m.driverName || trip.driverName || '—'}</b> },
+    { label: 'التليفون', value: m.driverPhone || '—' },
+    { label: 'العربية', value: [m.vehicleLabel, m.vehicleNo].filter(Boolean).join(' — ') || '—' },
+    { label: 'تاريخ التحميل', value: trip.departureDate ? fmtDate(trip.departureDate) : '—' },
+    { label: 'الناولون المتفق عليه', value: <b className="num">{trip.agreedFreight != null ? EGP(trip.agreedFreight) : '—'}</b> },
+    { label: 'الوصول', value: arrived ? fmtDate(trip.arrivalDate!) : <span style={{ color: 'var(--accent)' }}>في الطريق</span> },
+    { label: arrived ? 'مدة الرحلة' : 'مدة الرحلة حتى اليوم', value: days != null ? <b>{days} يوم</b> : '—' },
+  ];
+  return (
+    <div className="card no-print" style={{ padding: '12px 16px', marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <b style={{ flex: 1 }}>رحلة السائق المربوطة</b>
+        <button className="btn btn-ghost btn-sm" onClick={onOpen}>فتح كشف السائق ←</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10 }}>
+        {cells.map((c) => (
+          <div key={c.label} className="stat">
+            <div className="muted" style={{ fontSize: 12 }}>{c.label}</div>
+            <div style={{ fontSize: 14 }}>{c.value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function VehicleSheet({ id, onClose, onOpenDriver }: { id: string; onClose: () => void; onOpenDriver: () => void }) {
   const { can } = useAuth();
   const { data: m, isLoading } = useManifest(id);
   const deleteManifest = useDeleteManifest();
@@ -103,6 +142,7 @@ function VehicleSheet({ id, onClose }: { id: string; onClose: () => void }) {
 
   if (isLoading || !m) return <Spinner />;
   const totalQty = m.items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
+  const trip = m.driverTrips?.find((t) => t.uid);
 
   // كشف خارج من مكتب شحن — اسم المكتب لازم يتكتب على الورقة.
   const fromOffice = m.vehicleSource === 'CLIENT_OFFICE';
@@ -124,6 +164,14 @@ function VehicleSheet({ id, onClose }: { id: string; onClose: () => void }) {
         {can('manifests.print') && <button className="btn btn-primary btn-sm" onClick={() => window.print()}>🖨 طباعة الكشف</button>}
       </div>
 
+      {/* الرحلة المربوطة — للشاشة فقط. الناولون المتفق عليه لا يُطبع على الكشف */}
+      {trip && <TripCard m={m} trip={trip} onOpen={onOpenDriver} />}
+      {!trip && m.vehicleSource === 'OURS' && (
+        <div className="no-print" style={{ fontSize: 13, marginBottom: 10, color: 'var(--debit)' }}>
+          هذا الكشف غير مربوط برحلة سائق. اربطه من تاب السائق.
+        </div>
+      )}
+
       <div className="print-scale" ref={outerRef}>
         {/* الديزاين القديم (app_4.html): ترويسة اسم الشركة + العنوان ورقم الكشف،
             بيانات الكشف حقل تحت حقل، جدول الأصناف (م / الاصناف / العدد)، والإقرار.
@@ -135,18 +183,24 @@ function VehicleSheet({ id, onClose }: { id: string; onClose: () => void }) {
             <div className="ttl"><b>كشف استلام بضاعة</b><br />رقم: {m.no}</div>
           </div>
 
-          {/* بيانات العربية بس، كل حقل في سطر لوحده: التاريخ، رقم العربية،
-              المسمّى، العميل (ومكتب الشحن والملاحظات لو موجودين). بيانات
-              السائق في تاب السائق، والتكاليف مش في الكشف. */}
+          {/* كل حقل في سطر لوحده: التاريخ، العميل، بيانات السائق (من رحلته
+              وسجل السائقين — الـ API بيعبّيها)، بيانات العربية، الملاحظات.
+              الناولون والتكاليف مش في الكشف المطبوع. */}
           <table className="pr pr-info">
             <tbody>
               <tr><td><b>التاريخ:</b> <span>{fmtDate(m.date)}</span></td></tr>
-              <tr><td><b>رقم العربية:</b> <span>{m.vehicleNo || ''}</span></td></tr>
-              <tr><td><b>مسمّى العربية:</b> <span>{m.vehicleLabel || ''}</span></td></tr>
               <tr><td><b>اسم العميل:</b> <span>{m.clientName || ''}</span></td></tr>
               {fromOffice && (
                 <tr><td><b>مكتب الشحن:</b> <span>{m.shippingOffice || ''}</span></td></tr>
               )}
+              <tr><td><b>اسم السائق:</b> <span>{m.driverName || ''}</span></td></tr>
+              <tr><td><b>الرقم القومي:</b> <span>{m.driverNID || ''}</span></td></tr>
+              <tr><td><b>رقم التليفون:</b> <span>{m.driverPhone || ''}</span></td></tr>
+              <tr><td><b>رقم العربية:</b> <span>{m.vehicleNo || ''}</span></td></tr>
+              {m.trailerNo && (
+                <tr><td><b>رقم المقطورة:</b> <span>{m.trailerNo}</span></td></tr>
+              )}
+              <tr><td><b>مسمّى العربية:</b> <span>{m.vehicleLabel || ''}</span></td></tr>
               {m.note && (
                 <tr><td><b>ملاحظات:</b> <span>{m.note}</span></td></tr>
               )}
@@ -184,10 +238,17 @@ function VehicleSheet({ id, onClose }: { id: string; onClose: () => void }) {
 
           <div className="pr-ack">
             <p>
-              أقر أنا / <b>{DOTS}</b> باستلام البضاعة المذكورة أعلاه،
+              أقر أنا / <b>{m.driverName || DOTS}</b>
+              {' '}رقم قومي / <b>{m.driverNID || DOTS}</b>
+              {' '}سائق العربية رقم / <b>{m.vehicleNo || DOTS}</b> باستلام البضاعة المذكورة أعلاه،
               وأتعهد بالحفاظ على البضاعة المستلمة في حالتها الجيدة، والالتزام بتوصيلها إلى
               الجهة المحددة، كما أتعهد برد قيمة أي عجز أو تلف أو فقد يحدث بها لأي سبب يرجع لي.
             </p>
+            <div className="pr-sign">
+              <span>اسم السائق: <b>{m.driverName || DOTS}</b></span>
+              <span>التليفون: <b>{m.driverPhone || DOTS}</b></span>
+              <span>التوقيع: {DOTS}</span>
+            </div>
           </div>
         </div>
       </div>

@@ -918,6 +918,8 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 .mf-old table.pr > tbody > tr.mf-total > td { background: transparent; border-top: 2px solid var(--ink); }
 
 .mf-old .pr-ack { margin-top: 24px; font-size: 14px; line-height: 2; }
+/* سطر توقيع السائق تحت الإقرار */
+.mf-old .pr-sign { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-top: 18px; }
 
 /* القاعدة العامة th,td بتحط nowrap — في جدول البيانات ده بيخلّي الجدول يتمدّ أعرض
    من الورقة فالـ print-scale بيصغّر الكشف كله. هنا القيم بتلفّ جوّه خليتها. */

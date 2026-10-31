@@ -35,7 +35,12 @@ export interface Manifest {
   shippingOffice?: string | null;
   note?: string | null;
   items: ManifestItem[];
-  driverTrips?: { uid?: string; arrivalDate?: string | null; driverName?: string | null }[];
+  /** رحلة السائق المربوطة — GET /manifests/:id بيرجّع بياناتها والناولون المتفق عليه */
+  driverTrips?: {
+    uid?: string; arrivalDate?: string | null; driverName?: string | null;
+    vehicleNo?: string | null; trailerNo?: string | null; vehicleLabel?: string | null;
+    departureDate?: string; agreedFreight?: number;
+  }[];
   /** إجمالي الجمارك على الكشف + مخلّصه — بييجي من GET /manifests/:id */
   clearance?: { total: number; agent?: { uid: string; name: string } | null } | null;
   /** الفاتورة المرتبطة — وجودها هو اللي بيخلّي العربية تظهر كتاب جوّه الفاتورة */

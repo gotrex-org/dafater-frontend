@@ -44,6 +44,9 @@ export function useLinkTripInvoice() {
       driverTripsApi.linkInvoice(id, invoiceId, type),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [KEY] });
+      // الربط بيوصل لكشف العربية وفاتورته من الـ API
+      qc.invalidateQueries({ queryKey: ['manifests'] });
+      qc.invalidateQueries({ queryKey: ['invoices'] });
       qc.invalidateQueries({ queryKey: ['reports'] });
       qc.invalidateQueries({ queryKey: ['deals'] });
     },
