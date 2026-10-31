@@ -30,11 +30,11 @@ type SortKey = 'name' | 'balance' | 'activity';
 type LedgerKind = 'all' | 'invoices' | 'collect' | 'commission' | 'withdraw';
 type MainTab = 'ledger' | 'mizan' | 'registry';
 
-// USD accounts show the dollar figure as-is; the EGP equivalent (at the party's
-// weighted-average rate) is shown in parentheses beside it. EGP accounts show plainly.
+// USD accounts show the EGP value (dollar cycle, FIFO on agent payments) with the
+// dollar figure in parentheses beside it. EGP accounts show plainly.
 function amtWithEgp(amount: number | undefined | null, currency?: string | null, rate?: number) {
   if (currency === 'USD' && rate && rate > 0) {
-    return `${money(amount, 'USD')} (${EGP((Number(amount) || 0) * rate)} ج.م)`;
+    return `${EGP((Number(amount) || 0) * rate)} ج.م (${money(amount, 'USD')})`;
   }
   return money(amount, currency as 'EGP' | 'USD' | null | undefined);
 }
@@ -307,6 +307,27 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
   const totalDebit = visibleRows.reduce((s, r) => s + (r.debit || 0), 0);
   const totalCredit = visibleRows.reduce((s, r) => s + (r.credit || 0), 0);
 
+  // طرف دولاري: المبلغ بالجنيه (من دفعات الوكيل FIFO) وبجانبه الدولار بين قوسين.
+  // الجزء غير المسعّر من الفاتورة يظهر بالدولار بعلامة حمراء.
+  const fxMode = data?.balanceEgp !== undefined;
+  const fxCell = (usd: number, r: LedgerRow) => {
+    const unpriced = r.usdUnpriced ?? 0;
+    const priced = usd - unpriced;
+    return (
+      <>
+        {priced > 1e-9 && r.egp != null && <>{EGP(r.egp)} <span className="muted">({money(priced, 'USD')})</span></>}
+        {unpriced > 1e-9 && (
+          <div style={{ color: 'var(--debit)', fontSize: 12 }} title="لم تقابله دفعة دولار من الوكيل بعد">
+            غير مسعّر ({money(unpriced, 'USD')})
+          </div>
+        )}
+      </>
+    );
+  };
+  const hasUnpriced = fxMode && (data?.rows ?? []).some((r) => (r.usdUnpriced ?? 0) > 1e-9);
+  const fxBalance = (egp: number | undefined, usd: number) =>
+    `${hasUnpriced ? '≈ ' : ''}${EGP(egp ?? 0)} ج.م (${money(usd, 'USD')})`;
+
   // rows with an expandable item breakdown, and a single show-all / hide-all toggle
   const detailRowIds = visibleRows.filter((r) => r.invoiceItems?.length).map((r) => r.id);
   const allExpanded = detailRowIds.length > 0 && detailRowIds.every((id) => expanded.has(id));
@@ -439,9 +460,9 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                             ? <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); toggle(r.id); }}>{open ? '▾' : '▸'} {r.note || 'تفاصيل الفاتورة'}</button>
                             : r.note}
                         </td>
-                        <td className="num deb lg-deb" data-l="مدين">{r.debit ? money(r.debit, cur) : ''}</td>
-                        <td className="num cre lg-cre" data-l="دائن">{r.credit ? money(r.credit, cur) : ''}</td>
-                        {showBalance && <td className="num lg-bal" data-l="الرصيد">{money(r.balance, cur)}</td>}
+                        <td className="num deb lg-deb" data-l="مدين">{r.debit ? (fxMode ? fxCell(r.debit, { ...r, usdUnpriced: 0 }) : money(r.debit, cur)) : ''}</td>
+                        <td className="num cre lg-cre" data-l="دائن">{r.credit ? (fxMode ? fxCell(r.credit, r) : money(r.credit, cur)) : ''}</td>
+                        {showBalance && <td className="num lg-bal" data-l="الرصيد">{fxMode ? fxBalance(r.egpBalance, r.balance) : money(r.balance, cur)}</td>}
                       </tr>
                       {open && (
                         <tr className="lg-items-row">
@@ -465,14 +486,19 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                     <td colSpan={3} style={{ fontWeight: 800 }}>الإجمالي</td>
                     <td className="num deb">{money(totalDebit, cur)}</td>
                     <td className="num cre">{money(totalCredit, cur)}</td>
-                    {showBalance && <td className="num">{money(data.balance, cur)}</td>}
+                    {showBalance && <td className="num">{fxMode ? fxBalance(data.balanceEgp, data.balance) : money(data.balance, cur)}</td>}
                   </tr>
                 )}
                 {visibleRows.length === 0 && <tr><td colSpan={6} className="empty">لا توجد حركات</td></tr>}
               </tbody>
             </table>
           </div>
-          <div className="page-title num lg-running" style={{ marginTop: 14, textAlign: 'left' }}>الرصيد الجاري: {amtWithEgp(data.balance, cur, party.avgExchangeRate)}</div>
+          <div className="page-title num lg-running" style={{ marginTop: 14, textAlign: 'left' }}>الرصيد الجاري: {fxMode ? fxBalance(data.balanceEgp, data.balance) : amtWithEgp(data.balance, cur, party.avgExchangeRate)}</div>
+          {hasUnpriced && (
+            <div style={{ textAlign: 'left', fontSize: 12, color: 'var(--debit)' }}>
+              ≈ يوجد جزء غير مسعّر، وقيمته في الرصيد تقريبية بآخر سعر صرف ({EGP(data.lastRate ?? 0)} ج.م). يتم التسعير الحقيقي عند توريد الوكيل.
+            </div>
+          )}
         </div>
       )}
 

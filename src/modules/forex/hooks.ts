@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { forexApi } from './api';
-import type { CreateAgentDto, UpdateAgentDto, EgpInDto, UsdOutDto, SettleDto } from './dtos';
+import type { CreateAgentDto, UpdateAgentDto, EgpInDto, UsdOutDto, SettleDto, UpdateAgentTxDto } from './dtos';
 
 const KEYS = { all: ['forex'] as const, one: (uid: string) => ['forex', uid] as const };
 
@@ -86,6 +86,23 @@ export function useDeleteAgentTx(agentUid: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (txUid: string) => forexApi.deleteTx(txUid),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: KEYS.all }); qc.invalidateQueries({ queryKey: KEYS.one(agentUid) }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: KEYS.all }); qc.invalidateQueries({ queryKey: KEYS.one(agentUid) }); ['treasury', 'parties', 'dashboard', 'transactions', 'invoices'].forEach((k) => qc.invalidateQueries({ queryKey: [k] })); },
+  });
+}
+
+// تعديل أي حركة وكيل — بيغيّر كمان حركة الخزنة/المورد المرتبطة، فنحدّث كل الشاشات اللي بتقرأ منها.
+export function useUpdateAgentTx(agentUid: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ txUid, dto }: { txUid: string; dto: UpdateAgentTxDto }) => forexApi.updateTx(txUid, dto),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
+      qc.invalidateQueries({ queryKey: KEYS.one(agentUid) });
+      qc.invalidateQueries({ queryKey: ['treasury'] });
+      qc.invalidateQueries({ queryKey: ['parties'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['invoices'] });
+    },
   });
 }

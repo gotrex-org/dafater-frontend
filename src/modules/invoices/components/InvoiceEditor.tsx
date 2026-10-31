@@ -207,6 +207,8 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
 
   const selectedParty = parties?.data.find((p) => p.id === partyId);
   const isUSD = selectedParty?.currency === 'USD';
+  // شراء دولار: لا يُكتب سعر صرف. الفاتورة تتسعّر بالجنيه من دفعات الوكيل للمورد (FIFO).
+  const usdPurchase = isUSD && kind !== 'SALE';
   const cur = isUSD ? 'USD' : 'EGP';
 
   // إجمالي الفاتورة = إجمالي الأصناف (تجارة) + إجمالي بنود الشحن (شحن)
@@ -274,9 +276,9 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
     if (!warehouseId) return setError('اختر المخزن');
     if (items.length === 0 && chargesDto.length === 0) return setError('أضف صنفاً أو بند شحن واحداً على الأقل');
     if (!fake && Number(paid) > 0 && !treasuryId) return setError('حددت مبلغاً مدفوعاً. اختر الخزنة التي يخرج منها المبلغ أو يدخل إليها');
-    if (!fake && isUSD && !(rate > 0)) return setError('فاتورة دولارية — اكتب سعر صرف الدولار اليوم');
+    if (!fake && isUSD && !usdPurchase && !(rate > 0)) return setError('فاتورة دولارية — اكتب سعر صرف الدولار اليوم');
 
-    const usdRate = isUSD && rate > 0 ? { exchangeRate: rate } : {};
+    const usdRate = isUSD && !usdPurchase && rate > 0 ? { exchangeRate: rate } : {};
 
     if (isEdit) {
       updateInvoice.mutate(
@@ -407,8 +409,14 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
           <>
             <div style={{ padding: '6px 16px', background: 'var(--debit-bg)', borderRadius: 8, margin: '0 16px 8px', fontWeight: 700, fontSize: 13, color: 'var(--debit)' }}>
               $ فاتورة دولارية — جميع الأسعار بالدولار
+              {usdPurchase && (
+                <div style={{ fontWeight: 500, marginTop: 4 }}>
+                  تُحوَّل الفاتورة إلى الجنيه تلقائياً بسعر صرف دفعات الوكيل للمورد، من الأقدم إلى الأحدث.
+                  الجزء الذي لم تقابله دفعة بعد يبقى غير مسعّر حتى يتم التوريد.
+                </div>
+              )}
             </div>
-            <div className="form-grid">
+            {!usdPurchase && <div className="form-grid">
               <Field label="سعر صرف الدولار اليوم (ج.م لكل $)">
                 <MoneyInput value={exchangeRate} onChange={setExchangeRate} placeholder="مثلاً 50" />
               </Field>
@@ -417,7 +425,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
                   <div className="num" style={{ fontWeight: 800, padding: '10px 0' }}>{money(total, 'USD')} = {EGP(totalEgp)} ج.م</div>
                 </Field>
               )}
-            </div>
+            </div>}
           </>
         )}
         <div className="tbl-wrap combo-table invoice-items">

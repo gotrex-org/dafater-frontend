@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { fmtDate, EGP } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import { Field, Combobox, MoneyInput } from '@/components/common';
 import { useAllParties } from '../../parties/hooks';
 import { useAllTreasury } from '../../treasury/hooks';
-import { useForexAgent, useUsdOut, useDeleteAgentTx, useUpdateAgent, useSettle } from '../hooks';
+import { useForexAgent, useUsdOut, useDeleteAgentTx, useUpdateAgent, useSettle, useUpdateAgentTx } from '../hooks';
+import type { DollarAgentTx } from '../dtos';
 
 function today() { return new Date().toISOString().slice(0, 10); }
 
@@ -43,6 +44,48 @@ export function AgentDetail({ agentUid, onBack, initialMode }: { agentUid: strin
   const [editPhone, setEditPhone] = useState('');
   const [editNote, setEditNote] = useState('');
   const [editErr, setEditErr] = useState('');
+
+  // تعديل حركة من الجدول (أي نوع)
+  const updateTx = useUpdateAgentTx(agentUid);
+  const [etxId, setEtxId] = useState<string | null>(null);
+  const [eDate, setEDate] = useState('');
+  const [eEgp, setEEgp] = useState('');
+  const [eDir, setEDir] = useState<'in' | 'out'>('in');
+  const [eTreasury, setETreasury] = useState('');
+  const [eUsd, setEUsd] = useState('');
+  const [eRate, setERate] = useState('');
+  const [eParty, setEParty] = useState('');
+  const [eNote, setENote] = useState('');
+  const [eErr, setEErr] = useState('');
+
+  const startTxEdit = (tx: DollarAgentTx) => {
+    setEtxId(tx.id);
+    setEDate(String(tx.date).slice(0, 10));
+    setEEgp(String(Math.abs(tx.egpAmount || 0) || ''));
+    setEDir(tx.egpAmount >= 0 ? 'in' : 'out');
+    setETreasury(tx.treasury?.id ?? '');
+    setEUsd(String(tx.usdAmount || ''));
+    setERate(String(tx.exchangeRate || ''));
+    setEParty(tx.party?.id ?? '');
+    setENote(tx.note ?? '');
+    setEErr('');
+  };
+
+  const saveTxEdit = (tx: DollarAgentTx) => {
+    setEErr('');
+    let dto: Parameters<typeof updateTx.mutate>[0]['dto'] = { date: eDate, note: eNote };
+    if (tx.type === 'USD_OUT') {
+      if (!(Number(eUsd) > 0)) return setEErr('اكتب المبلغ بالدولار');
+      if (!(Number(eRate) > 0)) return setEErr('اكتب سعر الصرف');
+      if (!eParty) return setEErr('اختر المورد الدولاري');
+      dto = { ...dto, usdAmount: Number(eUsd), exchangeRate: Number(eRate), partyId: eParty };
+    } else {
+      if (!(Number(eEgp) > 0)) return setEErr('اكتب المبلغ');
+      if (!eTreasury) return setEErr('اختر الخزنة');
+      dto = { ...dto, egpAmount: Number(eEgp), treasuryId: eTreasury, ...(tx.type === 'SETTLE' ? { direction: eDir } : {}) };
+    }
+    updateTx.mutate({ txUid: tx.id, dto }, { onSuccess: () => setEtxId(null), onError: (e: any) => setEErr(e.message) });
+  };
 
   const openEdit = () => {
     setEditName(agent?.name ?? '');
@@ -219,7 +262,8 @@ export function AgentDetail({ agentUid, onBack, initialMode }: { agentUid: strin
               <tr><td colSpan={user?.admin ? 7 : 6} className="muted" style={{ textAlign: 'center', padding: 16 }}>لا توجد حركات</td></tr>
             )}
             {agent.txs.map((tx) => (
-              <tr key={tx.id}>
+              <Fragment key={tx.id}>
+              <tr>
                 <td className="muted" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(tx.date)}</td>
                 <td>
                   {tx.type === 'EGP_IN'
@@ -242,7 +286,8 @@ export function AgentDetail({ agentUid, onBack, initialMode }: { agentUid: strin
                 <td className="num">{tx.type === 'USD_OUT' ? `$${tx.usdAmount.toLocaleString('en', { minimumFractionDigits: 2 })}` : '—'}</td>
                 <td className="num muted">{tx.type === 'USD_OUT' ? tx.exchangeRate : '—'}</td>
                 {user?.admin && (
-                  <td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <button className="btn btn-ghost btn-sm" title="تعديل" onClick={() => (etxId === tx.id ? setEtxId(null) : startTxEdit(tx))}>✎</button>
                     <button className="btn btn-danger btn-sm" onClick={() => {
                       if (!window.confirm('حذف هذه الحركة؟')) return;
                       deleteTx.mutate(tx.id);
@@ -250,6 +295,54 @@ export function AgentDetail({ agentUid, onBack, initialMode }: { agentUid: strin
                   </td>
                 )}
               </tr>
+              {etxId === tx.id && (
+                <tr>
+                  <td colSpan={7} style={{ background: 'var(--bg-soft, transparent)' }}>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', padding: '8px 0' }}>
+                      <Field label="التاريخ"><input type="date" value={eDate} onChange={(e) => setEDate(e.target.value)} /></Field>
+                      {tx.type === 'USD_OUT' ? (
+                        <>
+                          <Field label="المبلغ ($)"><MoneyInput value={eUsd} onChange={setEUsd} style={{ maxWidth: 130 }} /></Field>
+                          <Field label="سعر الصرف"><MoneyInput value={eRate} onChange={setERate} style={{ maxWidth: 110 }} /></Field>
+                          <Field label="المورد الدولاري">
+                            <div style={{ minWidth: 200 }}>
+                              <Combobox options={(suppliers?.data ?? []).filter((s: any) => s.currency === 'USD')} value={eParty} onChange={setEParty} placeholder="اختر المورد…" />
+                            </div>
+                          </Field>
+                        </>
+                      ) : (
+                        <>
+                          <Field label="المبلغ (ج.م)"><MoneyInput value={eEgp} onChange={setEEgp} style={{ maxWidth: 130 }} /></Field>
+                          {tx.type === 'SETTLE' && (
+                            <Field label="النوع">
+                              <select value={eDir} onChange={(e) => setEDir(e.target.value as 'in' | 'out')} style={{ minWidth: 170 }}>
+                                <option value="in">خصم — استرداد من الوكيل</option>
+                                <option value="out">إضافة — دفع للوكيل</option>
+                              </select>
+                            </Field>
+                          )}
+                          <Field label="الخزنة">
+                            <Combobox options={treasury?.data ?? []} value={eTreasury} onChange={setETreasury} placeholder="اختر الخزنة…" />
+                          </Field>
+                        </>
+                      )}
+                      <Field label="ملاحظة"><input value={eNote} onChange={(e) => setENote(e.target.value)} placeholder="اختياري…" style={{ maxWidth: 200 }} /></Field>
+                    </div>
+                    {tx.type === 'USD_OUT' && Number(eUsd) > 0 && Number(eRate) > 0 && (
+                      <div className="muted" style={{ fontSize: 13 }}>المكافئ بالجنيه: <b className="num">{EGP(Number(eUsd) * Number(eRate))}</b></div>
+                    )}
+                    <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                      التعديل يُطبَّق على رصيد الوكيل و{tx.type === 'USD_OUT' ? 'حساب المورد وتسعير فواتيره بالجنيه' : 'الخزنة'} مباشرة.
+                    </div>
+                    {eErr && <div className="err-text" style={{ marginTop: 6 }}>{eErr}</div>}
+                    <div className="toolbar" style={{ marginTop: 8 }}>
+                      <button className="btn btn-primary btn-sm" onClick={() => saveTxEdit(tx)} disabled={updateTx.isPending}>{updateTx.isPending ? '...' : 'حفظ التعديل'}</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setEtxId(null)}>إلغاء</button>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
           </tbody>
         </table>

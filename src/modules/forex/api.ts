@@ -1,5 +1,5 @@
 import { api } from '@/lib/api';
-import type { DollarAgent, DollarAgentDetail, CreateAgentDto, UpdateAgentDto, EgpInDto, UsdOutDto, SettleDto } from './dtos';
+import type { DollarAgent, DollarAgentDetail, CreateAgentDto, UpdateAgentDto, EgpInDto, UsdOutDto, SettleDto, UpdateAgentTxDto } from './dtos';
 
 export const forexApi = {
   list: () => api.get<DollarAgent[]>('/forex'),
@@ -10,5 +10,6 @@ export const forexApi = {
   egpIn: (uid: string, dto: EgpInDto) => api.post<DollarAgentDetail>(`/forex/${uid}/egp-in`, dto),
   usdOut: (uid: string, dto: UsdOutDto) => api.post<DollarAgentDetail>(`/forex/${uid}/usd-out`, dto),
   settle: (uid: string, dto: SettleDto) => api.post<DollarAgentDetail>(`/forex/${uid}/settle`, dto),
+  updateTx: (txUid: string, dto: UpdateAgentTxDto) => api.patch<unknown>(`/forex/tx/${txUid}`, dto),
   deleteTx: (txUid: string) => api.del<void>(`/forex/tx/${txUid}`),
 };

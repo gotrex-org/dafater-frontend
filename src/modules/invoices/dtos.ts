@@ -40,6 +40,8 @@ export interface Invoice {
   date: string;
   currency?: 'EGP' | 'USD';
   exchangeRate?: number | null;
+  /** فاتورة دولار: تسعيرها بالجنيه من دفعات الوكيل (FIFO). */
+  fifo?: { usd: number; egp: number; pricedUsd: number; unpricedUsd: number; rate: number };
   partyId: string;
   warehouseId: string;
   paid: number;

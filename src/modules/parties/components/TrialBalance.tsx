@@ -129,7 +129,7 @@ export function TrialBalance({ onOpenParty }: { onOpenParty: (uid: string) => vo
                   if (!isUSD) return EGP(usdAbs);
                   return egp == null
                     ? `${USD(usdAbs)} — بدون سعر صرف`
-                    : `${USD(usdAbs)} (${EGP(Math.abs(egp))} ج.م)`;
+                    : `${EGP(Math.abs(egp))} ج.م (${USD(usdAbs)})`;
                 };
                 const consolidated = (p as unknown as { __consolidated?: boolean }).__consolidated;
                 return (

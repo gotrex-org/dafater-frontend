@@ -18,6 +18,15 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
   const discount = invoice.discount || 0;
   const kindLabel = invoice.kind === 'SALE' ? 'بيع' : 'شراء';
   const cur = invoice.currency ?? invoice.party?.currency ?? 'EGP';
+  // فاتورة دولار: السعر بالجنيه وبجانبه الدولار بين قوسين. الشراء يتسعّر من دفعات
+  // الوكيل (FIFO)، والبيع بسعر الصرف المكتوب على الفاتورة.
+  const isUsd = cur === 'USD';
+  const fifo = invoice.fifo;
+  const usdPurchase = isUsd && invoice.kind !== 'SALE';
+  const fxRate = !isUsd ? 1 : usdPurchase ? (fifo?.rate ?? 0) : (invoice.exchangeRate ?? 0);
+  const unpricedUsd = usdPurchase ? (fifo?.unpricedUsd ?? 0) : 0;
+  const amt = (v: number) =>
+    !isUsd ? money(v, cur) : fxRate > 0 ? `${EGP(v * fxRate)} (${money(v, 'USD')})` : money(v, 'USD');
 
   // الأصناف وبنود الشحن: البنود من جدول بنود الشحن (نولون / تحميل / شفتنة …)، ومعاها
   // الأصناف الخدمية القديمة (service). بتتعرض في قسم منفصل تحت الأصناف بإجمالي خاص بيها.
@@ -87,8 +96,8 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
               <tr>
                 <th>الصنف</th>
                 <th className="num" style={{ width: 80 }}>العدد</th>
-                <th className="num" style={{ width: 104 }}>السعر {cur === 'USD' ? '($)' : '(ج.م)'}</th>
-                <th className="num" style={{ width: 116 }}>الاجمالي</th>
+                <th className="num" style={{ width: isUsd ? 150 : 104 }}>السعر (ج.م){isUsd ? ' ($)' : ''}</th>
+                <th className="num" style={{ width: isUsd ? 170 : 116 }}>الاجمالي</th>
               </tr>
             </thead>
             <tbody>
@@ -96,8 +105,8 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
                 <tr key={it.id}>
                   <td>{it.product?.name ?? '—'}</td>
                   <td className="num">{it.qty}</td>
-                  <td className="num">{money(it.price, cur)}</td>
-                  <td className="num">{money(it.qty * it.price, cur)}</td>
+                  <td className="num">{amt(it.price)}</td>
+                  <td className="num">{amt(it.qty * it.price)}</td>
                 </tr>
               ))}
               {/* الإجماليات الفرعية بتبان بس لما يكون فيه بنود — من غيرها الفاتورة
@@ -105,21 +114,21 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
               {services.length > 0 && (
                 <tr className="inv-sub">
                   <td colSpan={3}>إجمالي الأصناف</td>
-                  <td className="num">{money(goodsTotal, cur)}</td>
+                  <td className="num">{amt(goodsTotal)}</td>
                 </tr>
               )}
               {services.map((it) => (
                 <tr key={it.id} className="inv-bnd">
                   <td><span className="inv-bnd-tag">شحن</span>{it.product?.name ?? '—'}</td>
                   <td className="num">{it.qty}</td>
-                  <td className="num">{money(it.price, cur)}</td>
-                  <td className="num">{money(it.qty * it.price, cur)}</td>
+                  <td className="num">{amt(it.price)}</td>
+                  <td className="num">{amt(it.qty * it.price)}</td>
                 </tr>
               ))}
               {services.length > 0 && (
                 <tr className="inv-sub">
                   <td colSpan={3}>إجمالي بنود الشحن</td>
-                  <td className="num">{money(servicesTotal, cur)}</td>
+                  <td className="num">{amt(servicesTotal)}</td>
                 </tr>
               )}
               {invoice.items.length === 0 && services.length === 0 && (
@@ -130,16 +139,22 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
         </div>
 
         <div className="inv-totals">
-          <div className="r"><span>قبل الخصم</span><span className="num">{money(total, cur)}</span></div>
+          <div className="r"><span>قبل الخصم</span><span className="num">{amt(total)}</span></div>
           {discount > 0 && (
-            <div className="r"><span>خصم</span><span className="num">− {money(discount, cur)}</span></div>
+            <div className="r"><span>خصم</span><span className="num">− {amt(discount)}</span></div>
           )}
-          <div className="r end"><span>الإجمالي</span><span className="num">{money(netTotal, cur)}</span></div>
+          <div className="r end"><span>الإجمالي</span><span className="num">{amt(netTotal)}</span></div>
         </div>
 
-        {cur === 'USD' && !!invoice.exchangeRate && (
-          <div className="num" style={{ textAlign: 'left', fontWeight: 700, color: 'var(--debit)', marginTop: 8 }}>
-            بالمصري (سعر {EGP(invoice.exchangeRate)}): {EGP(netTotal * invoice.exchangeRate)} ج.م
+        {isUsd && fxRate > 0 && (
+          <div className="num" style={{ textAlign: 'left', fontWeight: 700, marginTop: 8 }}>
+            سعر الصرف {EGP(fxRate)} ج.م{usdPurchase ? ' (من دفعات الوكيل)' : ''}
+          </div>
+        )}
+        {unpricedUsd > 0 && (
+          <div style={{ textAlign: 'left', fontWeight: 700, color: 'var(--debit)', marginTop: 4 }}>
+            ⚠️ غير مسعّر: <span className="num">{money(unpricedUsd, 'USD')}</span> لم تقابله دفعة دولار من الوكيل بعد.
+            {fxRate > 0 ? ' الأسعار بالجنيه محسوبة على سعر الجزء المسعّر.' : ''} يتم التسعير تلقائياً عند التوريد.
           </div>
         )}
 

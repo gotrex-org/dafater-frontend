@@ -46,6 +46,11 @@ export interface LedgerRow {
   debit: number;
   credit: number;
   balance: number;
+  // طرف دولاري: قيمة السطر بالجنيه من دورة الدولار (FIFO على دفعات الوكيل).
+  egp?: number | null;
+  egpBalance?: number;
+  usdUnpriced?: number;
+  fxRate?: number;
   partyRole?: PartyRole | null;
   partyName?: string | null;
   invoiceUid?: string | null;
@@ -62,4 +67,7 @@ export interface LedgerStatement {
   opening: number;
   rows: LedgerRow[];
   balance: number;
+  openingEgp?: number;
+  balanceEgp?: number;
+  lastRate?: number;
 }
