@@ -9,6 +9,7 @@ import { useAllParties } from '../../parties/hooks';
 import { useDriverTrips, useCreateDriverTrip, useDeleteDriverTrip } from '../hooks';
 import { useAllTreasury } from '../../treasury/hooks';
 import { DriverTripDetail } from './DriverTripDetail';
+import { DriverStatement } from './DriverStatement';
 import { DriversRegistry } from '../../drivers/components/DriversRegistry';
 import type { DriverTrip } from '../dtos';
 
@@ -22,6 +23,8 @@ export function DriverTripsView() {
 
   const [tab, setTab] = useState<'trips' | 'registry'>('trips');
   const [selected, setSelected] = useState<DriverTrip | null>(null);
+  // كشف السائق: بياناته وكل رحلاته
+  const [driverView, setDriverView] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'open' | 'closed'>('open');
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState('');
@@ -100,6 +103,8 @@ export function DriverTripsView() {
     return true;
   });
 
+  if (driverView) return <DriverStatement driverName={driverView} onBack={() => setDriverView(null)} />;
+
   if (selected) {
     const live = trips?.find((t) => t.id === selected.id) ?? selected;
     return <DriverTripDetail trip={live} onBack={() => setSelected(null)} />;
@@ -113,7 +118,7 @@ export function DriverTripsView() {
           <button className="btn btn-ghost btn-sm" onClick={() => setTab('trips')}>رحلات السائقين</button>
           <button className="btn btn-primary btn-sm">سجل السائقين</button>
         </div>
-        <DriversRegistry />
+        <DriversRegistry onOpen={setDriverView} />
       </>
     );
   }
@@ -233,7 +238,10 @@ export function DriverTripsView() {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                 <div>
-                  <div style={{ fontWeight: 800, fontSize: 15 }}>{trip.driverName}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontWeight: 800, fontSize: 15 }}>{trip.driverName}</span>
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '2px 8px' }} onClick={(e) => { e.stopPropagation(); setDriverView(trip.driverName); }}>كشف السائق</button>
+                  </div>
                   <div className="muted" style={{ fontSize: 12 }}>
                     {trip.clientName}
                     {trip.vehicleLabel ? ` — ${trip.vehicleLabel}` : ''}

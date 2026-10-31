@@ -62,7 +62,7 @@ function DriverAdvancePanel({ driverName, treasuryOptions, canManage }: { driver
   );
 }
 
-export function DriversRegistry() {
+export function DriversRegistry({ onOpen }: { onOpen?: (driverName: string) => void } = {}) {
   const { can } = useAuth();
   const canManage = can('settings');
   const [search, setSearch] = useState('');
@@ -192,6 +192,7 @@ export function DriversRegistry() {
                 {d.note && <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>{d.note}</div>}
               </div>
               <div className="toolbar" style={{ flexShrink: 0 }}>
+                {onOpen && <button className="btn btn-primary btn-sm" onClick={() => onOpen(d.name)}>كشف السائق</button>}
                 <button className={`btn btn-sm ${advOpen ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setOpenAdvance(advOpen ? null : d.name)}>💰 السلف</button>
                 {canManage && <button className="btn btn-ghost btn-sm" onClick={() => openEdit(d)}>✏ تعديل</button>}
                 {canManage && (
