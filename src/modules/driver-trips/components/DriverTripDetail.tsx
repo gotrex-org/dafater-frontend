@@ -8,7 +8,7 @@ import { useAllParties } from '../../parties/hooks';
 import { useAllTreasury } from '../../treasury/hooks';
 import { useConfig } from '../../config/hooks';
 import { useAddPayment, useDeletePayment, useDriverTrip, useLinkTripInvoice, useSetArrival, useTripInvoiceCandidates, useUpdateDriverTrip, useUpdateWeightDiff } from '../hooks';
-import { useManifests } from '../../manifests/hooks';
+import { useManifests, useVehicleShipping } from '../../manifests/hooks';
 import type { DriverTrip } from '../dtos';
 
 // Fallbacks only — actual values come from useConfig() (إعدادات رحلات السائقين)
@@ -330,6 +330,7 @@ export function DriverTripDetail({ trip, onBack }: Props) {
 
 
         <InvoiceLink trip={trip} />
+        {trip.manifest?.uid && <TripCustoms manifestUid={trip.manifest.uid} manifestNo={trip.manifest.no} />}
 
         {/* Stats row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(140px,1fr))', gap: 10, marginTop: 14 }}>
@@ -609,7 +610,7 @@ function InvoiceLink({ trip }: { trip: DriverTrip }) {
   const link = useLinkTripInvoice();
 
   const collected = trip.collectedFreight ?? 0;
-  const profit = trip.tripProfit ?? collected - trip.agreedFreight;
+  // مكسب النقلة في التقارير فقط — الكشوفات ماتعرضش مكاسب
   // المستند المربوط: فاتورة بيع أو عملية بيع خارجي
   const doc = trip.invoice ?? trip.deal ?? null;
   const linked = !!doc;
@@ -636,7 +637,6 @@ function InvoiceLink({ trip }: { trip: DriverTrip }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(140px,1fr))', gap: 10, marginTop: 10 }}>
           <div className="stat"><div className="muted" style={{ fontSize: 12 }}>محصّل من العميل</div><div className="num cre" style={{ fontWeight: 800 }}>{EGP(collected)}</div></div>
           <div className="stat"><div className="muted" style={{ fontSize: 12 }}>مدفوع للسواق</div><div className="num deb" style={{ fontWeight: 800 }}>{EGP(trip.agreedFreight)}</div></div>
-          <div className="stat"><div className="muted" style={{ fontSize: 12 }}>مكسب النقلة</div><div className={`num ${profit >= 0 ? 'cre' : 'deb'}`} style={{ fontWeight: 800 }}>{EGP(profit)}</div></div>
         </div>
       ) : (
         <div className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>
@@ -681,6 +681,43 @@ function InvoiceLink({ trip }: { trip: DriverTrip }) {
             </div>
           )}
           {link.error && <div className="error" style={{ marginTop: 8 }}>{(link.error as any).message}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** الجمرك والتخليص المكتوب على كشف العربية المربوطة بالرحلة — للعرض، والتعديل من تاب الجمارك في كشف العربية. */
+function TripCustoms({ manifestUid, manifestNo }: { manifestUid: string; manifestNo: string }) {
+  const { data: s } = useVehicleShipping(manifestUid);
+  if (!s || s.vehicleSource !== 'OURS') return null;
+  const lines = s.customs.lines;
+  return (
+    <div className="card" style={{ padding: '12px 16px', marginTop: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <b style={{ flex: 1 }}>الجمرك والتخليص</b>
+        <span className="pill">كشف العربية #{manifestNo}</span>
+        <span className="num" style={{ fontWeight: 800 }}>{EGP(s.customs.total)}</span>
+      </div>
+      {lines.length ? (
+        <div className="tbl-wrap" style={{ marginTop: 10 }}>
+          <table>
+            <thead><tr><th>التاريخ</th><th>مكتب التخليص</th><th>البيان</th><th className="num">المبلغ</th></tr></thead>
+            <tbody>
+              {lines.map((l) => (
+                <tr key={l.id}>
+                  <td className="muted">{fmtDate(l.date)}</td>
+                  <td>{l.office?.name ?? '—'}</td>
+                  <td className="muted">{l.note ?? ''}</td>
+                  <td className="num">{EGP(l.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>
+          لا يوجد جمرك على هذه العربية. يُضاف من تاب «الجمارك» في كشف العربية.
         </div>
       )}
     </div>
