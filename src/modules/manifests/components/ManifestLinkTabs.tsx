@@ -141,6 +141,8 @@ export function InvoiceTab({ m, onBack }: { m: Manifest; onBack: () => void }) {
   const { data: invoicesPage, isLoading: li } = useInvoices(!linked && client ? { search: client, pageSize: 200 } : { pageSize: 1 });
   const { data: dealsPage, isLoading: ld } = useDeals(!linked && client ? { search: client, pageSize: 200 } : { pageSize: 1 });
   const [err, setErr] = useState('');
+  // معاينة فاتورة من القائمة قبل ربطها
+  const [preview, setPreview] = useState<{ id: string; type: 'invoice' | 'deal'; label: string } | null>(null);
 
   if (m.invoice || m.deal) {
     const label = m.invoice ? `الفاتورة ${m.invoice.no}` : `البيع الخارجي ${m.deal!.no}`;
@@ -181,6 +183,7 @@ export function InvoiceTab({ m, onBack }: { m: Manifest; onBack: () => void }) {
       {
         onSuccess: () => {
           // رحلة السائق تتربط بنفس المستند لو لسه مش مربوطة بحاجة
+          setPreview(null);
           if (trip?.uid && tripData && !tripData.invoice && !tripData.deal) {
             linkInvoice.mutate({ id: trip.uid, invoiceId: id, type });
           }
@@ -191,12 +194,33 @@ export function InvoiceTab({ m, onBack }: { m: Manifest; onBack: () => void }) {
   };
   const canLink = can('manifests.edit');
 
+  if (preview) {
+    return (
+      <>
+        <div className="toolbar no-print">
+          <button className="btn btn-ghost btn-sm" onClick={() => setPreview(null)}>→ رجوع لقائمة الفواتير</button>
+          <span className="muted" style={{ fontSize: 13 }}>معاينة {preview.label}</span>
+          {canLink && (
+            <button
+              className="btn btn-primary btn-sm sp" disabled={updateManifest.isPending}
+              onClick={() => link(preview.id, preview.type)}
+            >{updateManifest.isPending ? '…' : 'ربط بهذه العربية'}</button>
+          )}
+        </div>
+        {err && <div className="err-text">{err}</div>}
+        {preview.type === 'invoice'
+          ? <InvoiceDetailById uid={preview.id} onBack={() => setPreview(null)} />
+          : <DealDetailById uid={preview.id} onBack={() => setPreview(null)} />}
+      </>
+    );
+  }
+
   return (
     <div className="card" style={{ padding: 18, display: 'grid', gap: 12 }}>
       <div>
         <b style={{ fontSize: 15 }}>لا توجد فاتورة مربوطة بهذه العربية</b>
         <div className="muted" style={{ fontSize: 13 }}>
-          اختر فاتورة أو عملية بيع خارجي للعميل {client || '—'}. الربط يظهر في الفاتورة وفي رحلة السائق.
+          اختر فاتورة أو عملية بيع خارجي للعميل {client || '—'}. اضغط على الفاتورة لعرضها قبل الربط. الربط يظهر في الفاتورة وفي رحلة السائق.
         </div>
       </div>
       {li || ld ? <Spinner /> : invoices.length + deals.length === 0 ? (
@@ -206,20 +230,26 @@ export function InvoiceTab({ m, onBack }: { m: Manifest; onBack: () => void }) {
           <table>
             <thead><tr><th>المستند</th><th>التاريخ</th><th /></tr></thead>
             <tbody>
-              {invoices.map((i) => (
-                <tr key={`i${i.id}`}>
-                  <td><b>فاتورة {i.kind === 'SALE' ? 'بيع' : 'شراء'} {i.no}</b></td>
-                  <td className="muted">{fmtDate(i.date)}</td>
-                  <td>{canLink && <button className="btn btn-ghost btn-sm" disabled={updateManifest.isPending} onClick={() => link(i.id, 'invoice')}>ربط بهذه العربية</button>}</td>
-                </tr>
-              ))}
-              {deals.map((d) => (
-                <tr key={`d${d.id}`}>
-                  <td><b>بيع خارجي {d.no}</b></td>
-                  <td className="muted">{fmtDate(d.date)}</td>
-                  <td>{canLink && <button className="btn btn-ghost btn-sm" disabled={updateManifest.isPending} onClick={() => link(d.id, 'deal')}>ربط بهذه العربية</button>}</td>
-                </tr>
-              ))}
+              {invoices.map((i) => {
+                const label = `فاتورة ${i.kind === 'SALE' ? 'بيع' : 'شراء'} ${i.no}`;
+                return (
+                  <tr key={`i${i.id}`} style={{ cursor: 'pointer' }} title="اضغط لعرض الفاتورة" onClick={() => setPreview({ id: i.id, type: 'invoice', label })}>
+                    <td><b style={{ color: 'var(--accent)', textDecoration: 'underline' }}>{label}</b></td>
+                    <td className="muted">{fmtDate(i.date)}</td>
+                    <td>{canLink && <button className="btn btn-ghost btn-sm" disabled={updateManifest.isPending} onClick={(e) => { e.stopPropagation(); link(i.id, 'invoice'); }}>ربط بهذه العربية</button>}</td>
+                  </tr>
+                );
+              })}
+              {deals.map((d) => {
+                const label = `بيع خارجي ${d.no}`;
+                return (
+                  <tr key={`d${d.id}`} style={{ cursor: 'pointer' }} title="اضغط لعرض العملية" onClick={() => setPreview({ id: d.id, type: 'deal', label })}>
+                    <td><b style={{ color: 'var(--accent)', textDecoration: 'underline' }}>{label}</b></td>
+                    <td className="muted">{fmtDate(d.date)}</td>
+                    <td>{canLink && <button className="btn btn-ghost btn-sm" disabled={updateManifest.isPending} onClick={(e) => { e.stopPropagation(); link(d.id, 'deal'); }}>ربط بهذه العربية</button>}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
