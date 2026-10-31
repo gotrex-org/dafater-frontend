@@ -27,6 +27,9 @@ function invalidateLinked(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: manifestKeys.all });
   qc.invalidateQueries({ queryKey: ['invoices'] });
   qc.invalidateQueries({ queryKey: ['reports'] });
+  // رحلة السائق بتتربط بفاتورة الكشف تلقائياً من الـ API
+  qc.invalidateQueries({ queryKey: ['driver-trips'] });
+  qc.invalidateQueries({ queryKey: ['deals'] });
 }
 
 export function useCreateManifest() {

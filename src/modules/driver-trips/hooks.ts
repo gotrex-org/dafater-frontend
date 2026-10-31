@@ -68,6 +68,8 @@ export function useUpdateDriverTrip() {
 
 function invalidateAfterPayment(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: [KEY] });
+  qc.invalidateQueries({ queryKey: ['manifests'] });
+  qc.invalidateQueries({ queryKey: ['invoices'] });
   qc.invalidateQueries({ queryKey: ['parties'] });
   qc.invalidateQueries({ queryKey: ['treasury'] });
   qc.invalidateQueries({ queryKey: ['dashboard'] });
