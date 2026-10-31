@@ -5,22 +5,80 @@ import { EGP, fmtDate } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import { downloadElementAsPdf } from '@/lib/pdf';
 import { Spinner } from '@/components/common';
-import { RecordOpener } from '../../records/RecordOpener';
 import { useManifest, useDeleteManifest } from '../hooks';
 import { ManifestEditor } from './ManifestEditor';
 import { ShippingCosts } from './ShippingCosts';
+import { CustomsTab, DriverTab, InvoiceTab, type LinkTab } from './ManifestLinkTabs';
+import type { Manifest } from '../dtos';
 
 const DOTS = '..........................';
 // full A4 at 96dpi (210mm × 297mm) — the sheet is sized to fill the whole page
 const PAGE_W = 794;
 const PAGE_H = 1123;
 
+/**
+ * كشف العربية بتابات السلسلة: العربية · السائق · الفاتورة · الجمارك.
+ * تاب العربية هو الكشف نفسه بشكله، والباقي سجلات مربوطة تتعدّل من مكانها أو
+ * تتربط لو مش موجودة.
+ */
 export function ManifestPrint({ id, onClose }: { id: string; onClose: () => void }) {
+  const { data: m, isLoading } = useManifest(id);
+  const [tab, setTab] = useState<LinkTab>('vehicle');
+
+  if (isLoading || !m) return <Spinner />;
+  const backToVehicle = () => setTab('vehicle');
+
+  return (
+    <>
+      <LinkTabsNav m={m} tab={tab} onTab={setTab} />
+      {tab === 'vehicle' && <VehicleSheet id={id} onClose={onClose} />}
+      {tab === 'driver' && <DriverTab m={m} onBack={backToVehicle} />}
+      {tab === 'invoice' && <InvoiceTab m={m} onBack={backToVehicle} />}
+      {tab === 'customs' && <CustomsTab m={m} />}
+    </>
+  );
+}
+
+function LinkTabsNav({ m, tab, onTab }: { m: Manifest; tab: LinkTab; onTab: (t: LinkTab) => void }) {
+  const ours = m.vehicleSource === 'OURS';
+  const trip = m.driverTrips?.find((t) => t.uid);
+  // البادچ جنب كل تاب: اسم/رقم المربوط، أو «غير مربوط» بلون مميز
+  const items: { key: LinkTab; label: string; badge: string; linked: boolean }[] = [
+    { key: 'vehicle', label: 'العربية', badge: m.no, linked: true },
+    { key: 'driver', label: 'السائق', badge: !ours ? 'مكتب شحن' : trip ? trip.driverName || '—' : 'غير مربوط', linked: !ours || !!trip },
+    {
+      key: 'invoice', label: 'الفاتورة',
+      badge: m.invoice ? m.invoice.no : m.deal ? `بيع خارجي ${m.deal.no}` : 'غير مربوطة',
+      linked: !!(m.invoice || m.deal),
+    },
+    {
+      key: 'customs', label: 'الجمارك',
+      badge: !ours ? 'مكتب شحن' : m.clearance?.total ? EGP(m.clearance.total) : 'غير مربوطة',
+      linked: !ours || !!m.clearance?.total,
+    },
+  ];
+  return (
+    <nav className="tabs no-print" style={{ marginBottom: 12 }}>
+      {items.map((it) => (
+        <button
+          key={it.key}
+          className={tab === it.key ? 'active' : ''}
+          onClick={() => onTab(it.key)}
+          style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+        >
+          {it.label}{' '}
+          <span className={`pill${it.linked ? '' : ' mt-status st-unlinked'}`} style={{ fontSize: 11 }}>{it.badge}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function VehicleSheet({ id, onClose }: { id: string; onClose: () => void }) {
   const { can } = useAuth();
   const { data: m, isLoading } = useManifest(id);
   const deleteManifest = useDeleteManifest();
   const [editing, setEditing] = useState(false);
-  const [openRec, setOpenRec] = useState<{ entity: string; uid: string } | null>(null);
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
 
@@ -56,13 +114,6 @@ export function ManifestPrint({ id, onClose }: { id: string; onClose: () => void
   };
 
   if (editing) return <ManifestEditor manifest={m} onClose={() => setEditing(false)} onCreated={() => setEditing(false)} />;
-  // فتح أي حلقة من السلسلة بيبدّل الصفحة بسجلها، والرجوع بيرجّعنا للكشف.
-  if (openRec) {
-    return <RecordOpener entity={openRec.entity} uid={openRec.uid} onClose={() => setOpenRec(null)} />;
-  }
-
-  const trip = m.driverTrips?.find((t) => t.uid);
-  const fromOfficeChain = m.vehicleSource === 'CLIENT_OFFICE';
 
   return (
     <>
@@ -72,57 +123,6 @@ export function ManifestPrint({ id, onClose }: { id: string; onClose: () => void
         {can('manifests.delete') && <button className="btn btn-danger btn-sm" onClick={handleDelete} disabled={deleteManifest.isPending}>حذف</button>}
         {can('manifests.print') && <button className="btn btn-ghost btn-sm sp" onClick={() => innerRef.current && downloadElementAsPdf(innerRef.current, `كشف-${m.no}`)}>⬇ تحميل PDF</button>}
         {can('manifests.print') && <button className="btn btn-primary btn-sm" onClick={() => window.print()}>🖨 طباعة الكشف</button>}
-      </div>
-
-      {/* شريط السلسلة: الفاتورة · كشف العربية · رحلة السائق · التخليص.
-          كل حلقة موجودة بتفتح سجلها، والناقصة بتقول إنها ناقصة. no-print
-          عشان ماتطلعش في الورقة المطبوعة. */}
-      <div className="chain-bar no-print">
-        {m.invoice ? (
-          <button className="chain-chip" onClick={() => setOpenRec({ entity: 'invoices', uid: m.invoice!.id })}>
-            <span className="l">الفاتورة</span>
-            <b>{m.invoice.kind === 'SALE' ? 'بيع' : 'شراء'} {m.invoice.no}</b>
-          </button>
-        ) : m.deal ? (
-          <button className="chain-chip" onClick={() => setOpenRec({ entity: 'deals', uid: m.deal!.id })}>
-            <span className="l">الفاتورة</span>
-            <b>بيع خارجي {m.deal.no}</b>
-          </button>
-        ) : (
-          <span className="chain-chip is-empty"><span className="l">الفاتورة</span><b>غير مرتبط</b></span>
-        )}
-
-        <span className="chain-sep" aria-hidden="true" />
-
-        <span className="chain-chip is-current"><span className="l">كشف العربية</span><b>{m.no}</b></span>
-
-        <span className="chain-sep" aria-hidden="true" />
-
-        {trip ? (
-          <button className="chain-chip" onClick={() => setOpenRec({ entity: 'driver-trips', uid: trip.uid! })}>
-            <span className="l">رحلة السائق</span>
-            <b>{trip.driverName || '—'} · {trip.arrivalDate ? 'كمّلت' : 'في الطريق'}</b>
-          </button>
-        ) : (
-          <span className="chain-chip is-empty">
-            <span className="l">رحلة السائق</span>
-            <b>{fromOfficeChain ? 'مكتب شحن' : 'مافيش رحلة'}</b>
-          </span>
-        )}
-
-        <span className="chain-sep" aria-hidden="true" />
-
-        {m.clearance?.agent ? (
-          <button className="chain-chip" onClick={() => setOpenRec({ entity: 'parties', uid: m.clearance!.agent!.uid })}>
-            <span className="l">التخليص</span>
-            <b>{EGP(m.clearance.total)} · {m.clearance.agent.name}</b>
-          </button>
-        ) : (
-          <span className="chain-chip is-empty">
-            <span className="l">التخليص</span>
-            <b>{fromOfficeChain ? 'مكتب شحن' : 'مافيش تخليص'}</b>
-          </span>
-        )}
       </div>
 
       {/* تكاليف الشحن وربح العربية — للشاشة فقط، ماتطلعش في الورقة المطبوعة */}

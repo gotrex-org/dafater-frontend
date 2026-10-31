@@ -171,13 +171,13 @@ export function ShippingCosts({ manifestId }: { manifestId: string }) {
       </div>
 
       <div className="mf-grid" style={{ marginTop: 12, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+        {/* ربح العربية في التقارير فقط — الكشوفات ماتعرضش مكاسب */}
         {row('إجمالي التكاليف', s.costs, { minus: true })}
-        {row('ربح العربية', s.profit, { strong: true, color: s.profit < 0 ? 'var(--debit)' : 'var(--credit, #15803d)' })}
       </div>
 
       {!!s.otherExpenses.lines.length && (
         <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-          مصاريف أخرى مربوطة بالعربية (للعرض فقط، غير داخلة في الربح): {EGP(s.otherExpenses.total)}
+          مصاريف أخرى مربوطة بالعربية (للعرض فقط، غير داخلة في التكاليف): {EGP(s.otherExpenses.total)}
         </div>
       )}
     </div>
@@ -185,7 +185,7 @@ export function ShippingCosts({ manifestId }: { manifestId: string }) {
 }
 
 /** جمرك وتخليص على العربية — مبلغ يدوي + مكتب التخليص، ويترحّل على حساب المكتب. */
-function CustomsForm({ manifestId, onDone }: { manifestId: string; onDone: () => void }) {
+export function CustomsForm({ manifestId, onDone }: { manifestId: string; onDone: () => void }) {
   const { data: agents } = useClearanceAgents();
   const add = useAddClearanceExpense();
   const [agentId, setAgentId] = useState('');
