@@ -951,7 +951,9 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
    الحقول — مافيش فاصل رأسي بين اسم الحقل وقيمته. */
 .mf-plain table.pr.pr-info {
   border: 1px solid #ccc; border-radius: 10px; overflow: hidden;
+  width: 100%; box-sizing: border-box; /* نفس عرض جدول الأصناف */
 }
+.mf-plain .tbl-wrap > table.pr { width: 100%; margin-bottom: 0; }
 .mf-plain table.pr.pr-info > tbody > tr > td {
   display: flex; align-items: baseline; width: auto !important;
   padding: 0; border: none; border-bottom: 1px solid #ddd;

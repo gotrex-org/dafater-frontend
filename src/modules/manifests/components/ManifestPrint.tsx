@@ -7,7 +7,6 @@ import { downloadElementAsPdf } from '@/lib/pdf';
 import { Spinner } from '@/components/common';
 import { useManifest, useDeleteManifest } from '../hooks';
 import { ManifestEditor } from './ManifestEditor';
-import { ShippingCosts } from './ShippingCosts';
 import { CustomsTab, DriverTab, InvoiceTab, type LinkTab } from './ManifestLinkTabs';
 import type { Manifest } from '../dtos';
 
@@ -125,9 +124,6 @@ function VehicleSheet({ id, onClose }: { id: string; onClose: () => void }) {
         {can('manifests.print') && <button className="btn btn-primary btn-sm" onClick={() => window.print()}>🖨 طباعة الكشف</button>}
       </div>
 
-      {/* تكاليف الشحن وربح العربية — للشاشة فقط، ماتطلعش في الورقة المطبوعة */}
-      <ShippingCosts manifestId={m.id} />
-
       <div className="print-scale" ref={outerRef}>
         {/* الديزاين القديم (app_4.html): ترويسة اسم الشركة + العنوان ورقم الكشف،
             بيانات الكشف حقل تحت حقل، جدول الأصناف (م / الاصناف / العدد)، والإقرار.
@@ -139,31 +135,20 @@ function VehicleSheet({ id, onClose }: { id: string; onClose: () => void }) {
             <div className="ttl"><b>كشف استلام بضاعة</b><br />رقم: {m.no}</div>
           </div>
 
-          {/* كل حقل بيتعرض في سطر لوحده (الاسم ناحية والقيمة ناحية) — الترتيب
-              اللي بتقراه هنا هو اللي بيطلع على الورقة: العميل، التاريخ، مكتب
-              الشحن لو الخروج من مكتب، بيانات السائق، بيانات العربية، الملاحظات.
-              الـ colSpan فاضل للورق القديم ومش مأثّر على العرض المتراصّ. */}
+          {/* بيانات العربية بس، كل حقل في سطر لوحده: التاريخ، رقم العربية،
+              المسمّى، العميل (ومكتب الشحن والملاحظات لو موجودين). بيانات
+              السائق في تاب السائق، والتكاليف مش في الكشف. */}
           <table className="pr pr-info">
             <tbody>
-              <tr>
-                <td colSpan={fromOffice ? 1 : 2}><b>اسم العميل:</b> <span>{m.clientName || ''}</span></td>
-                <td><b>التاريخ:</b> <span>{fmtDate(m.date)}</span></td>
-                {fromOffice && (
-                  <td><b>مكتب الشحن:</b> <span>{m.shippingOffice || ''}</span></td>
-                )}
-              </tr>
-              <tr>
-                <td><b>اسم السائق:</b> <span>{m.driverName || ''}</span></td>
-                <td><b>الرقم القومي:</b> <span>{m.driverNID || ''}</span></td>
-                <td><b>رقم التليفون:</b> <span>{m.driverPhone || ''}</span></td>
-              </tr>
-              <tr>
-                <td><b>مسمّى العربية:</b> <span>{m.vehicleLabel || ''}</span></td>
-                <td><b>رقم العربية:</b> <span>{m.vehicleNo || ''}</span></td>
-                <td><b>رقم المقطورة:</b> <span>{m.trailerNo || ''}</span></td>
-              </tr>
+              <tr><td><b>التاريخ:</b> <span>{fmtDate(m.date)}</span></td></tr>
+              <tr><td><b>رقم العربية:</b> <span>{m.vehicleNo || ''}</span></td></tr>
+              <tr><td><b>مسمّى العربية:</b> <span>{m.vehicleLabel || ''}</span></td></tr>
+              <tr><td><b>اسم العميل:</b> <span>{m.clientName || ''}</span></td></tr>
+              {fromOffice && (
+                <tr><td><b>مكتب الشحن:</b> <span>{m.shippingOffice || ''}</span></td></tr>
+              )}
               {m.note && (
-                <tr><td colSpan={3}><b>ملاحظات:</b> <span>{m.note}</span></td></tr>
+                <tr><td><b>ملاحظات:</b> <span>{m.note}</span></td></tr>
               )}
             </tbody>
           </table>

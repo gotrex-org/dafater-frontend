@@ -142,8 +142,34 @@ export function InvoiceTab({ m, onBack }: { m: Manifest; onBack: () => void }) {
   const { data: dealsPage, isLoading: ld } = useDeals(!linked && client ? { search: client, pageSize: 200 } : { pageSize: 1 });
   const [err, setErr] = useState('');
 
-  if (m.invoice) return <InvoiceDetailById uid={m.invoice.id} onBack={onBack} />;
-  if (m.deal) return <DealDetailById uid={m.deal.id} onBack={onBack} />;
+  if (m.invoice || m.deal) {
+    const label = m.invoice ? `الفاتورة ${m.invoice.no}` : `البيع الخارجي ${m.deal!.no}`;
+    // فك الربط يمسح الربط من الكشف فقط؛ الفاتورة نفسها ورحلة السائق تبقى كما هي
+    const unlink = () => {
+      if (!window.confirm(`فك ربط ${label} بكشف العربية ${m.no}؟`)) return;
+      setErr('');
+      updateManifest.mutate(
+        { id: m.id, dto: { invoiceId: '', dealId: '' } },
+        { onError: (e: any) => setErr(e?.message || 'تعذر فك الربط') },
+      );
+    };
+    return (
+      <>
+        {can('manifests.edit') && (
+          <div className="toolbar no-print">
+            <span className="muted" style={{ fontSize: 13 }}>{label} مربوطة بهذا الكشف</span>
+            <button className="btn btn-danger btn-sm sp" disabled={updateManifest.isPending} onClick={unlink}>
+              {updateManifest.isPending ? '…' : 'فك ربط الفاتورة بالكشف'}
+            </button>
+          </div>
+        )}
+        {err && <div className="err-text">{err}</div>}
+        {m.invoice
+          ? <InvoiceDetailById uid={m.invoice.id} onBack={onBack} />
+          : <DealDetailById uid={m.deal!.id} onBack={onBack} />}
+      </>
+    );
+  }
 
   const invoices = (invoicesPage?.data ?? []).filter((i) => i.party?.name === client);
   const deals = (dealsPage?.data ?? []).filter((d) => d.client?.name === client);
