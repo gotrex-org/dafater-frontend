@@ -10,8 +10,8 @@ import { InvoiceDetailById } from '../../invoices/components/InvoiceDetail';
 import { DealDetailById } from '../../deals/components/DealsView';
 import { useInvoices } from '../../invoices/hooks';
 import { useDeals } from '../../deals/hooks';
-import { DriverTripDetailById } from '../../driver-trips/components/DriverTripDetail';
 import { DriverTripEditor } from '../../driver-trips/components/DriverTripEditor';
+import { DriverStatement } from '../../driver-trips/components/DriverStatement';
 import { useDriverTrips, useUpdateDriverTrip } from '../../driver-trips/hooks';
 import { useDeleteClearanceMovement, useUpdateClearanceMovement } from '../../clearance/hooks';
 import { useUpdateManifest, useVehicleShipping } from '../hooks';
@@ -51,7 +51,8 @@ export function DriverTab({ m, onBack }: { m: Manifest; onBack: () => void }) {
   const [err, setErr] = useState('');
 
   if (m.vehicleSource !== 'OURS') return <OfficeNote what="رحلة في كشف السائقين" />;
-  if (trip) return <DriverTripDetailById uid={trip.uid!} onBack={onBack} />;
+  // كشف السائق كامل: بياناته وكل رحلاته، ورحلة العربية دي متعلّمة
+  if (trip) return <DriverStatement driverName={trip.driverName || m.driverName || ''} currentTripId={trip.uid!} onBack={onBack} />;
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['manifests'] });
 

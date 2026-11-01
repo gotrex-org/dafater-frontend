@@ -14,7 +14,12 @@ const norm = (s: string | null | undefined) => (s ?? '').replace(/\s+/g, ' ').tr
  * كشف السائق: بياناته من سجل السائقين، وتحته كل الرحلات اللي راحها ببياناتها.
  * الضغط على رحلة يفتح كشفها. مافيش مكاسب هنا — المكاسب في التقارير بس.
  */
-export function DriverStatement({ driverName, onBack }: { driverName: string; onBack: () => void }) {
+export function DriverStatement({ driverName, onBack, currentTripId }: {
+  driverName: string;
+  onBack: () => void;
+  /** الرحلة المربوطة بكشف العربية اللي فاتح منه — بتتعلّم في الجدول */
+  currentTripId?: string;
+}) {
   const { data: driversPage, isLoading: ld } = useDrivers();
   const { data: allTrips, isLoading: lt } = useDriverTrips();
   const [openTrip, setOpenTrip] = useState<string | null>(null);
@@ -103,7 +108,10 @@ export function DriverStatement({ driverName, onBack }: { driverName: string; on
                   const extra = (t.remainingDelay ?? 0) + (t.remainingWeightDiff ?? 0);
                   const doc = t.invoice ? `فاتورة ${t.invoice.no}` : t.deal ? `بيع خارجي ${t.deal.no}` : null;
                   return (
-                    <tr key={t.id} style={{ cursor: 'pointer' }} title="اضغط لعرض الرحلة" onClick={() => setOpenTrip(t.id)}>
+                    <tr
+                      key={t.id} title="اضغط لعرض الرحلة" onClick={() => setOpenTrip(t.id)}
+                      style={{ cursor: 'pointer', ...(t.id === currentTripId ? { background: 'var(--accent-soft)', fontWeight: 700 } : {}) }}
+                    >
                       <td className="num">{fmtDate(t.departureDate)}</td>
                       <td className="num">{t.arrivalDate ? fmtDate(t.arrivalDate) : <span className="muted">—</span>}</td>
                       <td>{t.clientName}</td>
