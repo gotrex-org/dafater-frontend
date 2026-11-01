@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { EGP, fmtDate } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import { downloadElementAsPdf } from '@/lib/pdf';
@@ -30,7 +30,7 @@ export function ManifestPrint({ id, onClose }: { id: string; onClose: () => void
   return (
     <>
       <LinkTabsNav m={m} tab={tab} onTab={setTab} />
-      {tab === 'vehicle' && <VehicleSheet id={id} onClose={onClose} onOpenDriver={() => setTab('driver')} />}
+      {tab === 'vehicle' && <VehicleSheet id={id} onClose={onClose} />}
       {tab === 'driver' && <DriverTab m={m} onBack={backToVehicle} />}
       {tab === 'invoice' && <InvoiceTab m={m} onBack={backToVehicle} />}
       {tab === 'customs' && <CustomsTab m={m} />}
@@ -73,46 +73,7 @@ function LinkTabsNav({ m, tab, onTab }: { m: Manifest; tab: LinkTab; onTab: (t: 
   );
 }
 
-type Trip = NonNullable<Manifest['driverTrips']>[number];
-
-/** عدد أيام الرحلة: من التحميل للوصول، أو لليوم لو لسه في الطريق (نفس حساب العطلة). */
-function tripDays(from: string, to?: string | null) {
-  const d = Math.ceil((new Date(to ?? Date.now()).getTime() - new Date(from).getTime()) / 86_400_000);
-  return Math.max(0, d);
-}
-
-/** كارت رحلة السائق المربوطة بالكشف — للشاشة فقط. */
-function TripCard({ m, trip, onOpen }: { m: Manifest; trip: Trip; onOpen: () => void }) {
-  const arrived = !!trip.arrivalDate;
-  const days = trip.departureDate ? tripDays(trip.departureDate, trip.arrivalDate) : null;
-  const cells: { label: string; value: ReactNode }[] = [
-    { label: 'السائق', value: <b>{m.driverName || trip.driverName || '—'}</b> },
-    { label: 'التليفون', value: m.driverPhone || '—' },
-    { label: 'العربية', value: [m.vehicleLabel, m.vehicleNo].filter(Boolean).join(' — ') || '—' },
-    { label: 'تاريخ التحميل', value: trip.departureDate ? fmtDate(trip.departureDate) : '—' },
-    { label: 'الناولون المتفق عليه', value: <b className="num">{trip.agreedFreight != null ? EGP(trip.agreedFreight) : '—'}</b> },
-    { label: 'الوصول', value: arrived ? fmtDate(trip.arrivalDate!) : <span style={{ color: 'var(--accent)' }}>في الطريق</span> },
-    { label: arrived ? 'مدة الرحلة' : 'مدة الرحلة حتى اليوم', value: days != null ? <b>{days} يوم</b> : '—' },
-  ];
-  return (
-    <div className="card no-print" style={{ padding: '12px 16px', marginBottom: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-        <b style={{ flex: 1 }}>رحلة السائق المربوطة</b>
-        <button className="btn btn-ghost btn-sm" onClick={onOpen}>فتح كشف السائق ←</button>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10 }}>
-        {cells.map((c) => (
-          <div key={c.label} className="stat">
-            <div className="muted" style={{ fontSize: 12 }}>{c.label}</div>
-            <div style={{ fontSize: 14 }}>{c.value}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function VehicleSheet({ id, onClose, onOpenDriver }: { id: string; onClose: () => void; onOpenDriver: () => void }) {
+function VehicleSheet({ id, onClose }: { id: string; onClose: () => void }) {
   const { can } = useAuth();
   const { data: m, isLoading } = useManifest(id);
   const deleteManifest = useDeleteManifest();
@@ -164,8 +125,6 @@ function VehicleSheet({ id, onClose, onOpenDriver }: { id: string; onClose: () =
         {can('manifests.print') && <button className="btn btn-primary btn-sm" onClick={() => window.print()}>🖨 طباعة الكشف</button>}
       </div>
 
-      {/* الرحلة المربوطة — للشاشة فقط. الناولون المتفق عليه لا يُطبع على الكشف */}
-      {trip && <TripCard m={m} trip={trip} onOpen={onOpenDriver} />}
       {!trip && m.vehicleSource === 'OURS' && (
         <div className="no-print" style={{ fontSize: 13, marginBottom: 10, color: 'var(--debit)' }}>
           هذا الكشف غير مربوط برحلة سائق. اربطه من تاب السائق.
