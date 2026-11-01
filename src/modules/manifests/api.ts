@@ -5,7 +5,11 @@ import type { Manifest, CreateManifestDto, UpdateManifestDto, VehicleShipping } 
 
 export const manifestsApi = {
   list: (params: ListParams = {}) => api.get<Paginated<Manifest>>(`/manifests${toQuery(params)}`),
-  get: (id: string) => api.get<Manifest>(`/manifests/${id}`),
+  // الـ API بيرجّع uid الرحلة في id (uid-serializer) — الشاشات بتدوّر على uid
+  get: (id: string) => api.get<Manifest>(`/manifests/${id}`).then((m) => (m && {
+    ...m,
+    driverTrips: m.driverTrips?.map((t) => ({ ...t, uid: t.uid ?? t.id })),
+  }) as Manifest),
   nextNo: (clientName: string) => api.get<{ no: string }>(`/manifests/next-no?clientName=${encodeURIComponent(clientName)}`),
   create: (dto: CreateManifestDto) => api.post<Manifest>('/manifests', dto),
   update: (id: string, dto: UpdateManifestDto) => api.patch<Manifest>(`/manifests/${id}`, dto),

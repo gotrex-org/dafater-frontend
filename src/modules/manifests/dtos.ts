@@ -37,7 +37,7 @@ export interface Manifest {
   items: ManifestItem[];
   /** رحلة السائق المربوطة — GET /manifests/:id بيرجّع بياناتها والناولون المتفق عليه */
   driverTrips?: {
-    uid?: string; arrivalDate?: string | null; driverName?: string | null;
+    id?: string; uid?: string; arrivalDate?: string | null; driverName?: string | null;
     vehicleNo?: string | null; trailerNo?: string | null; vehicleLabel?: string | null;
     departureDate?: string; agreedFreight?: number;
   }[];
