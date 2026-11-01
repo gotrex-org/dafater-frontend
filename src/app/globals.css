@@ -1034,3 +1034,35 @@ button.chain-chip:hover .l { color: var(--accent-d); }
 .mf-list thead th { background: var(--line-soft); color: inherit; }
 /* الشريط الجانبي بيفضل باين فوق حدود الخلية */
 .mf-list tbody tr:hover { background: rgba(0,0,0,.03); }
+
+/* ── رحلة السائق: الشكل المبسّط ─────────────────────────────────────
+   السائق ← البيانات والربط والوصول ← الناولون ← العطلة ← المتبقي.
+   من غير براويز تقيلة: مسافات وخطوط فاصلة خفيفة بس. */
+.tp-card { padding: 28px 32px; display: flex; flex-direction: column; gap: 26px; }
+.tp-info { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line-soft); font-size: 14.5px; }
+.tp-info > b { flex: 0 0 110px; color: var(--ink-soft); font-weight: 600; }
+.tp-info > span { flex: 1; font-weight: 600; min-width: 0; }
+.tp-head { display: flex; align-items: baseline; margin-bottom: 6px; }
+.tp-head > span { flex: 1; font-size: 16px; font-weight: 800; }
+.tp-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line-soft); font-size: 14.5px; }
+.tp-d { width: 82px; color: var(--ink-soft); flex: none; }
+.tp-t { flex: 1; min-width: 0; }
+.tp-m { font-weight: 700; }
+.tp-x { border: none; background: none; color: #b9ae9b; font-size: 17px; line-height: 1; padding: 2px 6px; cursor: pointer; }
+.tp-x:hover { color: var(--debit); }
+.tp-foot { display: flex; align-items: center; padding-top: 10px; font-size: 14px; }
+.tp-add, .tp-small, .tp-link, .tp-doc { border: none; background: none; padding: 0; cursor: pointer; font-family: inherit; }
+.tp-add { color: var(--accent); font-weight: 700; font-size: 13.5px; }
+.tp-small { color: var(--ink-soft); font-size: 12.5px; text-decoration: underline; }
+.tp-link { color: var(--accent); font-weight: 700; font-size: 13px; padding: 6px 10px; }
+.tp-doc { color: var(--accent); font-weight: 700; font-size: 14.5px; }
+.tp-doc:hover, .tp-add:hover, .tp-link:hover { color: var(--accent-d); }
+.tp-form { background: var(--paper); border-radius: 10px; padding: 12px 14px; margin-top: 8px; }
+.tp-total { display: flex; align-items: baseline; background: var(--paper); border-radius: 12px; padding: 14px 18px; }
+.tp-total > span { flex: 1; font-size: 16px; font-weight: 800; }
+.tp-total > b { font-size: 26px; font-weight: 800; }
+@media screen and (max-width: 640px) {
+  .tp-card { padding: 18px 16px; }
+  .tp-info { flex-wrap: wrap; }
+  .tp-info > b { flex-basis: 100%; }
+}
