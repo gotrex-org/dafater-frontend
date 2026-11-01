@@ -148,7 +148,7 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
 
         {isUsd && fxRate > 0 && (
           <div className="num" style={{ textAlign: 'left', fontWeight: 700, marginTop: 8 }}>
-            سعر الصرف {EGP(fxRate)} ج.م{usdPurchase ? ' (من دفعات الوكيل)' : ''}
+            {usdPurchase ? 'سعر الوكيل' : 'سعر الصرف'} {EGP(fxRate)} ج.م
           </div>
         )}
         {unpricedUsd > 0 && (
