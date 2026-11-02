@@ -71,10 +71,10 @@ export function SettlementView() {
   // أقسام تاب التصفية تتبع الطريقة والصلاحية: قوائم الأسعار والإيداعات لا
   // معنى لها بدون مورد، والتصفية الثابتة لا تقرأ من قوائم الأسعار أصلاً
   const subs: { value: Sub; label: string }[] = [
-    { value: 'invoices', label: isFixed ? 'فواتير الشراء' : 'الفواتير' },
-    // صاحب الاسم يضيف فواتير الشراء لتصفيته الثابتة بنفسه، وتنتظر موافقة المالك
-    ...(isAdmin ? [{ value: 'pick' as Sub, label: 'اختيار الفواتير' }]
-      : isFixed ? [{ value: 'pick' as Sub, label: 'إضافة فواتير' }] : []),
+    { value: 'invoices', label: isFixed ? 'الأصناف' : 'الفواتير' },
+    // التصفية الثابتة: صاحب الاسم يختار الأصناف بنفسه وتنتظر موافقة المالك
+    ...(isFixed ? [{ value: 'pick' as Sub, label: 'اختيار الأصناف' }]
+      : isAdmin ? [{ value: 'pick' as Sub, label: 'اختيار الفواتير' }] : []),
     ...(hasSupplier && !isFixed ? [{ value: 'prices' as Sub, label: 'قوائم أسعار المورد' }] : []),
     ...(hasSupplier && isAdmin ? [{ value: 'supplier' as Sub, label: 'الإيداعات والرصيد' }] : []),
   ];
@@ -161,8 +161,8 @@ export function SettlementView() {
                   />
                   <StatCard label="إجمالي الكميات" value={QTY(data.fixedTotals?.qty ?? 0)} />
                   <StatCard
-                    label="عدد فواتير الشراء"
-                    value={QTY(data.fixedTotals?.invoices ?? 0)}
+                    label="عدد الأصناف"
+                    value={QTY(data.fixedTotals?.items ?? 0)}
                     variant="blue"
                   />
                 </StatsGrid>
@@ -199,7 +199,7 @@ export function SettlementView() {
               {isFixed && (data.fixedTotals?.needsAmount ?? 0) > 0 && (
                 <div className="card" style={{ padding: 10, marginTop: 10, borderColor: 'var(--debit)' }}>
                   <span style={{ fontSize: 12, color: 'var(--debit)' }}>
-                    تنبيه: {data.fixedTotals?.needsAmount} فاتورة بدون مبلغ للوحدة أو نسبة، فمستحقها
+                    تنبيه: {data.fixedTotals?.needsAmount} صنف بدون مبلغ للوحدة أو نسبة، فمستحقه
                     غير محسوب وغير داخل في الإجمالي.
                   </span>
                 </div>

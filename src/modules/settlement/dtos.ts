@@ -138,8 +138,9 @@ export interface CapitalTotals {
 export interface FixedTotals {
   due: number;
   qty: number;
-  invoices: number;
-  /** فواتير مختارة من غير مبلغ للوحدة، فمستحقها مش محسوب */
+  /** عدد الأصناف الموافق عليها */
+  items: number;
+  /** أصناف موافق عليها من غير مبلغ للوحدة أو نسبة، فمستحقها مش محسوب */
   needsAmount: number;
   /** أضافها صاحب الاسم وتنتظر موافقة المالك */
   pending: number;
@@ -149,8 +150,8 @@ export interface SettlementOverview {
   partner: Partner;
   totals: CapitalTotals | null;
   fixedTotals: FixedTotals | null;
-  /** فواتير الشراء ومستحق كل واحدة — في التصفية الثابتة فقط */
-  fixed: FixedInvoice[] | null;
+  /** الأصناف ومستحق كل صنف — في التصفية الثابتة فقط */
+  fixed: FixedItem[] | null;
   supplierAccount: SupplierAccount | null;
   vehicles: Vehicle[];
 }
@@ -228,28 +229,52 @@ export interface PartnerUpsertDto {
   note?: string;
 }
 
-/** فاتورة شراء في التصفية الثابتة: الكمية × المبلغ للوحدة = المستحق. */
-export interface FixedInvoice {
+/** (فاتورة شراء، صنف) — مفتاح صنف التصفية الثابتة. */
+export interface ItemRef {
+  invoiceId: string;
+  productId: string;
+}
+
+/**
+ * صنف من فاتورة شراء في التصفية الثابتة:
+ * الكمية × المبلغ للوحدة، أو القيمة × النسبة = المستحق.
+ */
+export interface FixedItem extends ItemRef {
   id: string;
-  selected: boolean;
-  /** false = أضافها صاحب الاسم وتنتظر موافقة المالك، فلا تدخل الحساب */
+  /** false = أضافه صاحب الاسم وينتظر موافقة المالك، فلا يدخل الحساب */
   approved: boolean;
   invoiceNo: string;
   date: string;
   supplierName: string;
   currency: 'EGP' | 'USD';
-  /** مجموع كميات أصناف المورد في الفاتورة */
+  productName: string;
+  unit: string | null;
+  /** مجموع كميات الصنف في الفاتورة */
   qty: number;
-  /** قيمة أصناف المورد بالجنيه — أساس النسبة. `null` = فاتورة دولار غير مسعّرة */
+  /** قيمة الصنف في الفاتورة بالجنيه — أساس النسبة. `null` = فاتورة دولار غير مسعّرة */
   value: number | null;
   /** المبلغ للوحدة. `null` = مكتوبش بعد، فالمستحق مش محسوب. */
   rate: number | null;
-  /** بديل للمبلغ للوحدة: نسبة من قيمة أصناف المورد */
+  /** بديل للمبلغ للوحدة: نسبة من قيمة الصنف */
   percent: number | null;
   amount: number | null;
-  note: string | null;
-  itemCount: number;
-  items: { id: string; productName: string; unit: string | null; qty: number }[];
+}
+
+/** نتيجة «اختيار الأصناف»: فاتورة شراء والأصناف المطابقة للبحث فيها. */
+export interface ItemSearchInvoice {
+  invoiceId: string;
+  invoiceNo: string;
+  date: string;
+  supplierName: string;
+  items: {
+    productId: string;
+    productName: string;
+    unit: string | null;
+    qty: number;
+    /** مختار لهذا الاسم */
+    selected: boolean;
+    approved: boolean;
+  }[];
 }
 
 /** حركة إضافة أو نقص على رأس المال القديم. المبلغ الموجب إضافة والسالب نقص. */

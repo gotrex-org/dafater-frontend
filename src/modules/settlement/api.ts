@@ -1,6 +1,6 @@
 import { api } from '@/lib/api';
 import type {
-  CapitalMovementInput, CapitalState, CreatePriceListDto, FixedInvoice, Partner, PartnerUpsertDto,
+  CapitalMovementInput, CapitalState, CreatePriceListDto, FixedItem, ItemRef, ItemSearchInvoice, Partner, PartnerUpsertDto,
   PaymentInput, PaymentsState, PriceList, SettlementOverview, Statement, SupplierProduct,
   UpdatePriceListDto, UpdateVehicleDto, Vehicle, VehicleDetail,
 } from './dtos';
@@ -36,15 +36,19 @@ export const settlementApi = {
     api.post<PaymentsState>(`${BASE}/${p}/payments`, dto),
   deletePayment: (p: string, id: string) => api.del<PaymentsState>(`${BASE}/${p}/payments/${id}`),
 
-  // التصفية الثابتة: فواتير الشراء والمبلغ للوحدة
-  fixed: (p: string) => api.get<FixedInvoice[]>(`${BASE}/${p}/fixed`),
-  setFixedRate: (p: string, invoiceId: string, body: { rate: number } | { percent: number }) =>
-    api.put<FixedInvoice>(`${BASE}/${p}/fixed/${invoiceId}`, body),
+  // التصفية الثابتة: أصناف من فواتير الشراء، ولكل صنف مبلغ للوحدة أو نسبة
+  fixed: (p: string) => api.get<FixedItem[]>(`${BASE}/${p}/fixed`),
+  searchItems: (p: string, q: string, from?: string, to?: string) => {
+    const qs = new URLSearchParams({ q, ...(from ? { from } : {}), ...(to ? { to } : {}) });
+    return api.get<ItemSearchInvoice[]>(`${BASE}/${p}/items/search?${qs}`);
+  },
+  addItems: (p: string, items: ItemRef[]) => api.post(`${BASE}/${p}/items`, { items }),
+  removeItem: (p: string, ref: ItemRef) => api.del<void>(`${BASE}/${p}/items/${ref.invoiceId}/${ref.productId}`),
+  setItemRate: (p: string, ref: ItemRef, body: { rate: number } | { percent: number }) =>
+    api.put<FixedItem>(`${BASE}/${p}/items/${ref.invoiceId}/${ref.productId}`, body),
 
-  // اختيار الفواتير: نفس الـ endpoint، والشكل يتبع طريقة التصفية — فواتير بيع
-  // برأس المال، وفواتير شراء بالتصفية الثابتة
+  // اختيار فواتير البيع للتصفية برأس المال
   candidates: (p: string) => api.get<Vehicle[]>(`${BASE}/${p}/candidates`),
-  fixedCandidates: (p: string) => api.get<FixedInvoice[]>(`${BASE}/${p}/candidates`),
   vehicle: (p: string, id: string) => api.get<VehicleDetail>(`${BASE}/${p}/vehicles/${id}`),
   select: (p: string, invoiceIds: string[]) => api.post(`${BASE}/${p}/vehicles`, { invoiceIds }),
   selectAll: (p: string) => api.post(`${BASE}/${p}/vehicles-all`, {}),

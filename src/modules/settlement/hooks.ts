@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { settlementApi } from './api';
 import type {
   CapitalMovementInput, CreatePriceListDto, PartnerUpsertDto, PaymentInput, UpdatePriceListDto,
-  UpdateVehicleDto,
+  UpdateVehicleDto, ItemRef,
 } from './dtos';
 
 const KEY = 'settlement';
@@ -208,9 +208,9 @@ export function useDeleteCapitalMovement(partnerId: string) {
   });
 }
 
-// --------------------------- التصفية الثابتة ---------------------------
+// --------------------- التصفية الثابتة (أصناف من فواتير الشراء) ---------------------
 
-export function useFixedInvoices(partnerId: string | null, enabled = true) {
+export function useFixedItems(partnerId: string | null, enabled = true) {
   return useQuery({
     queryKey: [KEY, 'fixed', partnerId],
     queryFn: () => settlementApi.fixed(partnerId!),
@@ -218,19 +218,36 @@ export function useFixedInvoices(partnerId: string | null, enabled = true) {
   });
 }
 
-export function useFixedCandidates(partnerId: string | null, enabled = true) {
+/** «اختيار الأصناف»: البحث بعد كتابة اسم الصنف فقط. */
+export function useItemSearch(partnerId: string | null, q: string, from?: string, to?: string) {
   return useQuery({
-    queryKey: [KEY, 'fixed-candidates', partnerId],
-    queryFn: () => settlementApi.fixedCandidates(partnerId!),
-    enabled: !!partnerId && enabled,
+    queryKey: [KEY, 'item-search', partnerId, q, from, to],
+    queryFn: () => settlementApi.searchItems(partnerId!, q, from, to),
+    enabled: !!partnerId && !!q.trim(),
   });
 }
 
-export function useSetFixedRate(partnerId: string) {
+export function useAddItems(partnerId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ invoiceId, ...body }: { invoiceId: string } & ({ rate: number } | { percent: number })) =>
-      settlementApi.setFixedRate(partnerId, invoiceId, body),
+    mutationFn: (items: ItemRef[]) => settlementApi.addItems(partnerId, items),
+    onSuccess: () => invalidateAll(qc),
+  });
+}
+
+export function useRemoveItem(partnerId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ref: ItemRef) => settlementApi.removeItem(partnerId, ref),
+    onSuccess: () => invalidateAll(qc),
+  });
+}
+
+export function useSetItemRate(partnerId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ref, body }: { ref: ItemRef; body: { rate: number } | { percent: number } }) =>
+      settlementApi.setItemRate(partnerId, ref, body),
     onSuccess: () => invalidateAll(qc),
   });
 }
