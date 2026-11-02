@@ -141,6 +141,8 @@ export interface FixedTotals {
   invoices: number;
   /** فواتير مختارة من غير مبلغ للوحدة، فمستحقها مش محسوب */
   needsAmount: number;
+  /** أضافها صاحب الاسم وتنتظر موافقة المالك */
+  pending: number;
 }
 
 export interface SettlementOverview {
@@ -230,14 +232,20 @@ export interface PartnerUpsertDto {
 export interface FixedInvoice {
   id: string;
   selected: boolean;
+  /** false = أضافها صاحب الاسم وتنتظر موافقة المالك، فلا تدخل الحساب */
+  approved: boolean;
   invoiceNo: string;
   date: string;
   supplierName: string;
   currency: 'EGP' | 'USD';
   /** مجموع كميات أصناف المورد في الفاتورة */
   qty: number;
+  /** قيمة أصناف المورد بالجنيه — أساس النسبة. `null` = فاتورة دولار غير مسعّرة */
+  value: number | null;
   /** المبلغ للوحدة. `null` = مكتوبش بعد، فالمستحق مش محسوب. */
   rate: number | null;
+  /** بديل للمبلغ للوحدة: نسبة من قيمة أصناف المورد */
+  percent: number | null;
   amount: number | null;
   note: string | null;
   itemCount: number;

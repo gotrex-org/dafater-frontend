@@ -72,7 +72,9 @@ export function SettlementView() {
   // معنى لها بدون مورد، والتصفية الثابتة لا تقرأ من قوائم الأسعار أصلاً
   const subs: { value: Sub; label: string }[] = [
     { value: 'invoices', label: isFixed ? 'فواتير الشراء' : 'الفواتير' },
-    ...(isAdmin ? [{ value: 'pick' as Sub, label: 'اختيار الفواتير' }] : []),
+    // صاحب الاسم يضيف فواتير الشراء لتصفيته الثابتة بنفسه، وتنتظر موافقة المالك
+    ...(isAdmin ? [{ value: 'pick' as Sub, label: 'اختيار الفواتير' }]
+      : isFixed ? [{ value: 'pick' as Sub, label: 'إضافة فواتير' }] : []),
     ...(hasSupplier && !isFixed ? [{ value: 'prices' as Sub, label: 'قوائم أسعار المورد' }] : []),
     ...(hasSupplier && isAdmin ? [{ value: 'supplier' as Sub, label: 'الإيداعات والرصيد' }] : []),
   ];
@@ -197,7 +199,7 @@ export function SettlementView() {
               {isFixed && (data.fixedTotals?.needsAmount ?? 0) > 0 && (
                 <div className="card" style={{ padding: 10, marginTop: 10, borderColor: 'var(--debit)' }}>
                   <span style={{ fontSize: 12, color: 'var(--debit)' }}>
-                    تنبيه: {data.fixedTotals?.needsAmount} فاتورة بدون مبلغ للوحدة، فمستحقها
+                    تنبيه: {data.fixedTotals?.needsAmount} فاتورة بدون مبلغ للوحدة أو نسبة، فمستحقها
                     غير محسوب وغير داخل في الإجمالي.
                   </span>
                 </div>
@@ -219,7 +221,7 @@ export function SettlementView() {
                     onOpen={setOpenVehicle}
                   />
                 ))}
-              {sub === 'pick' && isAdmin && (isFixed
+              {sub === 'pick' && (isAdmin || isFixed) && (isFixed
                 ? <FixedPicker key={partner.id} partner={partner} />
                 : <VehiclePicker key={partner.id} partner={partner} />)}
               {sub === 'prices' && hasSupplier && !isFixed && (

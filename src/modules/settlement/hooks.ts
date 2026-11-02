@@ -229,8 +229,8 @@ export function useFixedCandidates(partnerId: string | null, enabled = true) {
 export function useSetFixedRate(partnerId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ invoiceId, rate }: { invoiceId: string; rate: number }) =>
-      settlementApi.setFixedRate(partnerId, invoiceId, rate),
+    mutationFn: ({ invoiceId, ...body }: { invoiceId: string } & ({ rate: number } | { percent: number })) =>
+      settlementApi.setFixedRate(partnerId, invoiceId, body),
     onSuccess: () => invalidateAll(qc),
   });
 }

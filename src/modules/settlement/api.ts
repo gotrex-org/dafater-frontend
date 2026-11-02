@@ -38,8 +38,8 @@ export const settlementApi = {
 
   // التصفية الثابتة: فواتير الشراء والمبلغ للوحدة
   fixed: (p: string) => api.get<FixedInvoice[]>(`${BASE}/${p}/fixed`),
-  setFixedRate: (p: string, invoiceId: string, rate: number) =>
-    api.put<FixedInvoice>(`${BASE}/${p}/fixed/${invoiceId}`, { rate }),
+  setFixedRate: (p: string, invoiceId: string, body: { rate: number } | { percent: number }) =>
+    api.put<FixedInvoice>(`${BASE}/${p}/fixed/${invoiceId}`, body),
 
   // اختيار الفواتير: نفس الـ endpoint، والشكل يتبع طريقة التصفية — فواتير بيع
   // برأس المال، وفواتير شراء بالتصفية الثابتة
