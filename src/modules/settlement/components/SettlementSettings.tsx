@@ -63,7 +63,6 @@ export function SettlementSettings({ partner }: { partner: Partner }) {
   const busy = update.isPending || del.isPending;
   const who = name.trim() || 'الاسم';
   const userOptions = (users?.data ?? [])
-    .filter((u) => !u.admin)
     .map((u) => ({ id: u.id, name: u.username ? `${u.name} (${u.username})` : u.name }));
 
   const save = () => {
