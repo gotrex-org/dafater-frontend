@@ -65,7 +65,9 @@ export interface ClearanceStatement {
 
 export interface AddClearanceExpenseDto {
   manifestId: string;
-  agentId: string;
+  agentId?: string;
+  /** على حساب مورد مباشرة، بدون مكتب */
+  supplierId?: string;
   date: string;
   amount: number;
   categoryId?: string;
@@ -106,6 +108,7 @@ export interface UpdateClearanceMovementDto {
   date?: string;
   amount?: number;
   agentId?: string;
+  supplierId?: string;
   manifestId?: string;
   treasuryId?: string;
   rate?: number;

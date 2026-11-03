@@ -45,6 +45,8 @@ export function DriverTripDetail({ trip, onBack }: Props) {
   );
   const updateWeightDiff = useUpdateWeightDiff();
   const { data: parties } = useAllParties('CLIENT');
+  const { data: suppliersPage } = useAllParties('SUPPLIER');
+  const egpSuppliers = (suppliersPage?.data ?? []).filter((s) => s.currency !== 'USD');
   const { data: treasury } = useAllTreasury();
   const { data: config } = useConfig();
   const allTreasury = treasury?.data ?? [];
@@ -152,15 +154,20 @@ export function DriverTripDetail({ trip, onBack }: Props) {
 
   const [payType, setPayType] = useState<'freight' | 'delay' | 'weightDiff' | 'advance'>('freight');
   const [payTreasuryId, setPayTreasuryId] = useState('');
+  // ناولون السائق: من خزنة أو على حساب مورد
+  const [paySource, setPaySource] = useState<'treasury' | 'supplier'>('treasury');
+  const [paySupplierId, setPaySupplierId] = useState('');
+  const onSupplier = payType === 'freight' && paySource === 'supplier';
 
   const savePayment = () => {
     setPayErr('');
     if (!Number(payAmt) || Number(payAmt) <= 0) return setPayErr('اكتب المبلغ');
-    if (!payTreasuryId) return setPayErr('اختر الخزنة التي يخرج منها المبلغ');
+    if (onSupplier && !paySupplierId) return setPayErr('اختر المورد');
+    if (!onSupplier && !payTreasuryId) return setPayErr('اختر الخزنة التي يخرج منها المبلغ');
     addPayment.mutate(
-      { id: trip.id, dto: { date: payDate, amount: Number(payAmt), note: payNote || undefined, paymentType: payType, treasuryId: payTreasuryId || undefined } },
+      { id: trip.id, dto: { date: payDate, amount: Number(payAmt), note: payNote || undefined, paymentType: payType, ...(onSupplier ? { supplierId: paySupplierId } : { treasuryId: payTreasuryId || undefined }) } },
       {
-        onSuccess: () => { setPayAmt(''); setPayNote(''); setPayTreasuryId(''); setShowPayForm(false); },
+        onSuccess: () => { setPayAmt(''); setPayNote(''); setPayTreasuryId(''); setPaySupplierId(''); setPaySource('treasury'); setShowPayForm(false); },
         onError: (e: any) => setPayErr(e.message),
       },
     );
@@ -258,7 +265,17 @@ export function DriverTripDetail({ trip, onBack }: Props) {
           </select>
         </Field>
         <Field label="المبلغ (ج.م)"><MoneyInput value={payAmt} onChange={setPayAmt} placeholder="0.00" style={{ maxWidth: 130 }} /></Field>
-        <Field label="الخزنة"><Combobox options={allTreasury} value={payTreasuryId} onChange={setPayTreasuryId} placeholder="اختر الخزنة…" /></Field>
+        {payType === 'freight' && (
+          <Field label="الدفع">
+            <select value={paySource} onChange={(e) => setPaySource(e.target.value as 'treasury' | 'supplier')} style={{ minWidth: 120 }}>
+              <option value="treasury">من خزنة</option>
+              <option value="supplier">على حساب مورد</option>
+            </select>
+          </Field>
+        )}
+        {onSupplier
+          ? <Field label="المورد"><Combobox options={egpSuppliers} value={paySupplierId} onChange={setPaySupplierId} placeholder="اختر المورد…" /></Field>
+          : <Field label="الخزنة"><Combobox options={allTreasury} value={payTreasuryId} onChange={setPayTreasuryId} placeholder="اختر الخزنة…" /></Field>}
         <Field label="ملاحظة"><input value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder="اختياري…" style={{ maxWidth: 180 }} /></Field>
       </div>
       {payErr && <div className="err-text" style={{ marginTop: 6 }}>{payErr}</div>}

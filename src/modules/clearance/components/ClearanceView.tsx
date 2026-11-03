@@ -466,7 +466,14 @@ function MovementForm({ mode, agents, fixedAgentId, editing, onDone }: {
 
   // المكتب صاحب الحركة — لو مترحّلة على مورد، party هو المورد والمكتب في clearanceAgent.
   const office = m ? m.clearanceAgent ?? m.party : undefined;
-  const [agentId, setAgentId] = useState(fixedAgentId ?? office?.id ?? agents[0]?.id ?? '');
+  // جمرك على حساب مورد مباشرة: الحركة بدون مكتب، والطرف فيها هو المورد.
+  const savedOnSupplier = !!m && !m.clearanceAgent && m.party?.role === 'SUPPLIER';
+  const canPickSupplier = mode === 'vehicle' && !fixedAgentId;
+  const [onSupplier, setOnSupplier] = useState(savedOnSupplier);
+  const [supplierId, setSupplierId] = useState(savedOnSupplier ? m!.party!.id : '');
+  const { data: suppliersPage } = useAllParties('SUPPLIER');
+  const egpSuppliers = withCurrent((suppliersPage?.data ?? []).filter((s) => s.currency !== 'USD'), savedOnSupplier ? [m!.party] : []);
+  const [agentId, setAgentId] = useState(fixedAgentId ?? (savedOnSupplier ? undefined : office?.id) ?? agents[0]?.id ?? '');
   const [date, setDate] = useState(m?.date?.slice(0, 10) ?? todayISO());
   const [manifestId, setManifestId] = useState(m?.manifest?.id ?? '');
   const [treasuryId, setTreasuryId] = useState(payLeg?.treasury?.id ?? '');
@@ -493,9 +500,9 @@ function MovementForm({ mode, agents, fixedAgentId, editing, onDone }: {
     options.unshift({ id: m.manifest.id, name: `كشف ${m.manifest.no} — ${vehicleOf(m.manifest)} — ${m.manifest.clientName}` });
   }
   // المكتب الحالي للحركة يفضل في القائمة حتى لو مؤرشف
-  const agentOptions = office && !agents.some((a) => a.id === office.id) ? [{ id: office.id, name: office.name }, ...agents] : agents;
+  const agentOptions = office && !savedOnSupplier && !agents.some((a) => a.id === office.id) ? [{ id: office.id, name: office.name }, ...agents] : agents;
   // جديد: يُرحَّل على المورد المربوط حالياً. تعديل: يبقى على حسابه إلا لو تغيّر المكتب.
-  const supplier = editing && agentId === office?.id
+  const supplier = onSupplier ? null : editing && agentId === office?.id
     ? (m?.party?.role === 'SUPPLIER' ? m.party : null)
     : agents.find((a) => a.id === agentId)?.supplier ?? null;
 
@@ -504,7 +511,8 @@ function MovementForm({ mode, agents, fixedAgentId, editing, onDone }: {
 
   const save = () => {
     setErr('');
-    if (!agentId) return setErr('اختر مكتب التخليص');
+    if (onSupplier && !supplierId) return setErr('اختر المورد');
+    if (!onSupplier && !agentId) return setErr('اختر مكتب التخليص');
     if (needsVehicle && !manifestId) return setErr('اختر العربية');
     if (needsTreasury && !treasuryId) return setErr('اختر الخزنة');
     if (!amt) return setErr('اكتب المبلغ');
@@ -514,14 +522,17 @@ function MovementForm({ mode, agents, fixedAgentId, editing, onDone }: {
         id: m!.id,
         dto: {
           date, amount: amt, note: note.trim(),
-          ...(fixedAgentId ? {} : { agentId }),
+          ...(onSupplier ? { supplierId } : fixedAgentId ? {} : { agentId }),
           ...(needsVehicle ? { manifestId, categoryId } : {}),
           ...(needsTreasury ? { treasuryId } : {}),
         },
       }, opts);
     }
     const base = { agentId, date, amount: amt, note: note.trim() || undefined };
-    if (mode === 'vehicle') addVehicle.mutate({ ...base, manifestId, categoryId: categoryId || undefined }, opts);
+    if (mode === 'vehicle') {
+      const { agentId: _office, ...common } = base;
+      addVehicle.mutate({ ...common, ...(onSupplier ? { supplierId } : { agentId }), manifestId, categoryId: categoryId || undefined }, opts);
+    }
     else if (mode === 'cash') addCash.mutate({ ...base, manifestId, categoryId: categoryId || undefined, treasuryId }, opts);
     else pay.mutate({ ...base, treasuryId }, opts);
   };
@@ -530,7 +541,7 @@ function MovementForm({ mode, agents, fixedAgentId, editing, onDone }: {
     mode === 'pay' ? `المبلغ${isUSD ? ' ($)' : ' (ج.م)'}`
     : 'المبلغ (ج.م)';
   const hint =
-    mode === 'vehicle' ? 'المبلغ يُضاف على حساب المكتب، ويظهر في تكاليف شحن العربية.'
+    mode === 'vehicle' ? (onSupplier ? 'المبلغ يُضاف على حساب المورد، ويظهر في تكاليف شحن العربية.' : 'المبلغ يُضاف على حساب المكتب، ويظهر في تكاليف شحن العربية.')
     : mode === 'cash' ? 'المبلغ يُدفع من الخزنة الآن ويظهر في تكاليف شحن العربية. رصيد المكتب لا يتغيّر.'
     : 'الدفعة تنزل من المستحق للمكتب. يمكن أن تكون عن أكثر من عربية.';
 
@@ -543,7 +554,19 @@ function MovementForm({ mode, agents, fixedAgentId, editing, onDone }: {
         </div>
       )}
       <div className="form-grid">
-        {!fixedAgentId && (
+        {canPickSupplier && (
+          <Field label="على حساب">
+            <select value={onSupplier ? 'supplier' : 'office'} onChange={(e) => setOnSupplier(e.target.value === 'supplier')} style={selectStyle}>
+              <option value="office">مكتب تخليص</option>
+              <option value="supplier">مورد</option>
+            </select>
+          </Field>
+        )}
+        {onSupplier ? (
+          <Field label="المورد">
+            <Combobox options={egpSuppliers} value={supplierId} onChange={setSupplierId} placeholder="اختر المورد" />
+          </Field>
+        ) : !fixedAgentId && (
           <Field label="مكتب التخليص">
             <select value={agentId} onChange={(e) => setAgentId(e.target.value)} style={selectStyle}>
               {agentOptions.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}

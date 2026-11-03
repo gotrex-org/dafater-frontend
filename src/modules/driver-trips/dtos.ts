@@ -86,6 +86,8 @@ export interface AddPaymentDto {
   note?: string;
   paymentType?: 'freight' | 'delay' | 'weightDiff' | 'advance';
   treasuryId?: string;
+  /** ناولون على حساب مورد بدل الخزنة */
+  supplierId?: string;
   weightDiffAmount?: number;
 }
 
