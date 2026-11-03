@@ -233,8 +233,10 @@ export interface PartnerUpsertDto {
 
 /** (فاتورة شراء، صنف) — مفتاح صنف التصفية الثابتة. */
 export interface ItemRef {
+  /** uid المستند: فاتورة شراء، أو بيع خارجي لو `kind = 'deal'` */
   invoiceId: string;
   productId: string;
+  kind?: 'invoice' | 'deal';
 }
 
 /**
@@ -243,11 +245,16 @@ export interface ItemRef {
  */
 export interface FixedItem extends ItemRef {
   id: string;
+  kind: 'invoice' | 'deal';
   /** false = أضافه صاحب الاسم وينتظر موافقة المالك، فلا يدخل الحساب */
   approved: boolean;
+  /** اتكتب له مبلغ أو نسبة → في الأرشيف */
+  priced: boolean;
   invoiceNo: string;
   date: string;
   supplierName: string;
+  /** مين سجّل المستند (اللي اشترى) */
+  buyer: string | null;
   currency: 'EGP' | 'USD';
   productName: string;
   unit: string | null;
@@ -264,10 +271,13 @@ export interface FixedItem extends ItemRef {
 
 /** نتيجة «اختيار الأصناف»: فاتورة شراء والأصناف المطابقة للبحث فيها. */
 export interface ItemSearchInvoice {
+  kind: 'invoice' | 'deal';
   invoiceId: string;
   invoiceNo: string;
   date: string;
   supplierName: string;
+  /** مين سجّل المستند (اللي اشترى) */
+  buyer: string | null;
   items: {
     productId: string;
     productName: string;
@@ -314,6 +324,8 @@ export interface StatementEntry {
   /** uid الدفعة — `null` في سطر المستحق */
   id: string | null;
   kind: 'CAPITAL' | 'DUE' | 'PAYMENT';
+  /** سطر من حركات رأس المال — حذفه من رأس المال */
+  capital?: boolean;
   date: string;
   label: string;
   source: string;

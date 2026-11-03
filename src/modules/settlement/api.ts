@@ -7,6 +7,10 @@ import type {
 
 const BASE = '/settlement';
 
+/** مسار صنف التصفية الثابتة — `?kind=deal` لصنف البيع الخارجي. */
+const itemPath = (p: string, ref: ItemRef) =>
+  `${BASE}/${p}/items/${ref.invoiceId}/${ref.productId}${ref.kind === 'deal' ? '?kind=deal' : ''}`;
+
 export const settlementApi = {
   // الأسماء
   partners: () => api.get<Partner[]>(`${BASE}/partners`),
@@ -45,9 +49,9 @@ export const settlementApi = {
     return api.get<ItemSearchInvoice[]>(`${BASE}/${p}/items/search?${qs}`);
   },
   addItems: (p: string, items: ItemRef[]) => api.post(`${BASE}/${p}/items`, { items }),
-  removeItem: (p: string, ref: ItemRef) => api.del<void>(`${BASE}/${p}/items/${ref.invoiceId}/${ref.productId}`),
+  removeItem: (p: string, ref: ItemRef) => api.del<void>(itemPath(p, ref)),
   setItemRate: (p: string, ref: ItemRef, body: { rate: number } | { percent: number }) =>
-    api.put<FixedItem>(`${BASE}/${p}/items/${ref.invoiceId}/${ref.productId}`, body),
+    api.put<FixedItem>(itemPath(p, ref), body),
 
   // اختيار فواتير البيع للتصفية برأس المال
   candidates: (p: string) => api.get<Vehicle[]>(`${BASE}/${p}/candidates`),

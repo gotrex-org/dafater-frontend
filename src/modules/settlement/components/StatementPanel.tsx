@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { EGP, fmtDate, todayISO } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import { Field, MoneyInput, Spinner, StatCard, StatsGrid } from '@/components/common';
-import { useAddPayment, useDeletePayment, useStatement } from '../hooks';
+import { useAddCapitalMovement, useAddPayment, useDeleteCapitalMovement, useDeletePayment, useStatement } from '../hooks';
 import type { Partner } from '../dtos';
 import { TreasurySelect } from './TreasurySelect';
 
@@ -12,15 +12,18 @@ import { TreasurySelect } from './TreasurySelect';
  * كشف حساب التصفية: سطر لكل فاتورة مصفّاة بمستحقها ومن أين جاء، وسطر لكل دفعة
  * تسلّمها بالسالب، والرصيد التراكمي بينهما.
  *   برأس المال: المتبقي = المستحق − المدفوع، والدفعة في هذا الكشف فقط.
- *   ثابتة: الرصيد = رأس المال + المستحق − المسحوب، والسحب يخرج من خزنة ويُسجل في
- *   حساب الاسم في البرنامج (ميزان المراجعة والتقارير).
+ *   ثابتة: الكشف تصفية ومدفوعات وسحب — الرصيد = المدفوعات + التصفية − السحب.
+ *   المدفوعات (إضافة لرأس المال) تدخل خزنة، والسحب يخرج منها، وكلاهما في حساب
+ *   الاسم في البرنامج (ميزان المراجعة والتقارير).
  */
 export function StatementPanel({ partner }: { partner: Partner }) {
   const { user } = useAuth();
   const isAdmin = !!user?.admin;
   const { data, isLoading } = useStatement(partner.id);
   const del = useDeletePayment(partner.id);
-  const [paying, setPaying] = useState(false);
+  const delCapital = useDeleteCapitalMovement(partner.id);
+  // ثابتة: «مدفوعات» (in) أو «سحب» (out). برأس المال: دفعة فقط
+  const [form, setForm] = useState<null | 'in' | 'out'>(null);
 
   if (isLoading || !data) return <Spinner />;
 
@@ -29,9 +32,9 @@ export function StatementPanel({ partner }: { partner: Partner }) {
   return (
     <>
       <StatsGrid columns={byCapital ? 3 : 4}>
-        {!byCapital && <StatCard label={`رأس مال ${partner.name}`} value={EGP(data.capital)} />}
-        <StatCard label={`مستحق ${partner.name}`} value={EGP(data.dues)} variant="blue" />
-        <StatCard label={byCapital ? 'المدفوع له' : 'المسحوب'} value={EGP(data.paid)} variant="gold" />
+        {!byCapital && <StatCard label="المدفوعات" value={EGP(data.capital)} />}
+        <StatCard label={byCapital ? `مستحق ${partner.name}` : 'التصفية'} value={EGP(data.dues)} variant="blue" />
+        <StatCard label={byCapital ? 'المدفوع له' : 'السحب'} value={EGP(data.paid)} variant="gold" />
         <StatCard
           label={byCapital ? 'المتبقي' : 'الرصيد له'}
           value={EGP(data.total)}
@@ -42,21 +45,26 @@ export function StatementPanel({ partner }: { partner: Partner }) {
       <div className="muted" style={{ fontSize: 12, margin: '6px 2px 10px' }}>
         {byCapital
           ? 'كل سطر مستحق نصيب من صافي ربح فاتورة بنسبة رأس المال.'
-          : 'كل سطر مستحق صنف من فاتورة شراء بالمبلغ للوحدة أو النسبة.'}
+          : 'الرصيد = المدفوعات + التصفية − السحب.'}
         {' '}{byCapital
           ? 'المتبقي = المستحق − المدفوع. الدفعة تُسجل هنا ولا تمس الخزنة.'
-          : 'الرصيد = رأس المال + المستحق − المسحوب. السحب يخرج من الخزنة ويظهر في ميزان المراجعة.'}
+          : 'المدفوعات تدخل الخزنة والسحب يخرج منها، وكلاهما في ميزان المراجعة.'}
       </div>
 
       {isAdmin && (
         <div className="toolbar">
-          <button className="btn btn-primary btn-sm" onClick={() => setPaying((p) => !p)}>
-            {paying ? 'إلغاء' : byCapital ? '+ تسجيل دفعة' : '+ تسجيل سحب'}
+          {!byCapital && (
+            <button className="btn btn-primary btn-sm" onClick={() => setForm((f) => (f === 'in' ? null : 'in'))}>
+              {form === 'in' ? 'إلغاء' : '+ مدفوعات'}
+            </button>
+          )}
+          <button className="btn btn-primary btn-sm" onClick={() => setForm((f) => (f === 'out' ? null : 'out'))}>
+            {form === 'out' ? 'إلغاء' : byCapital ? '+ تسجيل دفعة' : '+ سحب'}
           </button>
         </div>
       )}
 
-      {paying && <PaymentForm partner={partner} onDone={() => setPaying(false)} />}
+      {form && <PaymentForm key={form} partner={partner} mode={form} onDone={() => setForm(null)} />}
 
       {!data.entries.length ? (
         <div className="card" style={{ padding: 16 }}>
@@ -64,7 +72,7 @@ export function StatementPanel({ partner }: { partner: Partner }) {
           <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
             {byCapital
               ? 'تظهر الحركات بعد اختيار الفواتير وتسعير أصنافها من قوائم أسعار المورد.'
-              : 'تظهر الحركات بعد اختيار الأصناف وكتابة المبلغ للوحدة أو النسبة، أو تسجيل رأس المال.'}
+              : 'تظهر الحركات بعد تصفية الأصناف، أو تسجيل مدفوعات أو سحب.'}
           </div>
         </div>
       ) : (
@@ -96,12 +104,14 @@ export function StatementPanel({ partner }: { partner: Partner }) {
                   <td className="num"><b>{EGP(e.balance)}</b></td>
                   {isAdmin && (
                     <td>
-                      {e.kind === 'PAYMENT' && e.id && (
+                      {e.id && (e.kind === 'PAYMENT' || e.capital) && (
                         <button
                           className="btn btn-ghost btn-sm"
-                          disabled={del.isPending}
+                          disabled={del.isPending || delCapital.isPending}
                           onClick={() => {
-                            if (window.confirm(byCapital ? 'حذف هذه الدفعة من كشف الحساب؟' : 'حذف هذا السحب؟ يُحذف من الخزنة أيضاً.')) del.mutate(e.id!);
+                            const msg = byCapital ? 'حذف هذه الدفعة من كشف الحساب؟' : `حذف ${e.label}؟ يُحذف من الخزنة أيضاً.`;
+                            if (!window.confirm(msg)) return;
+                            if (e.capital) delCapital.mutate(e.id!); else del.mutate(e.id!);
                           }}
                         >
                           حذف
@@ -127,10 +137,17 @@ export function StatementPanel({ partner }: { partner: Partner }) {
   );
 }
 
-/** تسجيل دفعة: التاريخ والمبلغ وملاحظة. المبلغ موجب دائماً وينزل من المستحق. */
-function PaymentForm({ partner, onDone }: { partner: Partner; onDone: () => void }) {
-  const add = useAddPayment(partner.id);
+/**
+ * تسجيل دفعة: التاريخ والمبلغ وملاحظة، والمبلغ موجب دائماً.
+ *   out: سحب (أو دفعة برأس المال) — ينزل من الرصيد
+ *   in:  مدفوعات في التصفية الثابتة — إضافة لرأس المال، تدخل الخزنة وتزود الرصيد
+ */
+function PaymentForm({ partner, mode, onDone }: { partner: Partner; mode: 'in' | 'out'; onDone: () => void }) {
+  const addOut = useAddPayment(partner.id);
+  const addIn = useAddCapitalMovement(partner.id);
+  const add = mode === 'in' ? addIn : addOut;
   const fixed = partner.shareBasis === 'FIXED';
+  const title = mode === 'in' ? 'مدفوعات' : fixed ? 'سحب' : 'دفعة';
   const [date, setDate] = useState(todayISO());
   const [amount, setAmount] = useState('');
   const [treasuryId, setTreasuryId] = useState('');
@@ -142,15 +159,14 @@ function PaymentForm({ partner, onDone }: { partner: Partner; onDone: () => void
     if (!(Number(amount) > 0)) return setError('اكتب مبلغ الدفعة');
     if (fixed && !treasuryId) return setError('اختر الخزنة');
     setError('');
-    add.mutate(
-      { date, amount: Number(amount), note: note || undefined, ...(fixed ? { treasuryId } : {}) },
-      { onSuccess: onDone, onError: (e: any) => setError(e.message) },
-    );
+    const dto = { date, amount: Number(amount), note: note || undefined, ...(fixed ? { treasuryId } : {}) };
+    const opts = { onSuccess: onDone, onError: (e: any) => setError(e.message) };
+    if (mode === 'in') addIn.mutate(dto, opts); else addOut.mutate(dto, opts);
   };
 
   return (
     <div className="card" style={{ padding: 16, marginBottom: 12 }}>
-      <b style={{ display: 'block', marginBottom: 10 }}>{fixed ? 'سحب' : 'دفعة'} لـ {partner.name}</b>
+      <b style={{ display: 'block', marginBottom: 10 }}>{title} — {partner.name}</b>
       <div className="form-grid">
         <Field label="التاريخ">
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -159,7 +175,7 @@ function PaymentForm({ partner, onDone }: { partner: Partner; onDone: () => void
           <MoneyInput value={amount} onChange={setAmount} placeholder="0.00" />
         </Field>
         {fixed && (
-          <Field label="من الخزنة">
+          <Field label={mode === 'in' ? 'دخلت الخزنة' : 'من الخزنة'}>
             <TreasurySelect value={treasuryId} onChange={setTreasuryId} />
           </Field>
         )}
@@ -172,7 +188,7 @@ function PaymentForm({ partner, onDone }: { partner: Partner; onDone: () => void
 
       <div className="toolbar" style={{ marginTop: 12, marginBottom: 0 }}>
         <button className="btn btn-primary" disabled={add.isPending} onClick={submit}>
-          {add.isPending ? '...' : fixed ? 'حفظ السحب' : 'حفظ الدفعة'}
+          {add.isPending ? '...' : `حفظ ${title}`}
         </button>
         <button className="btn btn-ghost" onClick={onDone}>إلغاء</button>
       </div>

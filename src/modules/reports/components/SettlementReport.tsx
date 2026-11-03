@@ -37,9 +37,9 @@ export function SettlementReportSection() {
                     <tr>
                       <th>الاسم</th>
                       <th>الطريقة</th>
-                      <th className="num">رأس المال</th>
-                      <th className="num">المستحق (المكسب)</th>
-                      <th className="num">المسحوب</th>
+                      <th className="num">المدفوعات (رأس المال)</th>
+                      <th className="num">التصفية (المكسب)</th>
+                      <th className="num">السحب</th>
                       <th className="num">الرصيد له</th>
                     </tr>
                   </thead>
@@ -67,7 +67,7 @@ export function SettlementReportSection() {
                 </table>
               </div>
               <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-                التصفية الثابتة: الرصيد = رأس المال + المستحق − المسحوب، وهو رصيده في ميزان المراجعة.
+                التصفية الثابتة: الرصيد = المدفوعات + التصفية − السحب، وهو رصيده في ميزان المراجعة.
                 برأس المال: الرصيد = المستحق − المدفوع، ورأس المال أساس النسبة فقط.
               </div>
             </>

@@ -3,24 +3,27 @@
 import { useState } from 'react';
 import { EGP, QTY, fmtDate } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
-import { EmptyState, MoneyInput, SearchInput, Spinner } from '@/components/common';
+import { EmptyState, MoneyInput, SearchInput, SegmentedControl, Spinner } from '@/components/common';
 import { useAddItems, useFixedItems, useItemSearch, useRemoveItem, useSetItemRate } from '../hooks';
 import type { FixedItem, ItemRef, Partner } from '../dtos';
 
-const refKey = (r: ItemRef) => `${r.invoiceId}:${r.productId}`;
+const refKey = (r: ItemRef) => `${r.kind ?? 'invoice'}:${r.invoiceId}:${r.productId}`;
+const docLabel = (kind: 'invoice' | 'deal', no: string) => `${kind === 'deal' ? 'بيع خارجي' : 'فاتورة شراء'} #${no}`;
 
 /**
- * التصفية الثابتة: أصناف مختارة من فواتير الشراء، ولكل صنف مبلغ للوحدة أو نسبة.
- *   بالمبلغ: المستحق = كمية الصنف في الفاتورة × المبلغ للوحدة
- *   بالنسبة: المستحق = قيمة الصنف في الفاتورة × النسبة
- * صاحب الاسم يختار الأصناف بنفسه من «اختيار الأصناف»، وتظهر هنا «بانتظار الموافقة»
- * حتى يكتب المالك المبلغ أو النسبة — وقبلها لا تدخل الحساب.
+ * التصفية الثابتة: أصناف مختارة من فواتير الشراء والبيع الخارجي، ولكل صنف مبلغ
+ * للوحدة أو نسبة.
+ *   بالمبلغ: المستحق = كمية الصنف × المبلغ للوحدة
+ *   بالنسبة: المستحق = قيمة شراء الصنف × النسبة
+ * «الأصناف»: اللي لسه بدون مبلغ أو نسبة (ومنها اللي صاحب الاسم أضافها بانتظار
+ * الموافقة). أول ما يُكتب المبلغ أو النسبة الصنف بيروح «الأرشيف».
+ * صاحب الاسم يرى الكمية والمستحق فقط — القيمة والمبلغ للوحدة والنسبة للمالك.
  */
 export function FixedPanel({ partner }: { partner: Partner }) {
   const { user } = useAuth();
   const isAdmin = !!user?.admin;
   const { data, isLoading } = useFixedItems(partner.id);
-  const remove = useRemoveItem(partner.id);
+  const [view, setView] = useState<'open' | 'archive'>('open');
 
   if (isLoading || !data) return <Spinner />;
 
@@ -37,8 +40,9 @@ export function FixedPanel({ partner }: { partner: Partner }) {
     );
   }
 
-  const counted = data.filter((v) => v.amount != null);
-  const total = counted.reduce((s, v) => s + (v.amount ?? 0), 0);
+  const open = data.filter((v) => !v.priced);
+  const archive = data.filter((v) => v.priced);
+  const rows = view === 'open' ? open : archive;
   const pending = data.filter((v) => !v.approved).length;
 
   return (
@@ -53,72 +57,105 @@ export function FixedPanel({ partner }: { partner: Partner }) {
         </div>
       )}
 
-      <div className="card tbl-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>الصنف</th>
-              <th>فاتورة شراء</th>
-              <th>التاريخ</th>
-              <th className="num">الكمية</th>
-              <th className="num">القيمة</th>
-              <th className="num">المبلغ للوحدة / النسبة</th>
-              <th className="num">المستحق</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((v) => (
-              <tr key={v.id} style={!v.approved ? { background: 'var(--accent-soft)' } : undefined}>
-                <td><b>{v.productName}</b></td>
-                <td>
-                  #{v.invoiceNo}
-                  <div className="muted" style={{ fontSize: 11 }}>{v.supplierName || '—'}</div>
-                </td>
-                <td>{fmtDate(v.date)}</td>
-                <td className="num">{QTY(v.qty)}</td>
-                <td className="num">{v.value == null ? '—' : EGP(v.value)}</td>
-                <td className="num">
-                  {isAdmin
-                    ? <RateCell partner={partner} item={v} />
-                    : v.rate != null ? EGP(v.rate) : v.percent != null ? `${v.percent}%` : '—'}
-                </td>
-                <td className="num" style={{ color: v.approved && v.amount == null ? 'var(--debit)' : undefined }}>
-                  {!v.approved
-                    ? <span className="pill">بانتظار الموافقة</span>
-                    : <b>{v.amount == null ? 'بدون مبلغ' : EGP(v.amount)}</b>}
-                </td>
-                <td>
-                  {(isAdmin || !v.approved) && (
-                    <button className="btn btn-ghost btn-sm" disabled={remove.isPending} onClick={() => remove.mutate(v)}>
-                      {isAdmin ? 'إزالة' : 'سحب'}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <th colSpan={6}>الإجمالي</th>
-              <th className="num">{EGP(total)}</th>
-              <th></th>
-            </tr>
-          </tfoot>
-        </table>
+      <div className="toolbar">
+        <SegmentedControl
+          value={view}
+          onChange={(v) => setView(v as 'open' | 'archive')}
+          options={[
+            { value: 'open', label: `الأصناف (${open.length})` },
+            { value: 'archive', label: `الأرشيف (${archive.length})` },
+          ]}
+        />
       </div>
 
+      {!rows.length ? (
+        <EmptyState text={view === 'open' ? 'كل الأصناف لها مبلغ أو نسبة — موجودة في الأرشيف' : 'لا توجد أصناف في الأرشيف بعد'} />
+      ) : (
+        <ItemsTable partner={partner} rows={rows} isAdmin={isAdmin} archive={view === 'archive'} />
+      )}
+
       <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-        المستحق = كمية الصنف × المبلغ للوحدة، أو قيمة الصنف × النسبة. يُكتب لكل صنف على حدة،
-        والإجمالي يظهر في كشف الحساب.
+        {isAdmin
+          ? 'المستحق = كمية الصنف × المبلغ للوحدة، أو قيمة الشراء × النسبة. بعد كتابة المبلغ أو النسبة ينتقل الصنف إلى الأرشيف، والإجمالي يظهر في كشف الحساب.'
+          : 'المستحق يظهر بعد موافقة المالك، والإجمالي في كشف الحساب.'}
       </div>
     </>
   );
 }
 
+function ItemsTable({ partner, rows, isAdmin, archive }: {
+  partner: Partner; rows: FixedItem[]; isAdmin: boolean; archive: boolean;
+}) {
+  const remove = useRemoveItem(partner.id);
+  const total = rows.reduce((s, v) => s + (v.amount ?? 0), 0);
+  // صاحب الاسم: الصنف والمستند والكمية والمستحق فقط
+  const cols = isAdmin ? 9 : 6;
+
+  return (
+    <div className="card tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>الصنف</th>
+            <th>المستند</th>
+            <th>التاريخ</th>
+            <th>سجّلها</th>
+            <th className="num">الكمية</th>
+            {isAdmin && <th className="num">القيمة</th>}
+            {isAdmin && <th className="num">المبلغ للوحدة / النسبة</th>}
+            <th className="num">المستحق</th>
+            {isAdmin && <th></th>}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((v) => (
+            <tr key={v.id} style={!v.approved ? { background: 'var(--accent-soft)' } : undefined}>
+              <td><b>{v.productName}</b></td>
+              <td>
+                {docLabel(v.kind, v.invoiceNo)}
+                <div className="muted" style={{ fontSize: 11 }}>{v.supplierName || '—'}</div>
+              </td>
+              <td>{fmtDate(v.date)}</td>
+              <td className="muted" style={{ fontSize: 12 }}>{v.buyer || '—'}</td>
+              <td className="num">{QTY(v.qty)}</td>
+              {isAdmin && <td className="num">{v.value == null ? '—' : EGP(v.value)}</td>}
+              {isAdmin && <td className="num"><RateCell partner={partner} item={v} /></td>}
+              <td className="num" style={{ color: v.approved && v.amount == null ? 'var(--debit)' : undefined }}>
+                {!v.approved
+                  ? <span className="pill">بانتظار الموافقة</span>
+                  : <b>{v.amount == null ? 'بدون مبلغ' : EGP(v.amount)}</b>}
+              </td>
+              {isAdmin && (
+                <td>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    disabled={remove.isPending}
+                    onClick={() => { if (window.confirm(`إزالة ${v.productName} من التصفية؟`)) remove.mutate(v); }}
+                  >
+                    إزالة
+                  </button>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+        {archive && (
+          <tfoot>
+            <tr>
+              <th colSpan={cols - (isAdmin ? 2 : 1)}>الإجمالي</th>
+              <th className="num">{EGP(total)}</th>
+              {isAdmin && <th></th>}
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  );
+}
+
 /**
  * خانة المبلغ للوحدة أو النسبة: تُكتب في الجدول نفسه وتُحفظ بالخروج منها.
- * حفظها على صنف بانتظار الموافقة هو الموافقة عليه.
+ * حفظها هو الموافقة على الصنف، وبعدها ينتقل إلى الأرشيف.
  */
 function RateCell({ partner, item }: { partner: Partner; item: FixedItem }) {
   const set = useSetItemRate(partner.id);
@@ -169,7 +206,7 @@ function RateCell({ partner, item }: { partner: Partner; item: FixedItem }) {
         />
       </div>
       {mode === 'percent' && item.value == null && (
-        <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>فاتورة دولار غير مسعّرة. لن تُحسب النسبة حتى تُسعَّر.</div>
+        <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>مستند بالدولار غير مسعّر. لن تُحسب النسبة حتى يُسعَّر.</div>
       )}
       {error && <div className="err-text" style={{ fontSize: 11, marginTop: 2 }}>{error}</div>}
     </div>
@@ -178,8 +215,9 @@ function RateCell({ partner, item }: { partner: Partner; item: FixedItem }) {
 
 /**
  * «اختيار الأصناف»: يُكتب اسم الصنف (مثلاً فريدا) فتظهر تحته كل فواتير الشراء
- * التي فيها هذا الصنف في الفترة المحددة، ويُحدَّد الصنف من كل فاتورة.
- * المالك يضيفه موافقاً عليه، وصاحب الاسم يضيفه فينتظر موافقة المالك.
+ * وعمليات البيع الخارجي التي فيها هذا الصنف في الفترة المحددة، ومن سجّل كل واحدة،
+ * ويُحدَّد الصنف من كل مستند. المالك يضيفه موافقاً عليه، وصاحب الاسم يضيفه فينتظر
+ * موافقة المالك — وصاحب الاسم يضيف فقط، والإزالة للمالك.
  */
 export function FixedPicker({ partner }: { partner: Partner }) {
   const { user } = useAuth();
@@ -194,11 +232,12 @@ export function FixedPicker({ partner }: { partner: Partner }) {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
 
   const rows = data ?? [];
-  const free = rows.flatMap((inv) => inv.items.filter((it) => !it.selected).map((it) => ({ invoiceId: inv.invoiceId, productId: it.productId })));
+  const free: ItemRef[] = rows.flatMap((doc) => doc.items.filter((it) => !it.selected)
+    .map((it) => ({ invoiceId: doc.invoiceId, productId: it.productId, kind: doc.kind })));
   const toPick = free.filter((r) => checked[refKey(r)]);
   const allChecked = free.length > 0 && toPick.length === free.length;
   const busy = add.isPending || remove.isPending;
-  const totalQty = rows.reduce((s, inv) => s + inv.items.reduce((a, it) => a + it.qty, 0), 0);
+  const totalQty = rows.reduce((s, doc) => s + doc.items.reduce((a, it) => a + it.qty, 0), 0);
 
   const toggleAll = () => setChecked(allChecked ? {} : Object.fromEntries(free.map((r) => [refKey(r), true])));
 
@@ -223,9 +262,9 @@ export function FixedPicker({ partner }: { partner: Partner }) {
       {add.error && <div className="err-text" style={{ marginBottom: 8 }}>{(add.error as any).message}</div>}
 
       {!q ? (
-        <EmptyState text="اكتب اسم الصنف لعرض فواتير الشراء التي فيها هذا الصنف" />
+        <EmptyState text="اكتب اسم الصنف لعرض فواتير الشراء والبيع الخارجي التي فيها هذا الصنف" />
       ) : isLoading || (isFetching && !rows.length) ? <Spinner /> : !rows.length ? (
-        <EmptyState text="لا توجد فواتير شراء بهذا الصنف في الفترة المحددة" />
+        <EmptyState text="لا توجد مشتريات بهذا الصنف في الفترة المحددة" />
       ) : (
         <div className="card tbl-wrap">
           <table>
@@ -235,18 +274,18 @@ export function FixedPicker({ partner }: { partner: Partner }) {
                   {free.length > 0 && <input type="checkbox" checked={allChecked} onChange={toggleAll} title="تحديد الكل" />}
                 </th>
                 <th>الصنف</th>
-                <th>فاتورة شراء</th>
+                <th>المستند</th>
                 <th>التاريخ</th>
                 <th>المورد</th>
+                <th>سجّلها</th>
                 <th className="num">الكمية</th>
-                <th></th>
+                {isAdmin && <th></th>}
               </tr>
             </thead>
             <tbody>
-              {rows.flatMap((inv) => inv.items.map((it) => {
-                const ref = { invoiceId: inv.invoiceId, productId: it.productId };
+              {rows.flatMap((doc) => doc.items.map((it) => {
+                const ref: ItemRef = { invoiceId: doc.invoiceId, productId: it.productId, kind: doc.kind };
                 const k = refKey(ref);
-                const canRemove = it.selected && (isAdmin || !it.approved);
                 return (
                   <tr key={k} style={it.selected ? { background: 'var(--accent-soft)' } : undefined}>
                     <td>
@@ -261,26 +300,29 @@ export function FixedPicker({ partner }: { partner: Partner }) {
                       )}
                     </td>
                     <td><b>{it.productName}</b></td>
-                    <td>#{inv.invoiceNo}</td>
-                    <td>{fmtDate(inv.date)}</td>
-                    <td>{inv.supplierName || '—'}</td>
+                    <td>{docLabel(doc.kind, doc.invoiceNo)}</td>
+                    <td>{fmtDate(doc.date)}</td>
+                    <td>{doc.supplierName || '—'}</td>
+                    <td className="muted" style={{ fontSize: 12 }}>{doc.buyer || '—'}</td>
                     <td className="num">{QTY(it.qty)}</td>
-                    <td>
-                      {canRemove && (
-                        <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => remove.mutate(ref)}>
-                          {isAdmin ? 'إزالة' : 'سحب'}
-                        </button>
-                      )}
-                    </td>
+                    {isAdmin && (
+                      <td>
+                        {it.selected && (
+                          <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => remove.mutate(ref)}>
+                            إزالة
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               }))}
             </tbody>
             <tfoot>
               <tr>
-                <th colSpan={5}>{rows.length} فاتورة</th>
+                <th colSpan={6}>{rows.length} مستند</th>
                 <th className="num">{QTY(totalQty)}</th>
-                <th></th>
+                {isAdmin && <th></th>}
               </tr>
             </tfoot>
           </table>
@@ -289,8 +331,8 @@ export function FixedPicker({ partner }: { partner: Partner }) {
 
       <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
         {isAdmin
-          ? 'بعد الإضافة يُكتب المبلغ للوحدة أو النسبة لكل صنف من «الأصناف».'
-          : 'الأصناف المرسلة تنتظر موافقة المالك، ويمكن سحبها قبل الموافقة.'}
+          ? 'بعد الإضافة يُكتب المبلغ للوحدة أو النسبة لكل صنف من «الأصناف»، ثم ينتقل إلى الأرشيف.'
+          : 'الأصناف المرسلة تنتظر موافقة المالك.'}
       </div>
     </>
   );
