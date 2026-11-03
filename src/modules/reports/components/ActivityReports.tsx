@@ -60,7 +60,7 @@ export function TradeReportSection({ r }: { r: R }) {
           </div>
           {!!data.dealsWithoutRate && (
             <div className="deb" style={{ fontSize: 12.5, marginTop: 4, fontWeight: 700 }}>
-              {data.dealsWithoutRate} عملية بيع خارجي من مورد بالدولار بدون سعر صرف، وهي خارج التقرير. أضف سعر الصرف من تعديل العملية.
+              {data.dealsWithoutRate} عملية بيع خارجي من مورد بالدولار لم يكتمل تسعيرها من دفعات الوكيل، وهي خارج التقرير حتى يتم التوريد.
             </div>
           )}
 

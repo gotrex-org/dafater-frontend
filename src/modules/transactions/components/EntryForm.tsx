@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { todayISO, EGP, fmtDate } from '@/lib/format';
+import { normalizeAr } from '@/lib/arabicSearch';
+import { FreightLinePicker } from './FreightLinePicker';
+import type { FreightLine } from '../dtos';
+import { todayISO, EGP, fmtDate, money } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import { fieldNavKeyDown } from '@/lib/field-nav';
 import { PageTitle, Field, Combobox, MoneyInput } from '@/components/common';
@@ -262,10 +265,15 @@ export function EntryForm() {
   // العربية المربوطة بالمصروف (اختياري) — للبنود المعلَّمة «يُربط بعربية» زي التحميل والشفتنة
   const [manifestId, setManifestId] = useState('');
   const vehicleCategory = !!(cats?.data ?? []).find((c) => c.id === categoryId)?.vehicleLink;
+  // بند «ناولون داخلي»: يمكن تحميله على صنف من فاتورة شراء (اختياري).
+  const categoryName = normalizeAr((cats?.data ?? []).find((c) => c.id === categoryId)?.name ?? '');
+  const freightCategory = ['ناولون داخلي', 'نولون داخلي'].some((n) => categoryName.includes(normalizeAr(n)));
+  const [freightLine, setFreightLine] = useState<FreightLine | null>(null);
   const { data: vehiclesPage } = useManifests({ pageSize: 200 });
   const [warehouseId, setWarehouseId] = useState('');
   const [cashDir, setCashDir] = useState<CashDir>('out');
   const [cashTarget, setCashTarget] = useState<CashTarget>('warehouse');
+  const showFreightPicker = type === 'cash' && cashDir === 'out' && (cashTarget === 'warehouse' || cashTarget === 'external') && freightCategory;
   const [goodsMode, setGoodsMode] = useState<GoodsMode>('invoices');
   const [invoiceIds, setInvoiceIds] = useState<string[]>([]);
   const [goodsItems, setGoodsItems] = useState<GoodsItem[]>([]);
@@ -277,7 +285,6 @@ export function EntryForm() {
   const [custodyDest, setCustodyDest] = useState<'treasury' | 'client' | 'category'>('treasury');
   const [amount, setAmount] = useState('');
   const [direction, setDirection] = useState<'debit' | 'credit'>('debit');
-  const [rate, setRate] = useState('');
   const [addFee, setAddFee] = useState(false);
   const [feeAmount, setFeeAmount] = useState('500');
   const [expensePartyId, setExpensePartyId] = useState('');
@@ -305,17 +312,19 @@ export function EntryForm() {
     : type === 'cash' && cashTarget === 'custody' ? persons?.data.find((p) => p.id === holderId) ?? persons?.data.find((p) => p.name === holderName.trim())
     : undefined;
   const selPartyCur = (selParty as any)?.currency;
-  const usdPay = (type === 'collect' || type === 'paySupplier') && (selPartyCur === 'USD' || treasuryCur === 'USD');
-  const usdResult = usdPay && Number(rate) > 0 && Number(amount) > 0 ? Number(amount) / Number(rate) : undefined;
+  // السعر يخص حساب بالجنيه مع خزنة بالدولار فقط. حساب بالدولار مع خزنة بالدولار = نفس الرقم،
+  // ومع خزنة بالجنيه ممنوع: الدفع لمورد الدولار عن طريق الوكيل.
+  const usdPay = (type === 'collect' || type === 'paySupplier') && selPartyCur !== 'USD' && treasuryCur === 'USD';
+  const usdMismatch = (type === 'collect' || type === 'paySupplier') && selPartyCur === 'USD' && !!treasuryCur && treasuryCur !== 'USD';
+  const usdMismatchMsg = type === 'collect'
+    ? 'تحصيل الدولار يتم في خزنة بالدولار.'
+    : 'الدفع لمورد الدولار يتم عن طريق الوكيل، أو من خزنة بالدولار.';
   const diffCur = type === 'transfer' && !!treasuryCur && !!treasury2Cur && treasuryCur !== treasury2Cur;
-  const received = diffCur && Number(rate) > 0
-    ? (treasuryCur === 'EGP' ? Number(amount) / Number(rate) : Number(amount) * Number(rate))
-    : undefined;
 
   const reset = () => {
     setAmount(''); setNote(''); setClientNote(''); setPartyId(''); setPartyId2('');
-    setTreasuryId(''); setTreasuryId2(''); setCategoryId(''); setWarehouseId(''); setManifestId('');
-    setRate(''); setAddFee(false); setFeeAmount('500'); setForexAgentId(''); setExpensePartyId('');
+    setTreasuryId(''); setTreasuryId2(''); setCategoryId(''); setWarehouseId(''); setManifestId(''); setFreightLine(null);
+    setAddFee(false); setFeeAmount('500'); setForexAgentId(''); setExpensePartyId('');
     setInvoiceIds([]); setGoodsItems([]); setHolderName(''); setHolderId('');
   };
 
@@ -378,6 +387,7 @@ export function EntryForm() {
           warehouseId: (cashTarget === 'warehouse' || cashTarget === 'goods') ? warehouseId || undefined : undefined,
           categoryId: (cashTarget === 'warehouse' || cashTarget === 'external' || custodySettleCategory) ? categoryId || undefined : undefined,
           manifestId: (cashTarget === 'warehouse' || cashTarget === 'external') && vehicleCategory && manifestId ? manifestId : undefined,
+          ...(showFreightPicker && freightLine ? { freightInvoiceId: freightLine.invoiceId, freightProductId: freightLine.productId } : {}),
           ...(cashTarget === 'goods' ? {
             goodsMode,
             invoiceIds: goodsMode === 'invoices' ? invoiceIds : undefined,
@@ -406,11 +416,11 @@ export function EntryForm() {
       if (!partyId) return setError('اختر المورد');
       if (!treasuryId) return setError('اختر الخزنة');
     }
+    if (usdMismatch) return setError(usdMismatchMsg);
     if (type === 'transfer') {
       if (!treasuryId) return setError('اختر الخزنة المُحوِّل منها');
       if (!treasuryId2) return setError('اختر الخزنة المُحوَّل إليها');
       if (treasuryId === treasuryId2) return setError('لا يمكن التحويل لنفس الخزنة');
-      if (diffCur && !(Number(rate) > 0)) return setError('اكتب سعر الدولار للتحويل بين عملتين مختلفتين');
     }
     if (type === 'adjust') {
       if (!partyId) return setError('اختر الحساب');
@@ -424,8 +434,6 @@ export function EntryForm() {
         treasuryId2: type === 'transfer' ? treasuryId2 : undefined,
         categoryId: type === 'expense' ? categoryId : undefined,
         direction: type === 'adjust' ? direction : undefined,
-        rate: usdPay ? Number(rate) || undefined : undefined,
-        amount2: type === 'transfer' && received ? received : undefined,
         transferFee: (type === 'collect' || type === 'unknownCollect') && addFee ? Number(feeAmount) || undefined : undefined,
         note: note || undefined,
         clientNote: type === 'collect' ? clientNote || undefined : undefined,
@@ -593,6 +601,12 @@ export function EntryForm() {
                     </Field>
                   )}
 
+                  {showFreightPicker && (
+                    <Field label="تحميل الناولون على صنف (اختياري)" full>
+                      <FreightLinePicker value={freightLine} onChange={setFreightLine} />
+                    </Field>
+                  )}
+
                   {(cashTarget === 'warehouse' || cashTarget === 'external') && vehicleCategory && (
                     <Field label="العربية (اختياري)" full>
                       <Combobox
@@ -673,12 +687,6 @@ export function EntryForm() {
                 </Field>
               )}
 
-              {diffCur && (
-                <Field label={`سعر الدولار${received ? ` (= ${received.toFixed(2)} ${treasury2Cur})` : ''}`}>
-                  <MoneyInput value={rate} onChange={setRate} placeholder="مثلاً 50" />
-                </Field>
-              )}
-
               {type === 'adjust' && (
                 <Field label="اتجاه التسوية">
                   <select value={direction} onChange={(e) => setDirection(e.target.value as 'debit' | 'credit')}>
@@ -688,19 +696,14 @@ export function EntryForm() {
                 </Field>
               )}
 
-              <Field label={usdPay ? `المبلغ (مصري) + سعر الدولار${usdResult ? ` = ${usdResult.toFixed(2)} $` : ''}` : diffCur ? `المبلغ (${treasuryCur})` : 'المبلغ'}>
-                {usdPay ? (
-                  <div className="usd-row">
-                    <MoneyInput value={amount} onChange={setAmount} placeholder="بالمصري" style={{ flex: 1, minWidth: 0 }} />
-                    <MoneyInput value={rate} onChange={setRate} placeholder="سعر $" style={{ width: 90, minWidth: 0 }} />
-                  </div>
-                ) : (
-                  <MoneyInput value={amount} onChange={setAmount} placeholder="0.00" />
-                )}
+              <Field label={usdPay ? 'المبلغ (ج.م)' : diffCur ? `المبلغ (${treasuryCur})` : selPartyCur === 'USD' ? 'المبلغ ($)' : 'المبلغ'}>
+                <MoneyInput value={amount} onChange={setAmount} placeholder="0.00" />
+                {(usdPay || diffCur) && <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>يُحسب بسعر صرف الوكيل في تاريخ الحركة.</div>}
               </Field>
+              {usdMismatch && <div className="err-text" style={{ gridColumn: '1/-1' }}>{usdMismatchMsg}</div>}
               {activeParty && (
                 <div style={{ gridColumn: '1/-1', fontSize: 12.5, fontWeight: 700 }}>
-                  رصيد {activeParty.name} الحالي: <span className={(activeParty.balance ?? 0) >= 0 ? 'deb' : 'cre'}>{EGP(Math.abs(activeParty.balance ?? 0))} {(activeParty.balance ?? 0) >= 0 ? 'عليه' : 'له'}</span>
+                  رصيد {activeParty.name} الحالي: <span className={(activeParty.balance ?? 0) >= 0 ? 'deb' : 'cre'}>{money(Math.abs(activeParty.balance ?? 0), activeParty.currency)} {(activeParty.balance ?? 0) >= 0 ? 'عليه' : 'له'}</span>
                 </div>
               )}
               <Field label="البيان" full><input value={note} onChange={(e) => setNote(e.target.value)} /></Field>

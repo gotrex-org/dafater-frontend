@@ -10,7 +10,7 @@ export { SearchInput } from './SearchInput';
 export { Field } from './Field';
 export { EmptyState } from './EmptyState';
 export { Spinner } from './Spinner';
-export { Combobox, withAdded } from './Combobox';
+export { Combobox, withAdded, withCurrent } from './Combobox';
 export { MoneyInput, formatMoney } from './MoneyInput';
 export type { ComboItem } from './Combobox';
 export { CollapsibleSection } from './CollapsibleSection';

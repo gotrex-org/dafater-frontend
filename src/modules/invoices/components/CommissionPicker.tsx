@@ -13,9 +13,12 @@ const NEW = '__new__';
 export function CommissionPicker({
   value,
   onChange,
+  current,
 }: {
   value: string;
   onChange: (id: string) => void;
+  /** صاحب العمولة المحفوظ على المستند — يظهر حتى لو تمت إزالته من القائمة */
+  current?: { id: string; name: string } | null;
 }) {
   const { data } = useAllParties('AGENT');
   const agents = data?.data ?? [];
@@ -73,6 +76,7 @@ export function CommissionPicker({
         >
           <option value="">— بدون —</option>
           {agents.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          {current && current.id === value && !agents.some((p) => p.id === value) && <option value={current.id}>{current.name}</option>}
           <option value={NEW}>+ شخص جديد…</option>
         </select>
         {agents.length > 0 && (

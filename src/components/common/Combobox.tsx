@@ -15,6 +15,20 @@ export function withAdded<T extends ComboItem>(options: T[], added: T | null): T
 }
 
 /**
+ * قايمة الاختيار + القيم المحفوظة على المستند نفسه. عند التعديل، الخزنة أو الصنف أو الطرف
+ * ممكن يكون مؤرشف أو خارج صلاحية المستخدم فمش في القايمة، والحقل كان بيظهر فاضي رغم إن
+ * القيمة محفوظة. بترجع نفس المرجع لو مفيش حاجة تتضاف.
+ */
+export function withCurrent<T extends ComboItem>(options: T[], current: (ComboItem | null | undefined)[]): T[] {
+  const seen = new Set(options.map((o) => o.id));
+  const extra: T[] = [];
+  for (const c of current) {
+    if (c && !seen.has(c.id)) { seen.add(c.id); extra.push(c as T); }
+  }
+  return extra.length ? [...options, ...extra] : options;
+}
+
+/**
  * Generic type-ahead dropdown over an {id,name}[] list — for choosing an existing record.
  *
  * Pass `onCreate` to also offer "add a new one" when what's typed matches nothing: a

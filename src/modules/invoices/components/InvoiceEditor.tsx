@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { money, EGP, todayISO, QTY } from '@/lib/format';
 import { useNavigationGuard } from '@/lib/useNavigationGuard';
 import { fieldNavKeyDown } from '@/lib/field-nav';
-import { PageTitle, Field, Combobox, MoneyInput } from '@/components/common';
+import { PageTitle, Field, Combobox, MoneyInput, withCurrent } from '@/components/common';
 import { useAllParties } from '../../parties/hooks';
 import { partiesApi } from '../../parties/api';
 import { useAllProducts, useCreateProduct, useUpdateProduct, useLastPrices } from '../../products/hooks';
@@ -59,6 +59,14 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   const { data: warehouses } = useAllWarehouses();
   const { data: treasury } = useAllTreasury();
   const { data: chargeTypes } = useChargeTypes();
+  // قيم الفاتورة نفسها تفضل ظاهرة عند التعديل حتى لو مش في القوايم (مؤرشفة أو خارج صلاحية المستخدم).
+  const partyOptions = withCurrent(parties?.data ?? [], [invoice?.party]);
+  const productOptions = withCurrent(products?.data ?? [], (invoice?.items ?? []).map((it) => it.product));
+  const warehouseOptions = withCurrent(warehouses?.data ?? [], [invoice?.warehouse]);
+  const treasuryOptions = withCurrent(treasury?.data ?? [], [
+    invoice?.treasury,
+    ...(invoice?.items ?? []).flatMap((it) => [it.freightTreasury, it.teaTreasury]),
+  ]);
   const createInvoice = useCreateInvoice();
   const updateInvoice = useUpdateInvoice();
   const createProduct = useCreateProduct();
@@ -127,7 +135,6 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   const [discount, setDiscount] = useState(d?.discount ?? (invoice?.discount ? String(invoice.discount) : ''));
   const [fake, setFake] = useState(d?.fake ?? invoice?.fake ?? false);
   const [note, setNote] = useState(d?.note ?? invoice?.note ?? '');
-  const [exchangeRate, setExchangeRate] = useState(d?.exchangeRate ?? (invoice?.exchangeRate ? String(invoice.exchangeRate) : ''));
   const [lines, setLines] = useState<Line[]>(
     d?.lines?.length
       ? d.lines.map((l) => ({ _key: _nextKey++, productId: l.productId, qty: l.qty, price: l.price, bnd: l.bnd,
@@ -186,7 +193,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   // Snapshot the whole form into a serializable draft so it can be minimized and
   // restored later (even after navigating to another page).
   const buildDraft = (): InvoiceDraft => {
-    const party = parties?.data.find((p) => p.id === partyId);
+    const party = partyOptions.find((p) => p.id === partyId);
     const kindLabel = kind === 'SALE' ? 'بيع' : 'شراء';
     const who = party ? ` — ${party.name}` : directSale ? ' — بيع مباشر' : '';
     return {
@@ -197,7 +204,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
       updatedAt: Date.now(),
       state: {
         no, date, partyId, directSale, warehouseId, treasuryId, paid, discount, fake, note,
-        exchangeRate,
+        exchangeRate: '',
         lines: lines.map((l) => ({ productId: l.productId, qty: l.qty, price: l.price, bnd: l.bnd, freight: l.freight, freightTreasuryId: l.freightTreasuryId, freightNote: l.freightNote, tea: l.tea, teaTreasuryId: l.teaTreasuryId, teaNote: l.teaNote, commQty: l.commQty, commPrice: l.commPrice, commPartyId: l.commPartyId })),
         charges: charges.map((c) => ({ chargeTypeId: c.chargeTypeId, qty: c.qty, price: c.price, note: c.note, manifestId: c.manifestId })),
       },
@@ -205,8 +212,12 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   };
   const handleMinimize = () => onMinimize?.(buildDraft());
 
-  const selectedParty = parties?.data.find((p) => p.id === partyId);
+  const selectedParty = partyOptions.find((p) => p.id === partyId);
   const isUSD = selectedParty?.currency === 'USD';
+  // الدولار لا يدخل خزنة بالجنيه بنفس الرقم. مدفوع قديم على الفاتورة يبقى ظاهراً كما هو.
+  const treasuryCur = (treasury?.data ?? []).find((t) => t.id === treasuryId)?.currency;
+  const usdCashBlocked = !fake && isUSD && treasuryCur !== 'USD' && !(isEdit && Number(invoice?.paid) > 0);
+  const paidNow = fake || usdCashBlocked ? 0 : Number(paid) || 0;
   // شراء دولار: لا يُكتب سعر صرف. الفاتورة تتسعّر بالجنيه من دفعات الوكيل للمورد (FIFO).
   const usdPurchase = isUSD && kind !== 'SALE';
   const cur = isUSD ? 'USD' : 'EGP';
@@ -218,8 +229,6 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
   const total = itemsTotal + chargesTotal;
   const disc = Math.min(Number(discount) || 0, total); // الخصم لا يتجاوز الإجمالي
   const netTotal = total - disc;
-  const rate = Number(exchangeRate) || 0;
-  const totalEgp = isUSD && rate > 0 ? total * rate : 0; // EGP equivalent of a USD invoice
   const setLine = (i: number, patch: Partial<Line>) =>
     setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
 
@@ -275,10 +284,8 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
     if (!partyId) return setError('اختر الطرف');
     if (!warehouseId) return setError('اختر المخزن');
     if (items.length === 0 && chargesDto.length === 0) return setError('أضف صنفاً أو بند شحن واحداً على الأقل');
-    if (!fake && Number(paid) > 0 && !treasuryId) return setError('حددت مبلغاً مدفوعاً. اختر الخزنة التي يخرج منها المبلغ أو يدخل إليها');
-    if (!fake && isUSD && !usdPurchase && !(rate > 0)) return setError('فاتورة دولارية — اكتب سعر صرف الدولار اليوم');
+    if (paidNow > 0 && !treasuryId) return setError('حددت مبلغاً مدفوعاً. اختر الخزنة التي يخرج منها المبلغ أو يدخل إليها');
 
-    const usdRate = isUSD && !usdPurchase && rate > 0 ? { exchangeRate: rate } : {};
 
     if (isEdit) {
       updateInvoice.mutate(
@@ -286,12 +293,11 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
           id: editInvoiceId!,
           dto: {
             date, partyId, warehouseId, items, charges: chargesDto,
-            paid: fake ? 0 : Number(paid) || 0,
+            paid: paidNow,
             discount: fake ? undefined : disc || undefined,
             fake,
             treasuryId: fake ? undefined : treasuryId || undefined,
             note: note || undefined,
-            ...usdRate,
           },
         },
         {
@@ -303,8 +309,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
       createInvoice.mutate(
         {
           kind, no: no.trim() || undefined, date, partyId, warehouseId, fake,
-          items, charges: chargesDto, paid: fake ? 0 : Number(paid) || 0, discount: fake ? undefined : disc || undefined, treasuryId: fake ? undefined : treasuryId || undefined, note: note || undefined,
-          ...usdRate,
+          items, charges: chargesDto, paid: paidNow, discount: fake ? undefined : disc || undefined, treasuryId: fake ? undefined : treasuryId || undefined, note: note || undefined,
         },
         // Purchase invoices never make a vehicle manifest — just close. Sales offer it.
         { onSuccess: (inv) => { if (kind === 'SALE') setSaved(inv); else onClose(); }, onError: (e: any) => setError(e.message) },
@@ -373,9 +378,9 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
             {directSale ? (
               <span className="muted" style={{ fontSize: 13 }}>{directSaleLoading ? '...' : 'بيع مباشر — بدون عميل محدد'}</span>
             ) : (
-              <PartyCombobox parties={parties?.data ?? []} value={partyId} onChange={setPartyId} role={role} />
+              <PartyCombobox parties={partyOptions} value={partyId} onChange={setPartyId} role={role} />
             )}
-            {!directSale && selectedParty && (
+            {!directSale && selectedParty && selectedParty.balance !== undefined && (
               <div style={{ fontSize: 12.5, marginTop: 4, fontWeight: 700 }}>
                 رصيده الحالي: <span className={(selectedParty.balance ?? 0) >= 0 ? 'deb' : 'cre'}>{money(Math.abs(selectedParty.balance ?? 0), cur)} {(selectedParty.balance ?? 0) >= 0 ? 'عليه' : 'له'}</span>
               </div>
@@ -388,7 +393,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
             )}
           </Field>
           <Field label="المخزن">
-            <Combobox options={warehouses?.data ?? []} value={warehouseId} onChange={setWarehouseId} />
+            <Combobox options={warehouseOptions} value={warehouseId} onChange={setWarehouseId} />
           </Field>
           <Field label="البيان (اختياري)" full><input value={note} onChange={(e) => setNote(e.target.value)} /></Field>
           <Field label="نوع الفاتورة" full>
@@ -409,23 +414,14 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
           <>
             <div style={{ padding: '6px 16px', background: 'var(--debit-bg)', borderRadius: 8, margin: '0 16px 8px', fontWeight: 700, fontSize: 13, color: 'var(--debit)' }}>
               $ فاتورة دولارية — جميع الأسعار بالدولار
+              {!usdPurchase && <div style={{ fontWeight: 500, marginTop: 4 }}>تُحوَّل الفاتورة إلى الجنيه بسعر صرف الوكيل في تاريخها.</div>}
               {usdPurchase && (
                 <div style={{ fontWeight: 500, marginTop: 4 }}>
-                  تُحوَّل الفاتورة إلى الجنيه تلقائياً بسعر دفعات الوكيل للمورد، من الأقدم إلى الأحدث.
+                  تُحوَّل الفاتورة إلى الجنيه تلقائياً بسعر صرف دفعات الوكيل للمورد، من الأقدم إلى الأحدث.
                   الجزء الذي لم تقابله دفعة بعد يبقى غير مسعّر حتى يتم التوريد.
                 </div>
               )}
             </div>
-            {!usdPurchase && <div className="form-grid">
-              <Field label="سعر صرف الدولار اليوم (ج.م لكل $)">
-                <MoneyInput value={exchangeRate} onChange={setExchangeRate} placeholder="مثلاً 50" />
-              </Field>
-              {rate > 0 && (
-                <Field label="الإجمالي بالمصري بعد التحويل">
-                  <div className="num" style={{ fontWeight: 800, padding: '10px 0' }}>{money(total, 'USD')} = {EGP(totalEgp)} ج.م</div>
-                </Field>
-              )}
-            </div>}
           </>
         )}
         <div className="tbl-wrap combo-table invoice-items">
@@ -451,7 +447,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
             </tr></thead>
             <tbody>
               {lines.map((l, i) => {
-                const prod = l.productId ? products?.data.find((p) => p.id === l.productId) : undefined;
+                const prod = l.productId ? productOptions.find((p) => p.id === l.productId) : undefined;
                 const stockRow = prod && !prod.service ? stockByProduct.get(l.productId) : undefined;
                 const lastPrice = prod ? lastPriceByProduct.get(l.productId) : undefined;
                 // سعر الشراء المعروض في فاتورة البيع: الثابت على الصنف، وإلا آخر سعر شراء فعلي.
@@ -464,7 +460,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
                     <td><MoneyInput value={l.qty} onChange={(v) => setLine(i, { qty: v })} placeholder="0" style={{ width: 80 }} /></td>
                     <td style={{ minWidth: 320 }}>
                       <ProductCombobox
-                        products={products?.data ?? []}
+                        products={productOptions}
                         value={l.productId}
                         onChange={(id) => pickProduct(i, id)}
                       />
@@ -488,7 +484,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
                                 <MoneyInput value={l.freight} onChange={(v) => setLine(i, { freight: v })} placeholder="مبلغ" style={{ width: 78 }} />
                                 <span className="muted" style={{ fontSize: 11 }}>من خزنة</span>
                                 <div style={{ width: 104 }}>
-                                  <Combobox options={treasury?.data ?? []} value={l.freightTreasuryId} onChange={(id) => setLine(i, { freightTreasuryId: id })} placeholder="اختر الخزنة" />
+                                  <Combobox options={treasuryOptions} value={l.freightTreasuryId} onChange={(id) => setLine(i, { freightTreasuryId: id })} placeholder="اختر الخزنة" />
                                 </div>
                                 <input value={l.freightNote} onChange={(e) => setLine(i, { freightNote: e.target.value })} placeholder="بيان" style={{ width: 120, padding: '7px 9px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 13 }} />
                                 <button className="btn btn-ghost btn-sm" style={{ marginInlineStart: 'auto', color: 'var(--debit)' }} onClick={() => setLine(i, { showFreight: false, freight: '', freightTreasuryId: '', freightNote: '' })}>×</button>
@@ -500,7 +496,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
                                 <MoneyInput value={l.tea} onChange={(v) => setLine(i, { tea: v })} placeholder="مبلغ" style={{ width: 78 }} />
                                 <span className="muted" style={{ fontSize: 11 }}>من خزنة</span>
                                 <div style={{ width: 104 }}>
-                                  <Combobox options={treasury?.data ?? []} value={l.teaTreasuryId} onChange={(id) => setLine(i, { teaTreasuryId: id })} placeholder="اختر الخزنة" />
+                                  <Combobox options={treasuryOptions} value={l.teaTreasuryId} onChange={(id) => setLine(i, { teaTreasuryId: id })} placeholder="اختر الخزنة" />
                                 </div>
                                 <input value={l.teaNote} onChange={(e) => setLine(i, { teaNote: e.target.value })} placeholder="بيان" style={{ width: 120, padding: '7px 9px', border: '1.5px solid var(--line)', borderRadius: 8, fontSize: 13 }} />
                                 <button className="btn btn-ghost btn-sm" style={{ marginInlineStart: 'auto', color: 'var(--debit)' }} onClick={() => setLine(i, { showTea: false, tea: '', teaTreasuryId: '', teaNote: '' })}>×</button>
@@ -514,7 +510,7 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
                                 <MoneyInput value={l.commPrice} onChange={(v) => setLine(i, { commPrice: v })} placeholder="سعر" style={{ width: 70 }} />
                                 <span className="num" style={{ fontWeight: 700 }}>= {money((Number(l.commQty) || 0) * (Number(l.commPrice) || 0), cur)}</span>
                                 <div style={{ minWidth: 150, flex: 1 }}>
-                                  <CommissionPicker value={l.commPartyId} onChange={(id) => setLine(i, { commPartyId: id })} />
+                                  <CommissionPicker value={l.commPartyId} onChange={(id) => setLine(i, { commPartyId: id })} current={invoice?.items.find((it) => it.commissionParty?.id === l.commPartyId)?.commissionParty} />
                                 </div>
                                 <button className="btn btn-ghost btn-sm" style={{ color: 'var(--debit)' }} onClick={() => setLine(i, { showComm: false, commQty: '', commPrice: '', commPartyId: '' })}>×</button>
                               </div>
@@ -656,10 +652,18 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
 
         {!fake && (
         <div className="form-grid">
-          <Field label="المدفوع نقدًا الآن"><MoneyInput value={paid} onChange={setPaid} placeholder="0.00" /></Field>
+          <Field label={isUSD ? 'المدفوع نقدًا الآن ($)' : 'المدفوع نقدًا الآن'}>
+            {usdCashBlocked ? (
+              <div className="muted" style={{ fontSize: 12.5, padding: '10px 0' }}>
+                {kind === 'SALE' ? 'تحصيل الدولار يتم في خزنة بالدولار.' : 'الدفع لمورد الدولار يتم عن طريق الوكيل، أو من خزنة بالدولار.'}
+              </div>
+            ) : (
+              <MoneyInput value={paid} onChange={setPaid} placeholder="0.00" />
+            )}
+          </Field>
           <Field label="حساب الخزنة">
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <div style={{ flex: 1 }}><Combobox options={treasury?.data ?? []} value={treasuryId} onChange={setTreasuryId} /></div>
+              <div style={{ flex: 1 }}><Combobox options={treasuryOptions} value={treasuryId} onChange={setTreasuryId} /></div>
               <button
                 type="button"
                 className="btn btn-ghost btn-sm"

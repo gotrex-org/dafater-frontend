@@ -58,3 +58,11 @@ export function useDeleteTransaction() {
     onSuccess: () => invalidateLedgers(qc),
   });
 }
+
+export function useFreightLines(search: string) {
+  return useQuery({
+    queryKey: ['transactions', 'freight-lines', search],
+    queryFn: () => transactionsApi.freightLines(search),
+    enabled: search.length >= 2,
+  });
+}

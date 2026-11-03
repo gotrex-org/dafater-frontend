@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { EGP } from '@/lib/format';
+import { EGP, money } from '@/lib/format';
 import { useTableState } from '@/lib/useTableState';
 import { SegmentedControl, SearchInput, MoneyInput } from '@/components/common';
 import { useAuth } from '@/lib/auth';
@@ -125,7 +125,7 @@ function PartyRow({ party, canDelete, canManage }: { party: Party; canDelete: bo
           {party.phone && <span className="muted" style={{ fontSize: 12, fontWeight: 400, marginInlineStart: 8 }}>{party.phone}</span>}
           {!isPerson && <LinkPanel party={party} canManage={canManage} otherRole={otherRole} />}
         </span>
-        <span className={`num ${(party.balance ?? 0) >= 0 ? 'deb' : 'cre'}`} style={{ fontWeight: 700 }}>{EGP(party.balance)}</span>
+        <span className={`num ${(party.balance ?? 0) >= 0 ? 'deb' : 'cre'}`} style={{ fontWeight: 700 }}>{party.currency === 'USD' ? money(party.balance, 'USD') : EGP(party.balance)}</span>
         <button className="btn btn-ghost btn-sm" onClick={() => setOpen((o) => !o)}>{open ? 'إغلاق' : 'تعديل'}</button>
         {canDelete && <button className="btn btn-danger btn-sm" onClick={remove} disabled={del.isPending}>حذف</button>}
       </div>

@@ -4,11 +4,12 @@ import { useRef } from 'react';
 
 export function parsePlate(plate?: string | null): { letters: string[]; numbers: string } {
   if (!plate) return { letters: ['', '', ''], numbers: '' };
-  const parts = plate.split(' ');
-  const letters = parts.slice(0, 3).map((p) => (p.length === 1 ? p : ''));
-  const hasLetters = letters.some(Boolean);
-  const numbers = hasLetters ? (parts[3] ?? '') : (parts[0] ?? '');
-  return { letters: [letters[0] ?? '', letters[1] ?? '', letters[2] ?? ''], numbers };
+  // الحروف = أول ٣ خانات من حرف واحد، والباقي كله أرقام. buildPlate بيشيل الخانات الفاضية،
+  // فلوحة بحرف أو حرفين ("ب ي 1234") الأرقام بتاعتها مش دايمًا في الخانة الرابعة.
+  const parts = plate.trim().split(/\s+/);
+  const letters: string[] = [];
+  while (letters.length < 3 && parts.length && /^\p{L}$/u.test(parts[0])) letters.push(parts.shift()!);
+  return { letters: [letters[0] ?? '', letters[1] ?? '', letters[2] ?? ''], numbers: parts.join(' ') };
 }
 
 export function buildPlate(letters: string[], numbers: string): string | undefined {

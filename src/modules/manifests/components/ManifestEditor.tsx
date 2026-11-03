@@ -17,9 +17,11 @@ import { manifestsApi } from '../api';
 import { DriverTripEditor } from '../../driver-trips/components/DriverTripEditor';
 import { DriverCombo } from '../../drivers/components/DriverCombo';
 import type { Manifest, ManifestItem } from '../dtos';
+import type { Party } from '../../parties/dtos';
 import type { DriverTrip } from '../../driver-trips/dtos';
 
 const blankItem = (): ManifestItem => ({ name: '', qty: 0 });
+const SAVED_CLIENT = '__saved_client__';
 
 
 interface Props {
@@ -71,11 +73,17 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
     if (!clientName.trim() || isEdit) return;
     manifestsApi.nextNo(clientName.trim()).then(({ no: n }) => setNo(n)).catch(() => {});
   }, [clientName, isEdit]);
-  // partyId is only used to drive the combobox selection; clientName is the stored value
-  const [partyId, setPartyId] = useState(() => {
-    const existing = manifest?.clientName ?? initial?.clientName ?? '';
-    return parties?.data?.find((p) => p.name === existing)?.id ?? '';
-  });
+  // partyId is only used to drive the combobox selection; clientName is the stored value.
+  // الاختيار المعروض مشتق من clientName مش محسوب مرة واحدة عند الفتح — قبل كده لو قايمة
+  // العملاء لسه ما حملتش، اسم العميل كان بيظهر فاضي في التعديل. واسم مش في القايمة
+  // (عميل مؤرشف أو اسم قديم) بيظهر كما هو بدل حقل فاضي.
+  const [partyId, setPartyId] = useState('');
+  const matchedClient = parties?.data.find((p) => p.name === clientName);
+  const savedClientOnly = !!parties && !partyId && !matchedClient && !!clientName;
+  const clientOptions = savedClientOnly
+    ? [...parties!.data, { id: SAVED_CLIENT, name: clientName } as Party]
+    : parties?.data ?? [];
+  const clientValue = partyId || matchedClient?.id || (savedClientOnly ? SAVED_CLIENT : '');
   const [driverName, setDriverName] = useState(manifest?.driverName ?? '');
   const [driverNID, setDriverNID] = useState(manifest?.driverNID ?? '');
   const [driverPhone, setDriverPhone] = useState(manifest?.driverPhone ?? '');
@@ -217,12 +225,12 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
           <div className="form-sec">بيانات الكشف</div>
           <Field label="اسم العميل" full className="fld-beige">
             <PartyCombobox
-              parties={parties?.data ?? []}
-              value={partyId}
+              parties={clientOptions}
+              value={clientValue}
               onChange={(id, p) => {
                 setPartyId(id);
                 // `p` covers a client created right here, which isn't in the list yet
-                const picked = p ?? (parties?.data ?? []).find((x) => x.id === id);
+                const picked = p ?? clientOptions.find((x) => x.id === id);
                 if (picked) setClientName(picked.name);
               }}
               role="CLIENT"
@@ -251,6 +259,13 @@ export function ManifestEditor({ onClose, onCreated, initial, manifest }: Props)
                 </option>
               ))}
               {/* المستند المربوط يبقى ظاهراً حتى قبل تحميل القائمة */}
+              {invoiceId && !clientInvoices.some((inv) => inv.id === invoiceId) && (
+                <option value={link}>
+                  {manifest?.invoice?.id === invoiceId
+                    ? `فاتورة ${manifest.invoice.kind === 'SALE' ? 'بيع' : 'شراء'} رقم ${manifest.invoice.no} — ${fmtDate(manifest.invoice.date)}`
+                    : 'فاتورة مرتبطة'}
+                </option>
+              )}
               {dealId && !clientDeals.some((d) => d.id === dealId) && (
                 <option value={link}>بيع خارجي{manifest?.deal?.no ? ` رقم ${manifest.deal.no}` : ''}</option>
               )}

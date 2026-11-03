@@ -37,8 +37,22 @@ export interface PostEntryDto {
   transferFee?: number;
   note?: string;
   clientNote?: string; // ملاحظة تظهر للعميل في بوابته بدل "استلام نقدية"
+  freightInvoiceId?: string;
+  freightProductId?: string;
   // مصروف مربوط بعربية (تحميل/شفتنة) — يظهر في تكاليف الشحن في كشفها
   manifestId?: string;
+}
+
+/** صنف في فاتورة شراء، لتحميل الناولون الداخلي عليه */
+export interface FreightLine {
+  invoiceId: string;
+  invoiceNo: string;
+  date: string;
+  supplierName: string;
+  productId: string;
+  productName: string;
+  unit?: string | null;
+  qty: number;
 }
 
 export interface Transaction {

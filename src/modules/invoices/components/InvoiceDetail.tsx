@@ -23,7 +23,7 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
   const isUsd = cur === 'USD';
   const fifo = invoice.fifo;
   const usdPurchase = isUsd && invoice.kind !== 'SALE';
-  const fxRate = !isUsd ? 1 : usdPurchase ? (fifo?.rate ?? 0) : (invoice.exchangeRate ?? 0);
+  const fxRate = !isUsd ? 1 : usdPurchase ? (fifo?.rate ?? 0) : (invoice.exchangeRate || fifo?.rate || 0);
   const unpricedUsd = usdPurchase ? (fifo?.unpricedUsd ?? 0) : 0;
   const amt = (v: number) =>
     !isUsd ? money(v, cur) : fxRate > 0 ? `${EGP(v * fxRate)} (${money(v, 'USD')})` : money(v, 'USD');
@@ -148,7 +148,7 @@ export function InvoiceDetail({ invoice, onBack }: { invoice: Invoice; onBack: (
 
         {isUsd && fxRate > 0 && (
           <div className="num" style={{ textAlign: 'left', fontWeight: 700, marginTop: 8 }}>
-            {usdPurchase ? 'سعر الوكيل' : 'سعر الصرف'} {EGP(fxRate)} ج.م
+            سعر الصرف {EGP(fxRate)} ج.م{usdPurchase ? ' (من دفعات الوكيل)' : ''}
           </div>
         )}
         {unpricedUsd > 0 && (

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { EGP, fmtDate, todayISO } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
-import { PageTitle, Field, Combobox, MoneyInput, Spinner } from '@/components/common';
+import { PageTitle, Field, Combobox, MoneyInput, Spinner, withCurrent } from '@/components/common';
 import { useManifests } from '../../manifests/hooks';
 import { useAllTreasury } from '../../treasury/hooks';
 import { useAllExpenseCategories } from '../../expense-categories/hooks';
@@ -473,7 +473,6 @@ function MovementForm({ mode, agents, fixedAgentId, editing, onDone }: {
   const [amount, setAmount] = useState(
     m ? String(mode === 'pay' ? (m.cashOut || m.debit) : m.credit) : '',
   );
-  const [rate, setRate] = useState(payLeg?.exchangeRate ? String(payLeg.exchangeRate) : '');
   const [categoryId, setCategoryId] = useState(m?.category?.id ?? '');
   const [note, setNote] = useState(m?.note ?? '');
   const [err, setErr] = useState('');
@@ -483,7 +482,6 @@ function MovementForm({ mode, agents, fixedAgentId, editing, onDone }: {
   const tr = (treasury?.data ?? []).find((t) => t.id === treasuryId) as { currency?: 'EGP' | 'USD' } | undefined;
   const isUSD = tr?.currency === 'USD';
   const amt = Number(amount) || 0;
-  const r = Number(rate) || 0;
 
   // عربياتنا + العربية الحالية للحركة (لو برّه أول 200)
   const ours = (manifestsPage?.data ?? []).filter((x) => x.vehicleSource === 'OURS');
@@ -510,8 +508,6 @@ function MovementForm({ mode, agents, fixedAgentId, editing, onDone }: {
     if (needsVehicle && !manifestId) return setErr('اختر العربية');
     if (needsTreasury && !treasuryId) return setErr('اختر الخزنة');
     if (!amt) return setErr('اكتب المبلغ');
-    if (isUSD && !r) return setErr('خزنة دولار: اكتب سعر الصرف');
-    const rateDto = isUSD ? { rate: r } : {};
 
     if (editing) {
       return update.mutate({
@@ -520,14 +516,14 @@ function MovementForm({ mode, agents, fixedAgentId, editing, onDone }: {
           date, amount: amt, note: note.trim(),
           ...(fixedAgentId ? {} : { agentId }),
           ...(needsVehicle ? { manifestId, categoryId } : {}),
-          ...(needsTreasury ? { treasuryId, ...rateDto } : {}),
+          ...(needsTreasury ? { treasuryId } : {}),
         },
       }, opts);
     }
     const base = { agentId, date, amount: amt, note: note.trim() || undefined };
     if (mode === 'vehicle') addVehicle.mutate({ ...base, manifestId, categoryId: categoryId || undefined }, opts);
-    else if (mode === 'cash') addCash.mutate({ ...base, manifestId, categoryId: categoryId || undefined, treasuryId, ...rateDto }, opts);
-    else pay.mutate({ ...base, treasuryId, ...rateDto }, opts);
+    else if (mode === 'cash') addCash.mutate({ ...base, manifestId, categoryId: categoryId || undefined, treasuryId }, opts);
+    else pay.mutate({ ...base, treasuryId }, opts);
   };
 
   const amountLabel =
@@ -562,27 +558,18 @@ function MovementForm({ mode, agents, fixedAgentId, editing, onDone }: {
         )}
         {needsTreasury && (
           <Field label="من خزنة">
-            <Combobox options={treasury?.data ?? []} value={treasuryId} onChange={setTreasuryId} placeholder="اختر الخزنة" />
+            <Combobox options={withCurrent(treasury?.data ?? [], [payLeg?.treasury])} value={treasuryId} onChange={setTreasuryId} placeholder="اختر الخزنة" />
           </Field>
         )}
         <Field label={amountLabel}><MoneyInput value={amount} onChange={setAmount} placeholder="0.00" /></Field>
         {needsTreasury && isUSD && (
-          <Field label="سعر صرف الدولار (ج.م لكل $)">
-            <MoneyInput value={rate} onChange={setRate} placeholder="مثلاً 50" />
-            {amt > 0 && r > 0 && (
-              <div className="muted num" style={{ fontSize: 12, marginTop: 4 }}>
-                {mode === 'pay'
-                  ? <>ينزل من رصيد المكتب: {EGP(amt * r)} ج.م</>
-                  : <>يخرج من الخزنة: {(amt / r).toFixed(2)} $</>}
-              </div>
-            )}
-          </Field>
+          <div className="muted" style={{ fontSize: 12, gridColumn: '1/-1' }}>يُحسب بسعر صرف الوكيل في تاريخ الحركة.</div>
         )}
         {needsVehicle && (
           <Field label="البند (اختياري)">
             <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} style={selectStyle}>
               <option value="">— بدون بند —</option>
-              {(categories?.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {withCurrent(categories?.data ?? [], [m?.category]).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </Field>
         )}

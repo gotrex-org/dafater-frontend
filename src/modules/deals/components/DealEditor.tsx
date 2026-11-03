@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { money, EGP, todayISO } from '@/lib/format';
 import { useNavigationGuard } from '@/lib/useNavigationGuard';
 import { fieldNavKeyDown } from '@/lib/field-nav';
-import { PageTitle, Field, Combobox, MoneyInput } from '@/components/common';
+import { PageTitle, Field, Combobox, MoneyInput, withCurrent } from '@/components/common';
 import { useAllParties } from '../../parties/hooks';
 import { useAllProducts, useLastPrices } from '../../products/hooks';
 import { useAllTreasury } from '../../treasury/hooks';
@@ -40,6 +40,14 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
   const { data: products } = useAllProducts();
   const { data: treasury } = useAllTreasury();
   const { data: chargeTypes } = useChargeTypes();
+  // قيم العملية نفسها تفضل ظاهرة عند التعديل حتى لو مش في القوايم (مؤرشفة أو خارج صلاحية المستخدم).
+  const clientOptions = withCurrent(clients?.data ?? [], [initialDeal?.client]);
+  const supplierOptions = withCurrent(suppliers?.data ?? [], [initialDeal?.supplier]);
+  const productOptions = withCurrent(products?.data ?? [], (initialDeal?.items ?? []).map((it) => it.product));
+  const treasuryOptions = withCurrent(treasury?.data ?? [], [
+    initialDeal?.treasury,
+    ...(initialDeal?.items ?? []).flatMap((it) => [it.freightTreasury, it.teaTreasury]),
+  ]);
   const { data: lastSale } = useLastPrices('SALE');
   const { data: lastBuy } = useLastPrices('PURCHASE');
   const lastSaleBy = new Map((lastSale ?? []).map((r) => [r.productId, r]));
@@ -55,7 +63,6 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
   const [paidIn, setPaidIn] = useState(() => initialDeal?.paidIn ? String(initialDeal.paidIn) : '');
   const [paidOut, setPaidOut] = useState(() => initialDeal?.paidOut ? String(initialDeal.paidOut) : '');
   const [note, setNote] = useState(() => initialDeal?.note ?? '');
-  const [exchangeRate, setExchangeRate] = useState(() => initialDeal?.exchangeRate ? String(initialDeal.exchangeRate) : '');
   // ناولون العملية القديم (قبل جدول بنود الشحن) — يظهر فقط على العمليات المسجلة به.
   const [nawlon, setNawlon] = useState(() => initialDeal?.nawlon ? String(initialDeal.nawlon) : '');
 
@@ -96,10 +103,15 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
   const setCharge = (i: number, patch: Partial<ChargeLine>) =>
     setCharges((cs) => cs.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
 
-  const selSupplier = suppliers?.data.find((s) => s.id === supplierId);
-  const selClient = clients?.data.find((c) => c.id === clientId);
+  const selSupplier = supplierOptions.find((s) => s.id === supplierId);
+  const selClient = clientOptions.find((c) => c.id === clientId);
   const supplierIsUSD = selSupplier?.currency === 'USD';
-  const rate = num(exchangeRate);
+  // الدولار لا يدخل خزنة بالجنيه بنفس الرقم. مبلغ قديم على العملية يبقى ظاهراً كما هو.
+  const treasuryCur = (treasury?.data ?? []).find((t) => t.id === treasuryId)?.currency;
+  const paidInBlocked = selClient?.currency === 'USD' && treasuryCur !== 'USD' && !(initialDeal?.paidIn);
+  const paidOutBlocked = supplierIsUSD && treasuryCur !== 'USD' && !(initialDeal?.paidOut);
+  const paidInNow = paidInBlocked ? 0 : num(paidIn);
+  const paidOutNow = paidOutBlocked ? 0 : num(paidOut);
 
   // اختيار صنف يملأ السعرين تلقائياً بنفس قواعد الفواتير، والسعر المكتوب لا يُمسح:
   //   البيع  ← آخر سعر بيع، وإلا السعر الثابت.
@@ -124,7 +136,8 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
   const chargesTotal = charges.reduce((s, c) => s + chargeQty(c) * num(c.price), 0);
   const sellTotal = itemsTotal + chargesTotal + num(nawlon);
   const buyTotal = lines.reduce((s, l) => s + num(l.qty) * num(l.buyPrice), 0);
-  const buyTotalEgp = supplierIsUSD ? (rate > 0 ? buyTotal * rate : null) : buyTotal;
+  // المورد الدولاري يتسعّر من دفعات الوكيل، فلا يُعرف ربح الأصناف وقت الكتابة.
+  const buyTotalEgp = supplierIsUSD ? null : buyTotal;
 
   const isDirty = isEdit || !!(clientId || supplierId || lines.some((l) => !!(l.productId || l.qty || l.buyPrice || l.sellPrice)) || charges.some((c) => !!(c.chargeTypeId && c.price)));
   useNavigationGuard(isDirty);
@@ -158,14 +171,12 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
     if (!clientId) return setError('اختر العميل');
     if (!supplierId) return setError('اختر المورد');
     if (items.length === 0 && chargesDto.length === 0) return setError('أضف صنفاً أو بند شحن واحداً على الأقل');
-    if ((num(paidIn) > 0 || num(paidOut) > 0) && !treasuryId) return setError('حددت مبلغاً محصلاً أو مدفوعاً. اختر الخزنة التي يخرج منها المبلغ أو يدخل إليها');
-    if (supplierIsUSD && items.length > 0 && !(rate > 0)) return setError('المورد بالدولار. اكتب سعر صرف الدولار اليوم');
+    if ((paidInNow > 0 || paidOutNow > 0) && !treasuryId) return setError('حددت مبلغاً محصلاً أو مدفوعاً. اختر الخزنة التي يخرج منها المبلغ أو يدخل إليها');
 
     const dto = {
       date, no: no.trim() || undefined, clientId, supplierId, items, charges: chargesDto,
-      paidIn: num(paidIn) || undefined, paidOut: num(paidOut) || undefined,
+      paidIn: paidInNow || undefined, paidOut: paidOutNow || undefined,
       treasuryId: treasuryId || undefined, note: note.trim() || undefined,
-      ...(supplierIsUSD && rate > 0 ? { exchangeRate: rate } : {}),
       // الناولون القديم يُرسل كما هو حتى لا يضيع عند تعديل عملية قديمة
       ...(isEdit ? { nawlon: num(nawlon) } : {}),
     };
@@ -237,7 +248,7 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
           )}
           <Field label="التاريخ"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: 'fit-content', maxWidth: '100%' }} /></Field>
           <Field label="العميل (البيع)">
-            <PartyCombobox parties={clients?.data ?? []} value={clientId} onChange={setClientId} role="CLIENT" />
+            <PartyCombobox parties={clientOptions} value={clientId} onChange={setClientId} role="CLIENT" />
             {selClient && (
               <div style={{ fontSize: 12.5, marginTop: 4, fontWeight: 700 }}>
                 رصيده الحالي: <span className={(selClient.balance ?? 0) >= 0 ? 'deb' : 'cre'}>{EGP(Math.abs(selClient.balance ?? 0))} {(selClient.balance ?? 0) >= 0 ? 'عليه' : 'له'}</span>
@@ -245,7 +256,7 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
             )}
           </Field>
           <Field label="المورد (الشراء)">
-            <PartyCombobox parties={suppliers?.data ?? []} value={supplierId} onChange={setSupplierId} role="SUPPLIER" />
+            <PartyCombobox parties={supplierOptions} value={supplierId} onChange={setSupplierId} role="SUPPLIER" />
             {selSupplier && (
               <div style={{ fontSize: 12.5, marginTop: 4, fontWeight: 700 }}>
                 رصيده الحالي: <span className={(selSupplier.balance ?? 0) >= 0 ? 'deb' : 'cre'}>{money(Math.abs(selSupplier.balance ?? 0), supplierIsUSD ? 'USD' : 'EGP')} {(selSupplier.balance ?? 0) >= 0 ? 'عليه' : 'له'}</span>
@@ -259,16 +270,10 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
           <>
             <div style={{ padding: '6px 16px', background: 'var(--debit-bg)', borderRadius: 8, margin: '0 16px 8px', fontWeight: 700, fontSize: 13, color: 'var(--debit)' }}>
               $ مورد بالدولار: سعر الشراء بالدولار، وسعر البيع بالجنيه
-            </div>
-            <div className="form-grid">
-              <Field label="سعر صرف الدولار اليوم (ج.م لكل $)">
-                <MoneyInput value={exchangeRate} onChange={setExchangeRate} placeholder="مثلاً 50" />
-              </Field>
-              {rate > 0 && (
-                <Field label="إجمالي الشراء بالجنيه">
-                  <div className="num" style={{ fontWeight: 800, padding: '10px 0' }}>{money(buyTotal, 'USD')} = {EGP(buyTotal * rate)} ج.م</div>
-                </Field>
-              )}
+              <div style={{ fontWeight: 500, marginTop: 4 }}>
+                يُحوَّل الشراء إلى الجنيه تلقائياً بسعر صرف دفعات الوكيل للمورد، من الأقدم إلى الأحدث.
+                الجزء الذي لم تقابله دفعة بعد يبقى غير مسعّر حتى يتم التوريد.
+              </div>
             </div>
           </>
         )}
@@ -285,7 +290,7 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
             </tr></thead>
             <tbody>
               {lines.map((l, i) => {
-                const prod = l.productId ? products?.data.find((p) => p.id === l.productId) : undefined;
+                const prod = l.productId ? productOptions.find((p) => p.id === l.productId) : undefined;
                 const ls = prod ? lastSaleBy.get(l.productId) : undefined;
                 const lb = prod && !supplierIsUSD ? lastBuyBy.get(l.productId) : undefined;
                 const extras = num(l.freight) + num(l.tea) + num(l.commQty) * num(l.commPrice);
@@ -293,7 +298,7 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
                   <tr key={l._key}>
                     <td><MoneyInput value={l.qty} onChange={(v) => setLine(i, { qty: v })} placeholder="0" style={{ width: 80 }} /></td>
                     <td style={{ minWidth: 300 }}>
-                      <ProductCombobox products={products?.data ?? []} value={l.productId} onChange={(id) => pickProduct(i, id)} />
+                      <ProductCombobox products={productOptions} value={l.productId} onChange={(id) => pickProduct(i, id)} />
                       {(l.showFreight || l.showTea || l.showComm) && (
                         <div style={{ marginTop: 6, display: 'grid', gap: 4, padding: 6, background: 'var(--line-soft)', borderRadius: 8, fontSize: 12 }}>
                           {l.showFreight && (
@@ -301,7 +306,7 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
                               <span style={{ minWidth: 42, fontWeight: 700 }}>ناولون</span>
                               <MoneyInput value={l.freight} onChange={(v) => setLine(i, { freight: v })} placeholder="مبلغ" style={{ width: 78 }} />
                               <span className="muted" style={{ fontSize: 11 }}>من خزنة</span>
-                              <div style={{ width: 104 }}><Combobox options={treasury?.data ?? []} value={l.freightTreasuryId} onChange={(id) => setLine(i, { freightTreasuryId: id })} placeholder="اختر الخزنة" /></div>
+                              <div style={{ width: 104 }}><Combobox options={treasuryOptions} value={l.freightTreasuryId} onChange={(id) => setLine(i, { freightTreasuryId: id })} placeholder="اختر الخزنة" /></div>
                               <input value={l.freightNote} onChange={(e) => setLine(i, { freightNote: e.target.value })} placeholder="بيان" style={{ ...inputStyle, width: 120 }} />
                               <button className="btn btn-ghost btn-sm" style={{ marginInlineStart: 'auto', color: 'var(--debit)' }} onClick={() => setLine(i, { showFreight: false, freight: '', freightTreasuryId: '', freightNote: '' })}>×</button>
                             </div>
@@ -311,7 +316,7 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
                               <span style={{ minWidth: 42, fontWeight: 700 }}>شاي</span>
                               <MoneyInput value={l.tea} onChange={(v) => setLine(i, { tea: v })} placeholder="مبلغ" style={{ width: 78 }} />
                               <span className="muted" style={{ fontSize: 11 }}>من خزنة</span>
-                              <div style={{ width: 104 }}><Combobox options={treasury?.data ?? []} value={l.teaTreasuryId} onChange={(id) => setLine(i, { teaTreasuryId: id })} placeholder="اختر الخزنة" /></div>
+                              <div style={{ width: 104 }}><Combobox options={treasuryOptions} value={l.teaTreasuryId} onChange={(id) => setLine(i, { teaTreasuryId: id })} placeholder="اختر الخزنة" /></div>
                               <input value={l.teaNote} onChange={(e) => setLine(i, { teaNote: e.target.value })} placeholder="بيان" style={{ ...inputStyle, width: 120 }} />
                               <button className="btn btn-ghost btn-sm" style={{ marginInlineStart: 'auto', color: 'var(--debit)' }} onClick={() => setLine(i, { showTea: false, tea: '', teaTreasuryId: '', teaNote: '' })}>×</button>
                             </div>
@@ -323,7 +328,7 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
                               <span className="muted">×</span>
                               <MoneyInput value={l.commPrice} onChange={(v) => setLine(i, { commPrice: v })} placeholder="سعر" style={{ width: 70 }} />
                               <span className="num" style={{ fontWeight: 700 }}>= {EGP(num(l.commQty) * num(l.commPrice))}</span>
-                              <div style={{ minWidth: 150, flex: 1 }}><CommissionPicker value={l.commPartyId} onChange={(id) => setLine(i, { commPartyId: id })} /></div>
+                              <div style={{ minWidth: 150, flex: 1 }}><CommissionPicker value={l.commPartyId} onChange={(id) => setLine(i, { commPartyId: id })} current={initialDeal?.items.find((it) => it.commissionParty?.id === l.commPartyId)?.commissionParty} /></div>
                               <button className="btn btn-ghost btn-sm" style={{ color: 'var(--debit)' }} onClick={() => setLine(i, { showComm: false, commQty: '', commPrice: '', commPartyId: '' })}>×</button>
                             </div>
                           )}
@@ -425,9 +430,17 @@ export function DealEditor({ onClose, initialDeal }: { onClose: () => void; init
         </div>
 
         <div className="form-grid" style={{ borderTop: '1px solid var(--line-soft)' }}>
-          <Field label="المحصل من العميل الآن"><MoneyInput value={paidIn} onChange={setPaidIn} placeholder="0.00" /></Field>
-          <Field label={supplierIsUSD ? 'المدفوع للمورد الآن ($)' : 'المدفوع للمورد الآن'}><MoneyInput value={paidOut} onChange={setPaidOut} placeholder="0.00" /></Field>
-          <Field label="حساب الخزنة"><Combobox options={treasury?.data ?? []} value={treasuryId} onChange={setTreasuryId} /></Field>
+          <Field label="المحصل من العميل الآن">
+            {paidInBlocked
+              ? <div className="muted" style={{ fontSize: 12.5, padding: '10px 0' }}>تحصيل الدولار يتم في خزنة بالدولار.</div>
+              : <MoneyInput value={paidIn} onChange={setPaidIn} placeholder="0.00" />}
+          </Field>
+          <Field label={supplierIsUSD ? 'المدفوع للمورد الآن ($)' : 'المدفوع للمورد الآن'}>
+            {paidOutBlocked
+              ? <div className="muted" style={{ fontSize: 12.5, padding: '10px 0' }}>الدفع لمورد الدولار يتم عن طريق الوكيل، أو من خزنة بالدولار.</div>
+              : <MoneyInput value={paidOut} onChange={setPaidOut} placeholder="0.00" />}
+          </Field>
+          <Field label="حساب الخزنة"><Combobox options={treasuryOptions} value={treasuryId} onChange={setTreasuryId} /></Field>
           {isEdit && !!initialDeal?.nawlon && (
             <Field label="ناولون العملية (مسجل سابقاً)">
               <MoneyInput value={nawlon} onChange={setNawlon} placeholder="0.00" />

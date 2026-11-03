@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { EGP, fmtDate, todayISO } from '@/lib/format';
-import { Field, Combobox, MoneyInput, PlateInput, parsePlate, buildPlate, Spinner } from '@/components/common';
+import { Field, Combobox, MoneyInput, PlateInput, parsePlate, buildPlate, Spinner, withCurrent } from '@/components/common';
 import { PartyCombobox } from '../../invoices/components/PartyCombobox';
 import { useAllParties } from '../../parties/hooks';
 import { useAllTreasury } from '../../treasury/hooks';
@@ -48,7 +48,7 @@ export function DriverTripDetail({ trip, onBack }: Props) {
   const { data: treasury } = useAllTreasury();
   const { data: config } = useConfig();
   const allTreasury = treasury?.data ?? [];
-  const allClients = parties?.data ?? [];
+  const allClients = withCurrent(parties?.data ?? [], [trip.party]);
   const graceDays = config?.delayGraceDays ?? DELAY_THRESHOLD;
   const feeRate = config?.delayFeePerDay ?? DELAY_RATE;
 
