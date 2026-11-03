@@ -161,12 +161,12 @@ export function ReportsView({ embedded = false }: { embedded?: boolean }) {
         {pl.isLoading || !pl.data ? <Spinner /> : (
           <StatsGrid columns={4}>
             <StatCard variant="gold" label="الإيرادات (صافي المبيعات)" value={money(pl.data.revenue)} />
-            <StatCard label="التكلفة (مشتريات + مصاريف بضاعة)" value={money(pl.data.cost)} />
+            <StatCard label="التكلفة (مشتريات + مصاريف بضاعة + التصفية)" value={money(pl.data.cost)} />
             <StatCard label="مجمل الربح" value={money(pl.data.grossProfit)} />
             <StatCard variant="debit" label="المصاريف التشغيلية" value={money(pl.data.expenses)} />
             <StatCard variant="debit" label="منها: مصاريف المخزن" value={money(pl.data.warehouseExpenses)} />
             <StatCard variant="debit" label="تسويات نقدية" value={money(pl.data.settlement)} />
-            <StatCard variant="debit" label="مستحقات التصفية الثابتة" value={money(pl.data.partnerDues ?? 0)} />
+            <StatCard label="منها: مستحقات التصفية (على التكلفة)" value={money(pl.data.partnerDues ?? 0)} />
             <StatCard variant={pl.data.netProfit >= 0 ? 'accent' : 'debit'} label="صافي الربح" value={money(pl.data.netProfit)} />
           </StatsGrid>
         )}
