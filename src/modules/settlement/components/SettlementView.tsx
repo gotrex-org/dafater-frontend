@@ -115,6 +115,28 @@ export function SettlementView() {
     );
   }
 
+  // صاحب الاسم: رأس ماله (قراءة فقط) وكشف حسابه وإضافة فواتير — مش أكتر
+  if (!isAdmin) {
+    return (
+      <>
+        <PageTitle title="تصفية" subtitle={partner ? `تصفية حساب ${partner.name}` : undefined} />
+        {partners.length > 1 && (
+          <NameSelector partners={partners} picked={picked} onPick={choose} canAdd={false} onAdded={choose} />
+        )}
+        {error ? (
+          <div className="card" style={{ padding: 16, marginTop: 12 }}>
+            <b className="err-text">{(error as Error).message}</b>
+          </div>
+        ) : isLoading || !data || !partner ? <Spinner /> : (
+          <PartnerUserView
+            partner={partner}
+            capital={(isFixed ? data.fixedTotals?.capital : data.totals?.partnerCapital) ?? 0}
+          />
+        )}
+      </>
+    );
+  }
+
   return (
     <>
       <PageTitle
@@ -434,6 +456,40 @@ function SupplierAccountPanel({ account }: { account: SupplierAccount | null }) 
             </tbody>
           </table>
         )}
+      </div>
+    </>
+  );
+}
+
+/**
+ * شاشة صاحب الاسم (الحساب المربوط بالاسم): رأس ماله رقماً فقط من غير تعديل، وكشف
+ * الحساب اللي المالك بيرحّله، وإضافة فواتير (أصناف من فواتير الشراء) في التصفية
+ * الثابتة — بانتظار موافقة المالك. مافيش غير كده.
+ */
+function PartnerUserView({ partner, capital }: { partner: Partner; capital: number }) {
+  const isFixed = partner.shareBasis === 'FIXED';
+  const [tab, setTab] = useState<'statement' | 'add'>('statement');
+  const tabs = [
+    { value: 'statement' as const, label: 'كشف الحساب' },
+    ...(isFixed ? [{ value: 'add' as const, label: 'إضافة فواتير' }] : []),
+  ];
+
+  return (
+    <>
+      <StatsGrid columns={1}>
+        <StatCard label={`رأس مال ${partner.name}`} value={EGP(capital)} variant="accent" />
+      </StatsGrid>
+
+      {tabs.length > 1 && (
+        <div className="toolbar" style={{ marginTop: 12 }}>
+          <SegmentedControl options={tabs} value={tab} onChange={setTab} />
+        </div>
+      )}
+
+      <div style={{ marginTop: 12 }}>
+        {tab === 'add' && isFixed
+          ? <FixedPicker key={partner.id} partner={partner} />
+          : <StatementPanel key={partner.id} partner={partner} />}
       </div>
     </>
   );
