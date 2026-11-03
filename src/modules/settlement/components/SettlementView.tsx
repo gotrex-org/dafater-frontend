@@ -216,6 +216,15 @@ export function SettlementView() {
                 </div>
               )}
 
+              {isFixed && (data.fixedTotals?.unpostedCount ?? 0) > 0 && (
+                <div className="card" style={{ padding: 10, marginTop: 10, borderColor: 'var(--accent)' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700 }}>
+                    {data.fixedTotals?.unpostedCount} صنف مسعّر بإجمالي {EGP(data.fixedTotals?.unposted ?? 0)} لم يُرحّل
+                    لكشف الحساب بعد. رحّله من «الأصناف» ← «ترحيل لكشف الحساب».
+                  </span>
+                </div>
+              )}
+
               {isFixed && (data.fixedTotals?.needsAmount ?? 0) > 0 && (
                 <div className="card" style={{ padding: 10, marginTop: 10, borderColor: 'var(--debit)' }}>
                   <span style={{ fontSize: 12, color: 'var(--debit)' }}>

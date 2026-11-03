@@ -146,6 +146,9 @@ export interface FixedTotals {
   needsAmount: number;
   /** أضافها صاحب الاسم وتنتظر موافقة المالك */
   pending: number;
+  /** مسعّر ولسه مااترحّلش لكشف الحساب */
+  unposted: number;
+  unpostedCount: number;
 }
 
 export interface SettlementOverview {
@@ -250,6 +253,11 @@ export interface FixedItem extends ItemRef {
   approved: boolean;
   /** اتكتب له مبلغ أو نسبة → في الأرشيف */
   priced: boolean;
+  /** اترحّل لكشف الحساب — في الأرشيف وقيمه مثبّتة، ومايترحّلش تاني */
+  posted: boolean;
+  posting: { id: string; no: number; date: string } | null;
+  /** سعر شراء الوحدة بالجنيه (للمدير فقط) */
+  unitPrice: number | null;
   invoiceNo: string;
   date: string;
   supplierName: string;
@@ -270,6 +278,16 @@ export interface FixedItem extends ItemRef {
 }
 
 /** نتيجة «اختيار الأصناف»: فاتورة شراء والأصناف المطابقة للبحث فيها. */
+/** ترحيل لكشف الحساب بأصنافه — زي الفاتورة. */
+export interface PostingDetail {
+  id: string;
+  no: number;
+  date: string;
+  note: string | null;
+  total: number;
+  items: FixedItem[];
+}
+
 export interface ItemSearchInvoice {
   kind: 'invoice' | 'deal';
   invoiceId: string;
@@ -327,6 +345,8 @@ export interface StatementEntry {
   kind: 'CAPITAL' | 'DUE' | 'PAYMENT';
   /** سطر من حركات رأس المال — حذفه من رأس المال */
   capital?: boolean;
+  /** سطر ترحيل — `id` هو الترحيل، وبالضغط عليه تظهر أصنافه */
+  posting?: boolean;
   date: string;
   label: string;
   source: string;

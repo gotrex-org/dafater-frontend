@@ -274,3 +274,29 @@ export function useSettlementAdmin() {
   if (user.isPrimary) return true;
   return !(partners ?? []).some((p) => p.user?.id === user.id);
 }
+
+// -------------------------------- الترحيل --------------------------------
+
+export function usePostItems(partnerId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (dto: { date?: string; note?: string }) => settlementApi.post(partnerId, dto),
+    onSuccess: () => invalidateAll(qc),
+  });
+}
+
+export function usePosting(partnerId: string, id: string | null) {
+  return useQuery({
+    queryKey: [KEY, 'posting', partnerId, id],
+    queryFn: () => settlementApi.posting(partnerId, id!),
+    enabled: !!id,
+  });
+}
+
+export function useDeletePosting(partnerId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => settlementApi.deletePosting(partnerId, id),
+    onSuccess: () => invalidateAll(qc),
+  });
+}

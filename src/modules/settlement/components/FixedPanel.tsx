@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { EGP, QTY, fmtDate } from '@/lib/format';
 import { EmptyState, MoneyInput, SearchInput, SegmentedControl, Spinner } from '@/components/common';
-import { useAddItems, useFixedItems, useItemSearch, useRemoveItem, useSetItemRate, useSettlementAdmin } from '../hooks';
+import { useAddItems, useFixedItems, useItemSearch, usePostItems, useRemoveItem, useSetItemRate, useSettlementAdmin } from '../hooks';
 import type { FixedItem, ItemRef, Partner } from '../dtos';
 
 const refKey = (r: ItemRef) => `${r.kind ?? 'invoice'}:${r.invoiceId}:${r.productId}`;
@@ -21,6 +21,7 @@ const docLabel = (kind: 'invoice' | 'deal', no: string) => `${kind === 'deal' ? 
 export function FixedPanel({ partner }: { partner: Partner }) {
   const isAdmin = useSettlementAdmin();
   const { data, isLoading } = useFixedItems(partner.id);
+  const post = usePostItems(partner.id);
   const [view, setView] = useState<'open' | 'archive'>('open');
 
   if (isLoading || !data) return <Spinner />;
@@ -38,10 +39,18 @@ export function FixedPanel({ partner }: { partner: Partner }) {
     );
   }
 
-  const open = data.filter((v) => !v.priced);
-  const archive = data.filter((v) => v.priced);
+  // الأرشيف = اللي اترحّل لكشف الحساب. اللي لسه ماترحّلش في «الأصناف» حتى لو مسعّر
+  const open = data.filter((v) => !v.posted);
+  const archive = data.filter((v) => v.posted);
   const rows = view === 'open' ? open : archive;
   const pending = data.filter((v) => !v.approved).length;
+  const ready = open.filter((v) => v.amount != null && v.amount > 0);
+  const readyTotal = ready.reduce((s, v) => s + (v.amount ?? 0), 0);
+
+  const doPost = () => {
+    if (!window.confirm(`ترحيل ${ready.length} صنف بإجمالي ${EGP(readyTotal)} لكشف حساب ${partner.name}؟ الأصناف المرحّلة لا تُرحّل مرة ثانية.`)) return;
+    post.mutate({});
+  };
 
   return (
     <>
@@ -64,18 +73,24 @@ export function FixedPanel({ partner }: { partner: Partner }) {
             { value: 'archive', label: `الأرشيف (${archive.length})` },
           ]}
         />
+        {isAdmin && view === 'open' && (
+          <button className="btn btn-primary btn-sm" disabled={!ready.length || post.isPending} onClick={doPost}>
+            {post.isPending ? '...' : `ترحيل لكشف الحساب${ready.length ? ` (${ready.length} صنف — ${EGP(readyTotal)})` : ''}`}
+          </button>
+        )}
       </div>
+      {post.error && <div className="err-text" style={{ marginBottom: 8 }}>{(post.error as any).message}</div>}
 
       {!rows.length ? (
-        <EmptyState text={view === 'open' ? 'كل الأصناف لها مبلغ أو نسبة — موجودة في الأرشيف' : 'لا توجد أصناف في الأرشيف بعد'} />
+        <EmptyState text={view === 'open' ? 'كل الأصناف مرحّلة — موجودة في الأرشيف' : 'لا توجد أصناف مرحّلة بعد'} />
       ) : (
         <ItemsTable partner={partner} rows={rows} isAdmin={isAdmin} archive={view === 'archive'} />
       )}
 
       <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
         {isAdmin
-          ? 'المستحق = كمية الصنف × المبلغ للوحدة، أو قيمة الشراء × النسبة. بعد كتابة المبلغ أو النسبة ينتقل الصنف إلى الأرشيف، والإجمالي يظهر في كشف الحساب.'
-          : 'المستحق يظهر بعد موافقة المالك، والإجمالي في كشف الحساب.'}
+          ? 'المستحق = كمية الصنف × المبلغ للوحدة، أو قيمة الشراء × النسبة. «ترحيل لكشف الحساب» يسجّل كل الأصناف المسعّرة مرة واحدة كأنها قيمة فاتورة، وتنتقل إلى الأرشيف بقيمها المثبّتة. الصنف المرحّل لا يُرحّل مرة ثانية.'
+          : 'المستحق يظهر في كشف الحساب بعد الترحيل.'}
       </div>
     </>
   );
@@ -112,12 +127,20 @@ function ItemsTable({ partner, rows, isAdmin, archive }: {
               <td>
                 {docLabel(v.kind, v.invoiceNo)}
                 <div className="muted" style={{ fontSize: 11 }}>{v.supplierName || '—'}</div>
+                {v.posting && <span className="pill" style={{ fontSize: 10 }}>ترحيل #{v.posting.no}</span>}
               </td>
               <td>{fmtDate(v.date)}</td>
               <td className="muted" style={{ fontSize: 12 }}>{v.buyer || '—'}</td>
               <td className="num">{QTY(v.qty)}</td>
               {isAdmin && <td className="num">{v.value == null ? '—' : EGP(v.value)}</td>}
-              {isAdmin && <td className="num"><RateCell partner={partner} item={v} /></td>}
+              {isAdmin && (
+                <td className="num">
+                  {/* المرحّل مبلغه مثبّت — يتعدّل بعد حذف الترحيل بس */}
+                  {v.posted
+                    ? (v.rate != null ? `${EGP(v.rate)} للوحدة` : v.percent != null ? `${v.percent}%` : '—')
+                    : <RateCell partner={partner} item={v} />}
+                </td>
+              )}
               <td className="num" style={{ color: v.approved && v.amount == null ? 'var(--debit)' : undefined }}>
                 {!v.approved
                   ? <span className="pill">بانتظار الموافقة</span>
@@ -125,13 +148,15 @@ function ItemsTable({ partner, rows, isAdmin, archive }: {
               </td>
               {isAdmin && (
                 <td>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    disabled={remove.isPending}
-                    onClick={() => { if (window.confirm(`إزالة ${v.productName} من التصفية؟`)) remove.mutate(v); }}
-                  >
-                    إزالة
-                  </button>
+                  {!v.posted && (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      disabled={remove.isPending}
+                      onClick={() => { if (window.confirm(`إزالة ${v.productName} من التصفية؟`)) remove.mutate(v); }}
+                    >
+                      إزالة
+                    </button>
+                  )}
                 </td>
               )}
             </tr>

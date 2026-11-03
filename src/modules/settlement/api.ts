@@ -1,6 +1,6 @@
 import { api } from '@/lib/api';
 import type {
-  CapitalMovementInput, CapitalState, CreatePriceListDto, FixedItem, ItemRef, ItemSearchInvoice, Partner, PartnerUpsertDto,
+  CapitalMovementInput, CapitalState, CreatePriceListDto, FixedItem, ItemRef, ItemSearchInvoice, Partner, PostingDetail, PartnerUpsertDto,
   PaymentInput, PaymentsState, PriceList, SettlementOverview, SettlementReport, Statement, SupplierProduct,
   UpdatePriceListDto, UpdateVehicleDto, Vehicle, VehicleDetail,
 } from './dtos';
@@ -50,6 +50,11 @@ export const settlementApi = {
   },
   addItems: (p: string, items: ItemRef[]) => api.post(`${BASE}/${p}/items`, { items }),
   removeItem: (p: string, ref: ItemRef) => api.del<void>(itemPath(p, ref)),
+  // الترحيل لكشف الحساب
+  post: (p: string, dto: { date?: string; note?: string }) =>
+    api.post<{ ok: boolean; no: number; count: number; amount: number }>(`${BASE}/${p}/postings`, dto),
+  posting: (p: string, id: string) => api.get<PostingDetail>(`${BASE}/${p}/postings/${id}`),
+  deletePosting: (p: string, id: string) => api.del<void>(`${BASE}/${p}/postings/${id}`),
   setItemRate: (p: string, ref: ItemRef, body: { rate: number } | { percent: number }) =>
     api.put<FixedItem>(itemPath(p, ref), body),
 

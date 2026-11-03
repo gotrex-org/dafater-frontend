@@ -6,6 +6,7 @@ import { Field, MoneyInput, Spinner, StatCard, StatsGrid } from '@/components/co
 import { useAddCapitalMovement, useAddPayment, useDeleteCapitalMovement, useDeletePayment, useSettlementAdmin, useStatement } from '../hooks';
 import type { Partner } from '../dtos';
 import { SETTLE, TreasurySelect } from './TreasurySelect';
+import { PostingModal } from './PostingModal';
 
 /**
  * كشف حساب التصفية: سطر لكل فاتورة مصفّاة بمستحقها ومن أين جاء، وسطر لكل دفعة
@@ -22,6 +23,8 @@ export function StatementPanel({ partner }: { partner: Partner }) {
   const delCapital = useDeleteCapitalMovement(partner.id);
   // ثابتة: «مدفوعات» (in) أو «سحب» (out). برأس المال: دفعة فقط
   const [form, setForm] = useState<null | 'in' | 'out'>(null);
+  // سطر ترحيل مفتوح — بيعرض أصنافه زي الفاتورة
+  const [openPosting, setOpenPosting] = useState<string | null>(null);
 
   if (isLoading || !data) return <Spinner />;
 
@@ -85,8 +88,13 @@ export function StatementPanel({ partner }: { partner: Partner }) {
               {data.entries.map((e, i) => (
                 <tr
                   key={e.id ?? `${e.date}-${e.label}-${i}`}
-                  style={e.kind === 'PAYMENT' ? { background: 'var(--gold-soft, transparent)' }
-                    : e.kind === 'CAPITAL' ? { background: 'var(--accent-soft)' } : undefined}
+                  style={{
+                    ...(e.kind === 'PAYMENT' ? { background: 'var(--gold-soft, transparent)' }
+                      : e.kind === 'CAPITAL' ? { background: 'var(--accent-soft)' } : {}),
+                    ...(e.posting ? { cursor: 'pointer' } : {}),
+                  }}
+                  onClick={e.posting && e.id ? () => setOpenPosting(e.id!) : undefined}
+                  title={e.posting ? 'اضغط لعرض الأصناف' : undefined}
                 >
                   <td>{fmtDate(e.date)}</td>
                   <td><b>{e.label}</b></td>
@@ -126,6 +134,8 @@ export function StatementPanel({ partner }: { partner: Partner }) {
           </table>
         </div>
       )}
+
+      {openPosting && <PostingModal partner={partner} id={openPosting} onClose={() => setOpenPosting(null)} />}
     </>
   );
 }
