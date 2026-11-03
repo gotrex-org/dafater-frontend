@@ -5,7 +5,7 @@ import { EGP, QTY, fmtDate } from '@/lib/format';
 import {
   EmptyState, PageTitle, SegmentedControl, Spinner, StatCard, StatsGrid,
 } from '@/components/common';
-import { usePartners, useSettlementAdmin, useSettlementOverview } from '../hooks';
+import { usePartners, useSettlementAdmin, useSettlementOverview, useStatement } from '../hooks';
 import type { CapitalTotals, Partner, SupplierAccount, Vehicle } from '../dtos';
 import { VehicleDetailModal } from './VehicleDetail';
 import { PriceListsPanel } from './PriceListsPanel';
@@ -128,10 +128,7 @@ export function SettlementView() {
             <b className="err-text">{(error as Error).message}</b>
           </div>
         ) : isLoading || !data || !partner ? <Spinner /> : (
-          <PartnerUserView
-            partner={partner}
-            capital={(isFixed ? data.fixedTotals?.capital : data.totals?.partnerCapital) ?? 0}
-          />
+          <PartnerUserView partner={partner} />
         )}
       </>
     );
@@ -471,22 +468,30 @@ function SupplierAccountPanel({ account }: { account: SupplierAccount | null }) 
 }
 
 /**
- * شاشة صاحب الاسم (الحساب المربوط بالاسم): رأس ماله رقماً فقط من غير تعديل، وكشف
- * الحساب اللي المالك بيرحّله، وإضافة فواتير (أصناف من فواتير الشراء) في التصفية
- * الثابتة — بانتظار موافقة المالك. مافيش غير كده.
+ * شاشة صاحب الاسم (الحساب المربوط) — 3 حاجات بس:
+ *   1) رأس ماله دلوقتي: رصيده له أو عليه، ومعاه إجمالي التصفيات
+ *   2) كشف الحساب (المعاملات) اللي المالك بيرحّله — قراءة فقط
+ *   3) إدخال فواتير شراء (أصناف) في التصفية الثابتة — بانتظار موافقة المالك
  */
-function PartnerUserView({ partner, capital }: { partner: Partner; capital: number }) {
+function PartnerUserView({ partner }: { partner: Partner }) {
   const isFixed = partner.shareBasis === 'FIXED';
   const [tab, setTab] = useState<'statement' | 'add'>('statement');
+  const { data: st } = useStatement(partner.id);
   const tabs = [
     { value: 'statement' as const, label: 'كشف الحساب' },
-    ...(isFixed ? [{ value: 'add' as const, label: 'إضافة فواتير' }] : []),
+    ...(isFixed ? [{ value: 'add' as const, label: 'إدخال فواتير شراء' }] : []),
   ];
+  const balance = st?.total ?? 0;
 
   return (
     <>
-      <StatsGrid columns={1}>
-        <StatCard label={`رأس مال ${partner.name}`} value={EGP(capital)} variant="accent" />
+      <StatsGrid columns={2}>
+        <StatCard
+          label={`رأس مالك الآن — ${balance < 0 ? 'عليك' : 'لك'}`}
+          value={EGP(Math.abs(balance))}
+          variant={balance < 0 ? 'debit' : 'accent'}
+        />
+        <StatCard label="إجمالي التصفيات" value={EGP(st?.dues ?? 0)} variant="blue" />
       </StatsGrid>
 
       {tabs.length > 1 && (
@@ -498,7 +503,7 @@ function PartnerUserView({ partner, capital }: { partner: Partner; capital: numb
       <div style={{ marginTop: 12 }}>
         {tab === 'add' && isFixed
           ? <FixedPicker key={partner.id} partner={partner} />
-          : <StatementPanel key={partner.id} partner={partner} />}
+          : <StatementPanel key={partner.id} partner={partner} hideCards />}
       </div>
     </>
   );

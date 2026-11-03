@@ -264,15 +264,12 @@ export function useSettlementReport() {
 }
 
 /**
- * صلاحيات المدير داخل التصفية. الحساب المربوط باسم يرى تصفيته فقط كصاحب اسم، حتى لو
- * كان أدمن — إلا المالك (isPrimary). نفس قاعدة SettlementViewerGuard في الـ API.
+ * مدير التصفية هو المالك (isPrimary) بس. أي حساب تاني — أدمن أو لأ — يدخل التصفية لو
+ * مربوط باسم، ويرى تصفيته هو كصاحب اسم. نفس قاعدة SettlementViewerGuard في الـ API.
  */
 export function useSettlementAdmin() {
   const { user } = useAuth();
-  const { data: partners } = usePartners();
-  if (!user?.admin) return false;
-  if (user.isPrimary) return true;
-  return !(partners ?? []).some((p) => p.user?.id === user.id);
+  return !!user?.isPrimary;
 }
 
 // -------------------------------- الترحيل --------------------------------

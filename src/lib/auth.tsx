@@ -90,7 +90,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(iv);
   }, [user?.id ?? null]);
 
-  const can = (view: string) => !!user && (user.admin || user.views.includes(view));
+  const can = (view: string) => {
+    if (!user) return false;
+    // التصفية بالربط مش بالصلاحية: المالك، أو حساب مربوط باسم — حتى الأدمن غير المربوط لأ
+    if (view === 'settlement') return !!user.isPrimary || !!user.settlementLinked;
+    return user.admin || user.views.includes(view);
+  };
 
   const syncUser = (patch: Partial<AuthUser>) => {
     setUser((prev) => {

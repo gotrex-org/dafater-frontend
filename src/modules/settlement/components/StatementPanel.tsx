@@ -16,7 +16,8 @@ import { PostingModal } from './PostingModal';
  *   المدفوعات (إضافة لرأس المال) تدخل خزنة، والسحب يخرج منها، وكلاهما في حساب
  *   الاسم في البرنامج (ميزان المراجعة والتقارير).
  */
-export function StatementPanel({ partner }: { partner: Partner }) {
+/** `hideCards`: شاشة صاحب الاسم بتعرض رصيده وإجمالي تصفياته فوق، فالبطاقات هنا تتشال. */
+export function StatementPanel({ partner, hideCards = false }: { partner: Partner; hideCards?: boolean }) {
   const isAdmin = useSettlementAdmin();
   const { data, isLoading } = useStatement(partner.id);
   const del = useDeletePayment(partner.id);
@@ -32,22 +33,26 @@ export function StatementPanel({ partner }: { partner: Partner }) {
 
   return (
     <>
-      <StatsGrid columns={4}>
-        <StatCard label="المدفوعات" value={EGP(data.capital)} />
-        <StatCard label={byCapital ? `نصيب ${partner.name}` : 'التصفية'} value={EGP(data.dues)} variant="blue" />
-        <StatCard label="السحب" value={EGP(data.paid)} variant="gold" />
-        <StatCard
-          label="الرصيد له"
-          value={EGP(data.total)}
-          variant={data.total < 0 ? 'debit' : 'accent'}
-        />
-      </StatsGrid>
+      {!hideCards && (
+        <>
+          <StatsGrid columns={4}>
+            <StatCard label="المدفوعات" value={EGP(data.capital)} />
+            <StatCard label={byCapital ? `نصيب ${partner.name}` : 'التصفية'} value={EGP(data.dues)} variant="blue" />
+            <StatCard label="السحب" value={EGP(data.paid)} variant="gold" />
+            <StatCard
+              label="الرصيد له"
+              value={EGP(data.total)}
+              variant={data.total < 0 ? 'debit' : 'accent'}
+            />
+          </StatsGrid>
 
-      <div className="muted" style={{ fontSize: 12, margin: '6px 2px 10px' }}>
-        {byCapital ? 'كل سطر نصيب من صافي ربح فاتورة بنسبة رأس المال. ' : ''}
-        الرصيد = المدفوعات + {byCapital ? 'النصيب' : 'التصفية'} − السحب. المدفوعات تدخل الخزنة والسحب يخرج
-        منها، وكلاهما في ميزان المراجعة.
-      </div>
+          <div className="muted" style={{ fontSize: 12, margin: '6px 2px 10px' }}>
+            {byCapital ? 'كل سطر نصيب من صافي ربح فاتورة بنسبة رأس المال. ' : ''}
+            الرصيد = المدفوعات + {byCapital ? 'النصيب' : 'التصفية'} − السحب. المدفوعات تدخل الخزنة والسحب يخرج
+            منها، وكلاهما في ميزان المراجعة.
+          </div>
+        </>
+      )}
 
       {isAdmin && (
         <div className="toolbar">

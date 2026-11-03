@@ -25,4 +25,6 @@ export interface AuthUser {
   role: 'STAFF' | 'CUSTOMER';
   partyId?: string;
   partyName?: string;
+  /** مربوط باسم في التصفية — قسم التصفية يظهر له (تصفيته هو بس) */
+  settlementLinked?: boolean;
 }
