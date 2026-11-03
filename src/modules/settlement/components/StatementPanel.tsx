@@ -31,35 +31,30 @@ export function StatementPanel({ partner }: { partner: Partner }) {
 
   return (
     <>
-      <StatsGrid columns={byCapital ? 3 : 4}>
-        {!byCapital && <StatCard label="المدفوعات" value={EGP(data.capital)} />}
-        <StatCard label={byCapital ? `مستحق ${partner.name}` : 'التصفية'} value={EGP(data.dues)} variant="blue" />
-        <StatCard label={byCapital ? 'المدفوع له' : 'السحب'} value={EGP(data.paid)} variant="gold" />
+      <StatsGrid columns={4}>
+        <StatCard label="المدفوعات" value={EGP(data.capital)} />
+        <StatCard label={byCapital ? `نصيب ${partner.name}` : 'التصفية'} value={EGP(data.dues)} variant="blue" />
+        <StatCard label="السحب" value={EGP(data.paid)} variant="gold" />
         <StatCard
-          label={byCapital ? 'المتبقي' : 'الرصيد له'}
+          label="الرصيد له"
           value={EGP(data.total)}
           variant={data.total < 0 ? 'debit' : 'accent'}
         />
       </StatsGrid>
 
       <div className="muted" style={{ fontSize: 12, margin: '6px 2px 10px' }}>
-        {byCapital
-          ? 'كل سطر مستحق نصيب من صافي ربح فاتورة بنسبة رأس المال.'
-          : 'الرصيد = المدفوعات + التصفية − السحب.'}
-        {' '}{byCapital
-          ? 'المتبقي = المستحق − المدفوع. الدفعة تُسجل هنا ولا تمس الخزنة.'
-          : 'المدفوعات تدخل الخزنة والسحب يخرج منها، وكلاهما في ميزان المراجعة.'}
+        {byCapital ? 'كل سطر نصيب من صافي ربح فاتورة بنسبة رأس المال. ' : ''}
+        الرصيد = المدفوعات + {byCapital ? 'النصيب' : 'التصفية'} − السحب. المدفوعات تدخل الخزنة والسحب يخرج
+        منها، وكلاهما في ميزان المراجعة.
       </div>
 
       {isAdmin && (
         <div className="toolbar">
-          {!byCapital && (
-            <button className="btn btn-primary btn-sm" onClick={() => setForm((f) => (f === 'in' ? null : 'in'))}>
-              {form === 'in' ? 'إلغاء' : '+ مدفوعات'}
-            </button>
-          )}
+          <button className="btn btn-primary btn-sm" onClick={() => setForm((f) => (f === 'in' ? null : 'in'))}>
+            {form === 'in' ? 'إلغاء' : '+ مدفوعات'}
+          </button>
           <button className="btn btn-primary btn-sm" onClick={() => setForm((f) => (f === 'out' ? null : 'out'))}>
-            {form === 'out' ? 'إلغاء' : byCapital ? '+ تسجيل دفعة' : '+ سحب'}
+            {form === 'out' ? 'إلغاء' : '+ سحب'}
           </button>
         </div>
       )}
@@ -109,7 +104,7 @@ export function StatementPanel({ partner }: { partner: Partner }) {
                           className="btn btn-ghost btn-sm"
                           disabled={del.isPending || delCapital.isPending}
                           onClick={() => {
-                            const msg = byCapital ? 'حذف هذه الدفعة من كشف الحساب؟' : `حذف ${e.label}؟ يُحذف من الخزنة أيضاً.`;
+                            const msg = `حذف ${e.label}؟ يُحذف من الخزنة أيضاً.`;
                             if (!window.confirm(msg)) return;
                             if (e.capital) delCapital.mutate(e.id!); else del.mutate(e.id!);
                           }}
@@ -124,7 +119,7 @@ export function StatementPanel({ partner }: { partner: Partner }) {
             </tbody>
             <tfoot>
               <tr>
-                <th colSpan={3}>{byCapital ? 'المتبقي' : 'الرصيد له'}</th>
+                <th colSpan={3}>الرصيد له</th>
                 <th className="num">{EGP(data.total)}</th>
                 <th className="num">{EGP(data.total)}</th>
                 {isAdmin && <th></th>}
@@ -146,8 +141,7 @@ function PaymentForm({ partner, mode, onDone }: { partner: Partner; mode: 'in' |
   const addOut = useAddPayment(partner.id);
   const addIn = useAddCapitalMovement(partner.id);
   const add = mode === 'in' ? addIn : addOut;
-  const fixed = partner.shareBasis === 'FIXED';
-  const title = mode === 'in' ? 'مدفوعات' : fixed ? 'سحب' : 'دفعة';
+  const title = mode === 'in' ? 'مدفوعات' : 'سحب';
   const [date, setDate] = useState(todayISO());
   const [amount, setAmount] = useState('');
   const [treasuryId, setTreasuryId] = useState('');
@@ -157,10 +151,10 @@ function PaymentForm({ partner, mode, onDone }: { partner: Partner; mode: 'in' |
   const submit = () => {
     if (!date) return setError('حدد التاريخ');
     if (!(Number(amount) > 0)) return setError('اكتب مبلغ الدفعة');
-    if (fixed && !treasuryId) return setError(mode === 'in' ? 'اختر الخزنة أو التسوية' : 'اختر الخزنة');
+    if (!treasuryId) return setError(mode === 'in' ? 'اختر الخزنة أو التسوية' : 'اختر الخزنة');
     setError('');
     // المدفوعات (إضافة لرأس المال) ممكن تبقى تسوية على حسابه من غير خزنة
-    const where = !fixed ? {} : treasuryId === SETTLE ? { settle: true } : { treasuryId };
+    const where = treasuryId === SETTLE ? { settle: true } : { treasuryId };
     const dto = { date, amount: Number(amount), note: note || undefined, ...where };
     const opts = { onSuccess: onDone, onError: (e: any) => setError(e.message) };
     if (mode === 'in') addIn.mutate(dto, opts); else addOut.mutate(dto, opts);
@@ -176,7 +170,7 @@ function PaymentForm({ partner, mode, onDone }: { partner: Partner; mode: 'in' |
         <Field label="المبلغ (ج.م)">
           <MoneyInput value={amount} onChange={setAmount} placeholder="0.00" />
         </Field>
-        {fixed && (
+        {(
           <Field label={mode === 'in' ? 'الخزنة أو التسوية' : 'من الخزنة'}>
             <TreasurySelect value={treasuryId} onChange={setTreasuryId} allowSettle={mode === 'in'} />
           </Field>

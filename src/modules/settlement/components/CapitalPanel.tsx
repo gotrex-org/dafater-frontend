@@ -34,11 +34,12 @@ export function CapitalPanel({ partner }: { partner: Partner }) {
       </StatsGrid>
 
       <div className="muted" style={{ fontSize: 12, margin: '6px 2px 10px' }}>
-        رأس المال الحالي = الافتتاحي + الإضافات − النقص.{' '}
-        {partner.shareBasis === 'FIXED'
-          ? <>الإضافة تدخل الخزنة والنقص يخرج منها، وكلاهما في حساب {partner.name} وكشف حسابه.</>
-          : <>نسبة {partner.name} في كل فاتورة تُحسب برأس ماله في <b>تاريخ تلك الفاتورة</b>، فالإضافة
-            أو النقص لا يعيد حساب فاتورة سابقة لتاريخها.</>}
+        رأس المال الحالي = الافتتاحي + الإضافات − النقص. الإضافة تدخل الخزنة والنقص يخرج منها
+        (أو تسوية بدون خزنة)، وكلاهما في حساب {partner.name} وكشف حسابه.
+        {partner.shareBasis === 'CAPITAL' && (
+          <> نسبة {partner.name} في كل فاتورة تُحسب برأس ماله في <b>تاريخ تلك الفاتورة</b>، فالإضافة
+            أو النقص لا يعيد حساب فاتورة سابقة لتاريخها.</>
+        )}
       </div>
 
       <div className="toolbar">
@@ -98,7 +99,6 @@ export function CapitalPanel({ partner }: { partner: Partner }) {
 /** المبلغ موجب للإضافة وسالب للنقص — الاختيار هنا، ولا يُكتب بعلامة يدوياً. */
 function MovementForm({ partner, onDone }: { partner: Partner; onDone: () => void }) {
   const add = useAddCapitalMovement(partner.id);
-  const fixed = partner.shareBasis === 'FIXED';
   const [date, setDate] = useState(todayISO());
   const [kind, setKind] = useState<'add' | 'sub'>('add');
   const [amount, setAmount] = useState('');
@@ -110,12 +110,12 @@ function MovementForm({ partner, onDone }: { partner: Partner; onDone: () => voi
     if (!date) return setError('حدد التاريخ');
     const value = Number(amount);
     if (!(value > 0)) return setError('اكتب المبلغ');
-    if (fixed && !treasuryId) return setError('اختر الخزنة أو التسوية');
+    if (!treasuryId) return setError('اختر الخزنة أو التسوية');
     setError('');
     add.mutate(
       {
         date, amount: kind === 'sub' ? -value : value, note: note || undefined,
-        ...(fixed ? (treasuryId === SETTLE ? { settle: true } : { treasuryId }) : {}),
+        ...(treasuryId === SETTLE ? { settle: true } : { treasuryId }),
       },
       { onSuccess: onDone, onError: (e: any) => setError(e.message) },
     );
@@ -146,7 +146,7 @@ function MovementForm({ partner, onDone }: { partner: Partner; onDone: () => voi
         <Field label="المبلغ (ج.م)">
           <MoneyInput value={amount} onChange={setAmount} placeholder="0.00" />
         </Field>
-        {fixed && (
+        {(
           <Field label="الخزنة أو التسوية">
             <TreasurySelect value={treasuryId} onChange={setTreasuryId} allowSettle />
           </Field>

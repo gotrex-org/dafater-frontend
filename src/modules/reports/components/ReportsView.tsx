@@ -167,6 +167,7 @@ export function ReportsView({ embedded = false }: { embedded?: boolean }) {
             <StatCard variant="debit" label="منها: مصاريف المخزن" value={money(pl.data.warehouseExpenses)} />
             <StatCard variant="debit" label="تسويات نقدية" value={money(pl.data.settlement)} />
             <StatCard label="منها: مستحقات التصفية (على التكلفة)" value={money(pl.data.partnerDues ?? 0)} />
+            <StatCard variant="debit" label="نصيب أسماء التصفية برأس المال" value={money(pl.data.partnerShares ?? 0)} />
             <StatCard variant={pl.data.netProfit >= 0 ? 'accent' : 'debit'} label="صافي الربح" value={money(pl.data.netProfit)} />
           </StatsGrid>
         )}
