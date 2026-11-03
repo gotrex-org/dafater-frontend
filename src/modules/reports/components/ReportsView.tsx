@@ -8,6 +8,7 @@ import { useAllParties } from '../../parties/hooks';
 import { useAllProducts } from '../../products/hooks';
 import { useAuth } from '@/lib/auth';
 import { TradeReportSection, ShippingReportSection, VehicleProfitsSection } from './ActivityReports';
+import { SettlementReportSection } from './SettlementReport';
 
 // أول الشهر الحالي — الفلتر بيفتح عليه افتراضيًا (تقارير شهرية).
 function monthStart(): string {
@@ -165,6 +166,7 @@ export function ReportsView({ embedded = false }: { embedded?: boolean }) {
             <StatCard variant="debit" label="المصاريف التشغيلية" value={money(pl.data.expenses)} />
             <StatCard variant="debit" label="منها: مصاريف المخزن" value={money(pl.data.warehouseExpenses)} />
             <StatCard variant="debit" label="تسويات نقدية" value={money(pl.data.settlement)} />
+            <StatCard variant="debit" label="مستحقات التصفية الثابتة" value={money(pl.data.partnerDues ?? 0)} />
             <StatCard variant={pl.data.netProfit >= 0 ? 'accent' : 'debit'} label="صافي الربح" value={money(pl.data.netProfit)} />
           </StatsGrid>
         )}
@@ -181,6 +183,9 @@ export function ReportsView({ embedded = false }: { embedded?: boolean }) {
           </table></div>
         )}
       </Collapsible>
+
+      {/* التصفيات */}
+      <SettlementReportSection />
 
       {/* 5) Peak */}
       <Collapsible title="⭐ Peak — أكتر صنف/عميل/مورد ووقت شغل">

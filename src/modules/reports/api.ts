@@ -63,7 +63,7 @@ export interface VehicleProfits {
   totals: { revenue: number; rent: number; customs: number; loading: number; freight: number; costs: number; profit: number };
 }
 export interface InactiveClient { id: string; name: string; lastActivity: string | null; daysSince: number | null; }
-export interface ProfitLoss { revenue: number; cost: number; goodsExpenses: number; grossProfit: number; expenses: number; warehouseExpenses: number; settlement: number; netProfit: number; }
+export interface ProfitLoss { revenue: number; cost: number; goodsExpenses: number; grossProfit: number; expenses: number; warehouseExpenses: number; settlement: number; partnerDues?: number; netProfit: number; }
 export interface WarehouseExpenseRow { id: string; name: string; total: number; categories: { name: string; total: number }[]; }
 export interface WarehouseExpenses { total: number; warehouses: WarehouseExpenseRow[]; }
 export interface CustodyHolder { id: string; name: string; balance: number; }

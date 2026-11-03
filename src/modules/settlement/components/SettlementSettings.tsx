@@ -76,7 +76,7 @@ export function SettlementSettings({ partner }: { partner: Partner }) {
           shareBasis: basis,
           // نرسل حقل الطريقة المختارة فقط. تصفير الآخر كان يمحو رأس المال
           // عند التحويل إلى التصفية الثابتة ثم الرجوع، بلا أي تنبيه.
-          ...(basis === 'CAPITAL' ? { capital: Number(capital) || 0 } : {}),
+          capital: Number(capital) || 0,
           supplierIds: useSupplier && supplierId ? [supplierId] : [],
           cartonExpense: useCarton ? Number(carton) || 0 : 0,
           userId: useUser && userId ? userId : null,
@@ -113,12 +113,10 @@ export function SettlementSettings({ partner }: { partner: Partner }) {
           </select>
         </Field>
 
-        {/* التصفية الثابتة لا تحتاج حقلاً هنا — المبلغ للوحدة يُكتب لكل فاتورة شراء */}
-        {basis === 'CAPITAL' && (
-          <Field label={`رأس مال ${who} الافتتاحي`}>
-            <MoneyInput value={capital} onChange={setCapital} placeholder="0.00" />
-          </Field>
-        )}
+        {/* برأس المال: أساس النسبة. في التصفية الثابتة: رصيد افتتاحي له في حسابه */}
+        <Field label={`رأس مال ${who} الافتتاحي`}>
+          <MoneyInput value={capital} onChange={setCapital} placeholder="0.00" />
+        </Field>
 
         <Field label="ملاحظة">
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="اختياري" />
@@ -191,8 +189,8 @@ export function SettlementSettings({ partner }: { partner: Partner }) {
       </div>
     </div>
 
-    {/* إضافة أو نقص رأس المال على القديم — للطريقة برأس المال فقط */}
-    {partner.shareBasis === 'CAPITAL' && <CapitalPanel partner={partner} />}
+    {/* إضافة أو نقص رأس المال على القديم — في التصفية الثابتة من الخزنة */}
+    <CapitalPanel partner={partner} />
     </>
   );
 }

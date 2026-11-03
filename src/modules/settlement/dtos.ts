@@ -136,6 +136,8 @@ export interface CapitalTotals {
 
 /** إجماليات التصفية الثابتة. `null` في التصفية برأس المال. */
 export interface FixedTotals {
+  /** رأس المال الحالي */
+  capital: number;
   due: number;
   qty: number;
   /** عدد الأصناف الموافق عليها */
@@ -300,16 +302,18 @@ export interface CapitalMovementInput {
   date: string;
   amount: number;
   note?: string;
+  /** التصفية الثابتة: الخزنة (إجبارية هناك) */
+  treasuryId?: string;
 }
 
 /**
- * سطر في كشف الحساب: مستحق من فاتورة (`DUE`) أو دفعة تسلّمها (`PAYMENT`
- * بمبلغ سالب)، ومن أين جاء، والرصيد التراكمي.
+ * سطر في كشف الحساب: مستحق (`DUE`)، أو دفعة تسلّمها (`PAYMENT` بمبلغ سالب)، أو
+ * رأس مال في التصفية الثابتة (`CAPITAL`)، ومن أين جاء، والرصيد التراكمي.
  */
 export interface StatementEntry {
   /** uid الدفعة — `null` في سطر المستحق */
   id: string | null;
-  kind: 'DUE' | 'PAYMENT';
+  kind: 'CAPITAL' | 'DUE' | 'PAYMENT';
   date: string;
   label: string;
   source: string;
@@ -319,13 +323,32 @@ export interface StatementEntry {
 
 export interface Statement {
   partner: Partner;
+  /** رأس المال الحالي (الافتتاحي + الإضافات − النقص) */
+  capital: number;
   /** إجمالي المستحق من الفواتير المحسوبة */
   dues: number;
   /** إجمالي ما تسلّمه */
   paid: number;
-  /** المتبقي له = المستحق − المدفوع */
+  /** الرصيد له: ثابتة = رأس المال + المستحق − المسحوب، برأس المال = المستحق − المدفوع */
   total: number;
   entries: StatementEntry[];
+}
+
+/** تقرير التصفيات: سطر لكل اسم بنفس أرقام كشف حسابه. */
+export interface SettlementReportRow {
+  id: string;
+  name: string;
+  shareBasis: ShareBasis;
+  active: boolean;
+  capital: number;
+  dues: number;
+  paid: number;
+  balance: number;
+}
+
+export interface SettlementReport {
+  rows: SettlementReportRow[];
+  totals: { capital: number; dues: number; paid: number; balance: number };
 }
 
 /** دفعة تسلّمها الاسم من مستحقه. */
@@ -347,4 +370,6 @@ export interface PaymentInput {
   date: string;
   amount: number;
   note?: string;
+  /** التصفية الثابتة: الخزنة اللي السحب خارج منها (إجبارية هناك) */
+  treasuryId?: string;
 }

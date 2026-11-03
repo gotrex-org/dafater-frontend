@@ -59,6 +59,10 @@ export function useVehicle(partnerId: string | null, id: string | null) {
  */
 function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: [KEY] });
+  // التصفية الثابتة بتتسجل في الخزنة وحساب الاسم والتقارير
+  qc.invalidateQueries({ queryKey: ['treasury'] });
+  qc.invalidateQueries({ queryKey: ['parties'] });
+  qc.invalidateQueries({ queryKey: ['reports'] });
 }
 
 export function useCreatePartner() {
@@ -250,4 +254,10 @@ export function useSetItemRate(partnerId: string) {
       settlementApi.setItemRate(partnerId, ref, body),
     onSuccess: () => invalidateAll(qc),
   });
+}
+
+// ------------------------------ تقرير التصفيات ------------------------------
+
+export function useSettlementReport() {
+  return useQuery({ queryKey: [KEY, 'report'], queryFn: () => settlementApi.report() });
 }

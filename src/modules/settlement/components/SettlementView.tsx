@@ -159,7 +159,7 @@ export function SettlementView() {
                     value={EGP(data.fixedTotals?.due ?? 0)}
                     variant="accent"
                   />
-                  <StatCard label="إجمالي الكميات" value={QTY(data.fixedTotals?.qty ?? 0)} />
+                  <StatCard label={`رأس مال ${partner.name}`} value={EGP(data.fixedTotals?.capital ?? 0)} />
                   <StatCard
                     label="عدد الأصناف"
                     value={QTY(data.fixedTotals?.items ?? 0)}

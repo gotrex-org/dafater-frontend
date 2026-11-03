@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/auth';
 import type { Party } from '../dtos';
 import { useParties } from '../hooks';
 
-const ROLE_LABEL: Record<string, string> = { CLIENT: 'عميل', SUPPLIER: 'مورد', AGENT: 'صاحب عمولة', PERSON: 'عهدة' };
+const ROLE_LABEL: Record<string, string> = { CLIENT: 'عميل', SUPPLIER: 'مورد', AGENT: 'صاحب عمولة', PERSON: 'عهدة', CLEARANCE: 'تخليص', PARTNER: 'تصفية' };
 
 // Convert a party's balance to EGP. EGP parties pass through; USD parties use their
 // weighted-average rate — returns { egp: null } when a USD party has no rate yet (can't

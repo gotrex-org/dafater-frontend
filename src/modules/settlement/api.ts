@@ -1,7 +1,7 @@
 import { api } from '@/lib/api';
 import type {
   CapitalMovementInput, CapitalState, CreatePriceListDto, FixedItem, ItemRef, ItemSearchInvoice, Partner, PartnerUpsertDto,
-  PaymentInput, PaymentsState, PriceList, SettlementOverview, Statement, SupplierProduct,
+  PaymentInput, PaymentsState, PriceList, SettlementOverview, SettlementReport, Statement, SupplierProduct,
   UpdatePriceListDto, UpdateVehicleDto, Vehicle, VehicleDetail,
 } from './dtos';
 
@@ -10,6 +10,8 @@ const BASE = '/settlement';
 export const settlementApi = {
   // الأسماء
   partners: () => api.get<Partner[]>(`${BASE}/partners`),
+  // تقرير التصفيات: رأس مال كل اسم ومستحقه وما سحبه ورصيده
+  report: () => api.get<SettlementReport>(`${BASE}/report`),
   createPartner: (dto: PartnerUpsertDto & { name: string }) => api.post<Partner>(`${BASE}/partners`, dto),
   updatePartner: (id: string, dto: PartnerUpsertDto) => api.patch<Partner>(`${BASE}/partners/${id}`, dto),
   deletePartner: (id: string) => api.del<void>(`${BASE}/partners/${id}`),

@@ -5,6 +5,7 @@ import { EGP, fmtDate, todayISO } from '@/lib/format';
 import { Field, MoneyInput, Spinner, StatCard, StatsGrid } from '@/components/common';
 import { useAddCapitalMovement, useCapital, useDeleteCapitalMovement } from '../hooks';
 import type { Partner } from '../dtos';
+import { TreasurySelect } from './TreasurySelect';
 
 /**
  * إضافة أو نقص رأس المال على القديم. رأس المال المكتوب في الإعدادات هو
@@ -33,8 +34,11 @@ export function CapitalPanel({ partner }: { partner: Partner }) {
       </StatsGrid>
 
       <div className="muted" style={{ fontSize: 12, margin: '6px 2px 10px' }}>
-        رأس المال الحالي = الافتتاحي + الإضافات − النقص. نسبة {partner.name} في كل فاتورة تُحسب
-        برأس ماله في <b>تاريخ تلك الفاتورة</b>، فالإضافة أو النقص لا يعيد حساب فاتورة سابقة لتاريخها.
+        رأس المال الحالي = الافتتاحي + الإضافات − النقص.{' '}
+        {partner.shareBasis === 'FIXED'
+          ? <>الإضافة تدخل الخزنة والنقص يخرج منها، وكلاهما في حساب {partner.name} وكشف حسابه.</>
+          : <>نسبة {partner.name} في كل فاتورة تُحسب برأس ماله في <b>تاريخ تلك الفاتورة</b>، فالإضافة
+            أو النقص لا يعيد حساب فاتورة سابقة لتاريخها.</>}
       </div>
 
       <div className="toolbar">
@@ -94,9 +98,11 @@ export function CapitalPanel({ partner }: { partner: Partner }) {
 /** المبلغ موجب للإضافة وسالب للنقص — الاختيار هنا، ولا يُكتب بعلامة يدوياً. */
 function MovementForm({ partner, onDone }: { partner: Partner; onDone: () => void }) {
   const add = useAddCapitalMovement(partner.id);
+  const fixed = partner.shareBasis === 'FIXED';
   const [date, setDate] = useState(todayISO());
   const [kind, setKind] = useState<'add' | 'sub'>('add');
   const [amount, setAmount] = useState('');
+  const [treasuryId, setTreasuryId] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
 
@@ -104,9 +110,13 @@ function MovementForm({ partner, onDone }: { partner: Partner; onDone: () => voi
     if (!date) return setError('حدد التاريخ');
     const value = Number(amount);
     if (!(value > 0)) return setError('اكتب المبلغ');
+    if (fixed && !treasuryId) return setError('اختر الخزنة');
     setError('');
     add.mutate(
-      { date, amount: kind === 'sub' ? -value : value, note: note || undefined },
+      {
+        date, amount: kind === 'sub' ? -value : value, note: note || undefined,
+        ...(fixed ? { treasuryId } : {}),
+      },
       { onSuccess: onDone, onError: (e: any) => setError(e.message) },
     );
   };
@@ -136,6 +146,11 @@ function MovementForm({ partner, onDone }: { partner: Partner; onDone: () => voi
         <Field label="المبلغ (ج.م)">
           <MoneyInput value={amount} onChange={setAmount} placeholder="0.00" />
         </Field>
+        {fixed && (
+          <Field label={kind === 'add' ? 'دخلت الخزنة' : 'خرجت من الخزنة'}>
+            <TreasurySelect value={treasuryId} onChange={setTreasuryId} />
+          </Field>
+        )}
         <Field label="ملاحظة">
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="اختياري" />
         </Field>
