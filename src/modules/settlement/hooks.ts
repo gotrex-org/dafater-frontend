@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/lib/auth';
 import { settlementApi } from './api';
 import type {
   CapitalMovementInput, CreatePriceListDto, PartnerUpsertDto, PaymentInput, UpdatePriceListDto,
@@ -260,4 +261,16 @@ export function useSetItemRate(partnerId: string) {
 
 export function useSettlementReport() {
   return useQuery({ queryKey: [KEY, 'report'], queryFn: () => settlementApi.report() });
+}
+
+/**
+ * صلاحيات المدير داخل التصفية. الحساب المربوط باسم يرى تصفيته فقط كصاحب اسم، حتى لو
+ * كان أدمن — إلا المالك (isPrimary). نفس قاعدة SettlementViewerGuard في الـ API.
+ */
+export function useSettlementAdmin() {
+  const { user } = useAuth();
+  const { data: partners } = usePartners();
+  if (!user?.admin) return false;
+  if (user.isPrimary) return true;
+  return !(partners ?? []).some((p) => p.user?.id === user.id);
 }

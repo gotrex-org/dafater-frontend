@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { EGP, QTY, fmtDate } from '@/lib/format';
-import { useAuth } from '@/lib/auth';
 import { MoneyInput, Spinner } from '@/components/common';
-import { usePriceLists, useSetItemWeek, useUpdateVehicle, useVehicle } from '../hooks';
+import { usePriceLists, useSetItemWeek, useSettlementAdmin, useUpdateVehicle, useVehicle } from '../hooks';
 import type { Partner } from '../dtos';
 
 /**
@@ -15,8 +14,7 @@ import type { Partner } from '../dtos';
 export function VehicleDetailModal(
   { partner, id, onClose }: { partner: Partner; id: string; onClose: () => void },
 ) {
-  const { user } = useAuth();
-  const isAdmin = !!user?.admin;
+  const isAdmin = useSettlementAdmin();
   // تحديد فترة لصنف يفيد فقط عند قراءة التكلفة من قوائم الأسعار
   const usesLists = partner.suppliers.length > 0;
   const { data: v, isLoading } = useVehicle(partner.id, id);

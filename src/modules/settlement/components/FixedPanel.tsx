@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { EGP, QTY, fmtDate } from '@/lib/format';
-import { useAuth } from '@/lib/auth';
 import { EmptyState, MoneyInput, SearchInput, SegmentedControl, Spinner } from '@/components/common';
-import { useAddItems, useFixedItems, useItemSearch, useRemoveItem, useSetItemRate } from '../hooks';
+import { useAddItems, useFixedItems, useItemSearch, useRemoveItem, useSetItemRate, useSettlementAdmin } from '../hooks';
 import type { FixedItem, ItemRef, Partner } from '../dtos';
 
 const refKey = (r: ItemRef) => `${r.kind ?? 'invoice'}:${r.invoiceId}:${r.productId}`;
@@ -20,8 +19,7 @@ const docLabel = (kind: 'invoice' | 'deal', no: string) => `${kind === 'deal' ? 
  * صاحب الاسم يرى الكمية والمستحق فقط — القيمة والمبلغ للوحدة والنسبة للمالك.
  */
 export function FixedPanel({ partner }: { partner: Partner }) {
-  const { user } = useAuth();
-  const isAdmin = !!user?.admin;
+  const isAdmin = useSettlementAdmin();
   const { data, isLoading } = useFixedItems(partner.id);
   const [view, setView] = useState<'open' | 'archive'>('open');
 
@@ -220,8 +218,7 @@ function RateCell({ partner, item }: { partner: Partner; item: FixedItem }) {
  * موافقة المالك — وصاحب الاسم يضيف فقط، والإزالة للمالك.
  */
 export function FixedPicker({ partner }: { partner: Partner }) {
-  const { user } = useAuth();
-  const isAdmin = !!user?.admin;
+  const isAdmin = useSettlementAdmin();
   const [search, setSearch] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');

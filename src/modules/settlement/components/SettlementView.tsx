@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { EGP, QTY, fmtDate } from '@/lib/format';
-import { useAuth } from '@/lib/auth';
 import {
   EmptyState, PageTitle, SegmentedControl, Spinner, StatCard, StatsGrid,
 } from '@/components/common';
-import { usePartners, useSettlementOverview } from '../hooks';
+import { usePartners, useSettlementAdmin, useSettlementOverview } from '../hooks';
 import type { CapitalTotals, Partner, SupplierAccount, Vehicle } from '../dtos';
 import { VehicleDetailModal } from './VehicleDetail';
 import { PriceListsPanel } from './PriceListsPanel';
@@ -29,8 +28,7 @@ function vehicleTitle(v: Vehicle) {
 }
 
 export function SettlementView() {
-  const { user } = useAuth();
-  const isAdmin = !!user?.admin;
+  const isAdmin = useSettlementAdmin();
   const { data: partners, isLoading: loadingNames } = usePartners();
   const [picked, setPicked] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('settlement');

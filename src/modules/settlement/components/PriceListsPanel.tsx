@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { EGP } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import { Combobox, Field, MoneyInput, Spinner } from '@/components/common';
-import { useCreatePriceList, usePriceLists, useSupplierProducts, useUpdatePriceList } from '../hooks';
+import { useCreatePriceList, usePriceLists, useSettlementAdmin, useSupplierProducts, useUpdatePriceList } from '../hooks';
 import type { Partner, PriceList } from '../dtos';
 
 /** اسم المورد المحدد للاسم. */
@@ -31,9 +31,9 @@ function weekEndFor(start: string) {
  * لذلك لا يوجد حذف.
  */
 export function PriceListsPanel({ partner }: { partner: Partner }) {
-  const { can, user } = useAuth();
+  const { can } = useAuth();
   const canEdit = can('settlement.prices');
-  const isAdmin = !!user?.admin;
+  const isAdmin = useSettlementAdmin();
   const { data: lists, isLoading } = usePriceLists(partner.id);
   const [editing, setEditing] = useState<PriceList | 'new' | null>(null);
 
@@ -122,8 +122,7 @@ const blankRow = (): Row => ({ key: ++rowSeq, productId: '', price: '' });
 function PriceListForm(
   { partner, list, onDone }: { partner: Partner; list: PriceList | null; onDone: () => void },
 ) {
-  const { user } = useAuth();
-  const isAdmin = !!user?.admin;
+  const isAdmin = useSettlementAdmin();
   // القائمة تخص مورد الاسم المحدد، وأصنافها تُقرأ من مشترياته
   const supplierId = list?.supplier.id ?? partner.suppliers[0]?.id ?? '';
   const { data: products, isLoading } = useSupplierProducts(partner.id, supplierId);

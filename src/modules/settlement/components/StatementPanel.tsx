@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { EGP, fmtDate, todayISO } from '@/lib/format';
-import { useAuth } from '@/lib/auth';
 import { Field, MoneyInput, Spinner, StatCard, StatsGrid } from '@/components/common';
-import { useAddCapitalMovement, useAddPayment, useDeleteCapitalMovement, useDeletePayment, useStatement } from '../hooks';
+import { useAddCapitalMovement, useAddPayment, useDeleteCapitalMovement, useDeletePayment, useSettlementAdmin, useStatement } from '../hooks';
 import type { Partner } from '../dtos';
 import { SETTLE, TreasurySelect } from './TreasurySelect';
 
@@ -17,8 +16,7 @@ import { SETTLE, TreasurySelect } from './TreasurySelect';
  *   الاسم في البرنامج (ميزان المراجعة والتقارير).
  */
 export function StatementPanel({ partner }: { partner: Partner }) {
-  const { user } = useAuth();
-  const isAdmin = !!user?.admin;
+  const isAdmin = useSettlementAdmin();
   const { data, isLoading } = useStatement(partner.id);
   const del = useDeletePayment(partner.id);
   const delCapital = useDeleteCapitalMovement(partner.id);
