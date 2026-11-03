@@ -5,7 +5,7 @@ import { EGP, fmtDate, todayISO } from '@/lib/format';
 import { Field, MoneyInput, Spinner, StatCard, StatsGrid } from '@/components/common';
 import { useAddCapitalMovement, useCapital, useDeleteCapitalMovement } from '../hooks';
 import type { Partner } from '../dtos';
-import { TreasurySelect } from './TreasurySelect';
+import { SETTLE, TreasurySelect } from './TreasurySelect';
 
 /**
  * إضافة أو نقص رأس المال على القديم. رأس المال المكتوب في الإعدادات هو
@@ -110,12 +110,12 @@ function MovementForm({ partner, onDone }: { partner: Partner; onDone: () => voi
     if (!date) return setError('حدد التاريخ');
     const value = Number(amount);
     if (!(value > 0)) return setError('اكتب المبلغ');
-    if (fixed && !treasuryId) return setError('اختر الخزنة');
+    if (fixed && !treasuryId) return setError('اختر الخزنة أو التسوية');
     setError('');
     add.mutate(
       {
         date, amount: kind === 'sub' ? -value : value, note: note || undefined,
-        ...(fixed ? { treasuryId } : {}),
+        ...(fixed ? (treasuryId === SETTLE ? { settle: true } : { treasuryId }) : {}),
       },
       { onSuccess: onDone, onError: (e: any) => setError(e.message) },
     );
@@ -147,8 +147,8 @@ function MovementForm({ partner, onDone }: { partner: Partner; onDone: () => voi
           <MoneyInput value={amount} onChange={setAmount} placeholder="0.00" />
         </Field>
         {fixed && (
-          <Field label={kind === 'add' ? 'دخلت الخزنة' : 'خرجت من الخزنة'}>
-            <TreasurySelect value={treasuryId} onChange={setTreasuryId} />
+          <Field label="الخزنة أو التسوية">
+            <TreasurySelect value={treasuryId} onChange={setTreasuryId} allowSettle />
           </Field>
         )}
         <Field label="ملاحظة">

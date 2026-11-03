@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { Field, MoneyInput, Spinner, StatCard, StatsGrid } from '@/components/common';
 import { useAddCapitalMovement, useAddPayment, useDeleteCapitalMovement, useDeletePayment, useStatement } from '../hooks';
 import type { Partner } from '../dtos';
-import { TreasurySelect } from './TreasurySelect';
+import { SETTLE, TreasurySelect } from './TreasurySelect';
 
 /**
  * كشف حساب التصفية: سطر لكل فاتورة مصفّاة بمستحقها ومن أين جاء، وسطر لكل دفعة
@@ -157,9 +157,11 @@ function PaymentForm({ partner, mode, onDone }: { partner: Partner; mode: 'in' |
   const submit = () => {
     if (!date) return setError('حدد التاريخ');
     if (!(Number(amount) > 0)) return setError('اكتب مبلغ الدفعة');
-    if (fixed && !treasuryId) return setError('اختر الخزنة');
+    if (fixed && !treasuryId) return setError(mode === 'in' ? 'اختر الخزنة أو التسوية' : 'اختر الخزنة');
     setError('');
-    const dto = { date, amount: Number(amount), note: note || undefined, ...(fixed ? { treasuryId } : {}) };
+    // المدفوعات (إضافة لرأس المال) ممكن تبقى تسوية على حسابه من غير خزنة
+    const where = !fixed ? {} : treasuryId === SETTLE ? { settle: true } : { treasuryId };
+    const dto = { date, amount: Number(amount), note: note || undefined, ...where };
     const opts = { onSuccess: onDone, onError: (e: any) => setError(e.message) };
     if (mode === 'in') addIn.mutate(dto, opts); else addOut.mutate(dto, opts);
   };
@@ -175,8 +177,8 @@ function PaymentForm({ partner, mode, onDone }: { partner: Partner; mode: 'in' |
           <MoneyInput value={amount} onChange={setAmount} placeholder="0.00" />
         </Field>
         {fixed && (
-          <Field label={mode === 'in' ? 'دخلت الخزنة' : 'من الخزنة'}>
-            <TreasurySelect value={treasuryId} onChange={setTreasuryId} />
+          <Field label={mode === 'in' ? 'الخزنة أو التسوية' : 'من الخزنة'}>
+            <TreasurySelect value={treasuryId} onChange={setTreasuryId} allowSettle={mode === 'in'} />
           </Field>
         )}
         <Field label="ملاحظة">

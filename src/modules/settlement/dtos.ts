@@ -312,8 +312,9 @@ export interface CapitalMovementInput {
   date: string;
   amount: number;
   note?: string;
-  /** التصفية الثابتة: الخزنة (إجبارية هناك) */
+  /** التصفية الثابتة: الخزنة، أو `settle` = تسوية على حسابه من غير خزنة */
   treasuryId?: string;
+  settle?: boolean;
 }
 
 /**
