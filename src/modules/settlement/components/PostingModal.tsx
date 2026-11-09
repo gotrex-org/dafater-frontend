@@ -5,7 +5,10 @@ import { Spinner } from '@/components/common';
 import { useDeletePosting, usePosting, useSettlementAdmin } from '../hooks';
 import type { Partner } from '../dtos';
 
-const docLabel = (kind: 'invoice' | 'deal', no: string) => `${kind === 'deal' ? 'بيع خارجي' : 'فاتورة شراء'} #${no}`;
+const NUM = { textAlign: 'center' as const, verticalAlign: 'top' as const };
+const WRAP = { whiteSpace: 'normal' as const, overflowWrap: 'anywhere' as const, verticalAlign: 'top' as const };
+
+const docLabel =(kind: 'invoice' | 'deal', no: string) => `${kind === 'deal' ? 'بيع خارجي' : 'فاتورة شراء'} #${no}`;
 
 /**
  * ترحيل من كشف الحساب زي الفاتورة: أصنافه بكمياتها وسعر الشراء والفرق (المبلغ للوحدة
@@ -36,40 +39,50 @@ export function PostingModal({ partner, id, onClose }: { partner: Partner; id: s
                 التاريخ: {fmtDate(data.date)}{data.note ? ` — ${data.note}` : ''}
               </div>
               <div className="tbl-wrap">
-                <table>
+                {/* عرض ثابت لكل عمود والأرقام في النص: كل رقم تحت عنوانه وتحت اللي فوقه */}
+                <table style={{ tableLayout: 'fixed', minWidth: isAdmin ? 640 : 420 }}>
+                  <colgroup>
+                    <col />
+                    <col style={{ width: isAdmin ? '22%' : '30%' }} />
+                    <col style={{ width: isAdmin ? '11%' : '16%' }} />
+                    {isAdmin && <col style={{ width: '14%' }} />}
+                    {isAdmin && <col style={{ width: '15%' }} />}
+                    <col style={{ width: isAdmin ? '15%' : '22%' }} />
+                  </colgroup>
                   <thead>
                     <tr>
                       <th>الصنف</th>
                       <th>المستند</th>
-                      <th className="num">الكمية</th>
-                      {isAdmin && <th className="num">سعر الشراء</th>}
-                      {isAdmin && <th className="num">الفرق</th>}
-                      <th className="num">المستحق</th>
+                      <th className="num" style={NUM}>الكمية</th>
+                      {isAdmin && <th className="num" style={NUM}>سعر الشراء</th>}
+                      {isAdmin && <th className="num" style={NUM}>الفرق</th>}
+                      <th className="num" style={NUM}>المستحق</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.items.map((v) => (
                       <tr key={v.id}>
-                        <td><b>{v.productName}</b></td>
-                        <td>
+                        <td style={WRAP}><b>{v.productName}</b></td>
+                        <td style={WRAP}>
                           {docLabel(v.kind, v.invoiceNo)}
                           <div className="muted" style={{ fontSize: 11 }}>{fmtDate(v.date)} — {v.supplierName || '—'}</div>
                         </td>
-                        <td className="num">{QTY(v.qty)}</td>
-                        {isAdmin && <td className="num">{v.unitPrice == null ? '—' : EGP(v.unitPrice)}</td>}
+                        <td className="num" style={NUM}>{QTY(v.qty)}</td>
+                        {isAdmin && <td className="num" style={NUM}>{v.unitPrice == null ? '—' : EGP(v.unitPrice)}</td>}
                         {isAdmin && (
-                          <td className="num">
-                            {v.rate != null ? `${EGP(v.rate)} للوحدة` : v.percent != null ? `${v.percent}%` : '—'}
+                          <td className="num" style={NUM}>
+                            {v.rate != null ? EGP(v.rate) : v.percent != null ? `${v.percent}%` : '—'}
+                            {v.rate != null && <div className="muted" style={{ fontSize: 11 }}>للوحدة</div>}
                           </td>
                         )}
-                        <td className="num"><b>{EGP(v.amount ?? 0)}</b></td>
+                        <td className="num" style={NUM}><b>{EGP(v.amount ?? 0)}</b></td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr>
                       <th colSpan={isAdmin ? 5 : 3}>الإجمالي ({data.items.length} صنف)</th>
-                      <th className="num">{EGP(data.total)}</th>
+                      <th className="num" style={NUM}>{EGP(data.total)}</th>
                     </tr>
                   </tfoot>
                 </table>
