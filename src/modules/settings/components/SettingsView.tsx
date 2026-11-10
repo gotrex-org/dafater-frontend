@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { PageTitle, StatsGrid, StatCard, Field, CollapsibleSection } from '@/components/common';
+import { PageTitle, StatsGrid, StatCard, Field, CollapsibleSection, SegmentedControl } from '@/components/common';
 import { useAuth } from '@/lib/auth';
 import { useDashboard } from '../../dashboard/hooks';
 import { useConfig, useUpdateConfig } from '../../config/hooks';
@@ -21,7 +21,7 @@ export function SettingsView() {
   const [graceDays, setGraceDays] = useState<number>(8);
   const [feePerDay, setFeePerDay] = useState<number>(1200);
   const [tripsMsg, setTripsMsg] = useState('');
-  const [productsOpen, setProductsOpen] = useState(false);
+  const [tab, setTab] = useState<'general' | 'products'>('general');
   const [salaryPct, setSalaryPct] = useState<number>(50);
   const [activityMsg, setActivityMsg] = useState('');
 
@@ -61,9 +61,34 @@ export function SettingsView() {
 
   const counts = dash?.counts;
 
+  // سجل الأصناف تاب لوحده — تسجيل الأصناف الجديدة من هنا بس (الفواتير بتختار من المسجّل)
+  const tabs = (
+    <div className="toolbar">
+      <SegmentedControl
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: 'general', label: 'الإعدادات' },
+          { value: 'products', label: 'سجل الأصناف' },
+        ]}
+      />
+    </div>
+  );
+
+  if (tab === 'products') {
+    return (
+      <>
+        <PageTitle title="سجل الأصناف" subtitle="تسجيل الأصناف وتعديلها ودمجها — الفواتير تختار من الأصناف المسجّلة هنا فقط" />
+        {tabs}
+        <ProductsManager />
+      </>
+    );
+  }
+
   return (
     <>
       <PageTitle title="الإعدادات" subtitle="المستخدمون، الأطراف، الأصناف، المخازن، الخزينة، البنود" />
+      {tabs}
 
       <StatsGrid>
         <StatCard label="العملاء" value={counts?.clients ?? '—'} />
@@ -138,25 +163,7 @@ export function SettingsView() {
         <ExpenseCategoriesManager canManage />
       </CollapsibleSection>
 
-      <button
-        className="card"
-        style={{ width: '100%', textAlign: 'start', padding: '14px 16px', marginTop: 12, cursor: 'pointer', border: '1px solid var(--line)', background: 'var(--surface)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-        onClick={() => setProductsOpen(true)}
-      >
-        <span style={{ fontWeight: 700, fontSize: 15 }}>سجل الأصناف</span>
-        <span className="muted" style={{ fontSize: 13 }}>فتح في نافذة ←</span>
-      </button>
-
       {(user?.admin || can('settings.users')) && <UsersManager />}
-
-      {productsOpen && (
-        <div className="modal-overlay" onClick={() => setProductsOpen(false)}>
-          <div className="modal" style={{ width: '94%', maxWidth: 960, maxHeight: '90vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-head"><b>سجل الأصناف</b><button className="btn btn-ghost btn-sm" onClick={() => setProductsOpen(false)}>×</button></div>
-            <div style={{ padding: 16 }}><ProductsManager /></div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

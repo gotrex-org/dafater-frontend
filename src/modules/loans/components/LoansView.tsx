@@ -83,8 +83,6 @@ function LoanForm({ defaultWarehouseId, onClose }: { defaultWarehouseId: string;
             value={productId}
             onChange={setProductId}
             placeholder="اختر الصنف…"
-            onCreate={setCreatingProduct}
-            createLabel="كصنف جديد"
           />
         </Field>
         <Field label="الكمية"><MoneyInput value={qty} onChange={setQty} placeholder="0" /></Field>

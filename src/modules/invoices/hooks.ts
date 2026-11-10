@@ -112,3 +112,33 @@ export function useSetInvoiceArchived() {
     onSuccess: () => qc.invalidateQueries({ queryKey: invoiceKeys.all }),
   });
 }
+
+// ------------------- تعديلات غير المالك بانتظار الموافقة -------------------
+
+export function useInvoiceEditRequests(enabled = true) {
+  return useQuery({ queryKey: ['invoices', 'edit-requests'], queryFn: () => invoicesApi.editRequests(), enabled });
+}
+
+export function useInvoiceEditRequest(id: string | null) {
+  return useQuery({
+    queryKey: ['invoices', 'edit-request', id],
+    queryFn: () => invoicesApi.editRequest(id!),
+    enabled: !!id,
+  });
+}
+
+/** الموافقة بتطبّق التعديل فعلاً — نفس اللي بيتأثر بالتعديل العادي. */
+export function useDecideInvoiceEdit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, approve }: { id: string; approve: boolean }) =>
+      approve ? invoicesApi.approveEdit(id).then(() => undefined) : invoicesApi.rejectEdit(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: invoiceKeys.all });
+      qc.invalidateQueries({ queryKey: ['parties'] });
+      qc.invalidateQueries({ queryKey: ['treasury'] });
+      qc.invalidateQueries({ queryKey: ['warehouses'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}

@@ -13,12 +13,12 @@ import type { Product } from '../dtos';
  * - freeText mode: `value`/`onChange` are the raw name string (used by manifests),
  *   and any typed text is kept even if it matches no product.
  *
- * Auto-create on blur: in id mode, if the user types a name and moves away without
- * picking from the dropdown, the component auto-selects an exact match or creates a
- * new product — no manual "add" click required. It stands down while the new-product
- * form is open, and for a name the user explicitly cancelled out of.
+ * On blur in id mode, an exact name match is auto-selected. Anything else is NOT
+ * created (a typo + clicking away used to register a junk product): products are
+ * registered only from الإعدادات ← سجل الأصناف, and the field shows a hint instead.
+ * allowCreate=true brings back the "add new" button and create-on-blur.
  *
- * allowCreate=false (freeText mode only): no "add new" suggestion is shown at all —
+ * allowCreate=false (the default): no "add new" suggestion is shown at all —
  * the dropdown is purely a filtered list of real catalog matches to help autofill,
  * and it never calls the create-product API. Typing is always the value regardless
  * of whether anything is picked from the list. Use for untrusted/anonymous callers
@@ -29,7 +29,8 @@ export function ProductCombobox({
   value,
   onChange,
   freeText = false,
-  allowCreate = true,
+  // الافتراضي: مفيش تسجيل أصناف من هنا — الأصناف بتتسجّل من الإعدادات ← سجل الأصناف
+  allowCreate = false,
   placeholder = 'اكتب أو اختر الصنف…',
 }: {
   products: Product[];
@@ -111,11 +112,10 @@ export function ProductCombobox({
       if (freeText || !query.trim() || value || pendingCreate) return;
       // the form is holding this name, or the user just backed out of creating it
       if (modalOpen.current || declined.current === query.trim()) return;
-      if (exactProduct) {
-        // exact name match → auto-select without creating
-        onChange(exactProduct.id);
-      } else {
-        // new name → auto-create
+      // exact name match → auto-select. اسم غير مسجّل مابيتسجّلش لوحده (كان اسم غلط
+      // + ضغطة برّه بيعمل صنف جديد) — التسجيل من الإعدادات ← سجل الأصناف بس.
+      if (exactProduct) onChange(exactProduct.id);
+      else if (allowCreate) {
         setPendingCreate(true);
         createProduct.mutate(
           { name: query.trim() },
@@ -149,6 +149,11 @@ export function ProductCombobox({
         >
           ➕ <span>إضافة «{query.trim()}» كصنف جديد</span>
         </button>
+      )}
+      {!freeText && !allowCreate && !!q && !exactProduct && !value && !matches.length && (
+        <div className="err-text" style={{ fontSize: 12, marginTop: 4 }}>
+          الصنف غير مسجّل. سجّله من الإعدادات ← سجل الأصناف
+        </div>
       )}
       {open && matches.length > 0 && (
         <ul className={`combo-list${canCreate ? ' with-create' : ''}`}>

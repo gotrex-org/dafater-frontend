@@ -369,6 +369,8 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
 }
 
 /* ── invoice items table — responsive (mobile stacked) ──────────── */
+/* عنوان سعر الشراء جنب الرقم — للموبايل بس (على الكمبيوتر العنوان في رأس الجدول) */
+.invoice-items .cost-label { display: none; }
 @media (max-width: 640px) {
   .invoice-items { overflow: visible !important; }
   .invoice-items table  { display: block; width: 100%; }
@@ -389,10 +391,15 @@ tbody td { font-weight: 500; } /* بيانات بخط bold خفيف */
   .invoice-items td:nth-child(1) { grid-column: 1; grid-row: 2; }
   /* price — row 2 col 2 */
   .invoice-items td:nth-child(3) { grid-column: 2; grid-row: 2; }
-  /* total — row 2 after price */
-  .invoice-items td:nth-child(4) { grid-column: 2; grid-row: 3; font-size: 13px; }
-  /* delete — row 2 col 3 */
-  .invoice-items td:nth-child(5) { grid-column: 3; grid-row: 2 / 4; justify-self: center; }
+  /* الإجمالي والحذف بالاسم مش بالترتيب: عمود سعر الشراء (فاتورة البيع) بيزيح ترتيبهم،
+     وكان بيقع مكان الإجمالي فسعر الشراء مايبانش. */
+  /* total — row 3 under price */
+  .invoice-items td.line-total { grid-column: 2; grid-row: 3; font-size: 13px; }
+  /* purchase price (sale invoice) — own row 4 with its label (the header is hidden) */
+  .invoice-items td.line-cost { grid-column: 1 / 3; grid-row: 4; }
+  .invoice-items td.line-cost .cost-label { display: inline; }
+  /* delete — col 3 */
+  .invoice-items td.line-actions { grid-column: 3; grid-row: 2 / 4; justify-self: center; }
   /* inputs fill their cell */
   .invoice-items td:nth-child(1) input,
   .invoice-items td:nth-child(3) input { width: 100% !important; }

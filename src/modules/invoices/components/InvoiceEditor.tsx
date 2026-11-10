@@ -301,7 +301,11 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
           },
         },
         {
-          onSuccess: () => onUpdated?.(),
+          onSuccess: (res) => {
+            // غير المالك: التعديل اتبعت للمالك والفاتورة لسه زي ما هي
+            if (res && 'pending' in res) window.alert('تم إرسال التعديل إلى المالك. الفاتورة لا تتغير حتى يوافق عليه.');
+            onUpdated?.();
+          },
           onError: (e: any) => setError(e.message),
         },
       );
@@ -536,7 +540,9 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
                       )}
                     </td>
                     {kind === 'SALE' && showCost && (
-                      <td className="num" style={{ fontSize: 12.5 }}>
+                      <td className="num line-cost" style={{ fontSize: 12.5 }}>
+                        {/* على الموبايل رأس الجدول مخفي — فالعنوان جنب الرقم */}
+                        <span className="cost-label muted" style={{ fontWeight: 400 }}>سعر الشراء: </span>
                         {cost === undefined ? (
                           <span className="muted">—</span>
                         ) : (
@@ -550,8 +556,8 @@ export function InvoiceEditor({ kind, onClose, invoice, onUpdated, initialDraft,
                         )}
                       </td>
                     )}
-                    <td className="num">{money(Number(l.qty) * Number(l.price), cur)}</td>
-                    <td>
+                    <td className="num line-total">{money(Number(l.qty) * Number(l.price), cur)}</td>
+                    <td className="line-actions">
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center', position: 'relative' }}>
                         {prod && (
                           <button

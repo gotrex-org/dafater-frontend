@@ -116,8 +116,6 @@ export function StockAdjustment({ warehouseId }: { warehouseId: string }) {
               value={productId}
               onChange={(v) => { setProductId(v); setActualQty(''); setDeltaQty(''); }}
               placeholder="اختر الصنف…"
-              onCreate={setCreatingProduct}
-              createLabel="كصنف جديد"
             />
           </Field>
 

@@ -195,3 +195,34 @@ export interface ManifestTabs {
   invoiceNo: string;
   tabs: ManifestTab[];
 }
+
+// ------------------- تعديلات غير المالك بانتظار الموافقة -------------------
+
+export interface InvoiceEditRequest {
+  id: string;
+  createdAt: string;
+  requestedBy: string | null;
+  invoiceId: string;
+  invoiceNo: string;
+  kind: InvoiceKind;
+  partyName: string;
+}
+
+/** الفاتورة قبل/بعد بالأسماء — للمقارنة في شاشة الموافقة. */
+export interface InvoiceEditSnapshot {
+  date: string;
+  partyName: string;
+  warehouseName: string;
+  items: { name: string; qty: number; price: number }[];
+  charges: { name: string; qty: number; price: number }[];
+  paid: number;
+  discount: number;
+  fake: boolean;
+  note: string | null;
+  total: number;
+}
+
+export interface InvoiceEditDetail extends Omit<InvoiceEditRequest, 'partyName'> {
+  before: InvoiceEditSnapshot;
+  after: InvoiceEditSnapshot;
+}

@@ -6,7 +6,8 @@ import { useTableState } from '@/lib/useTableState';
 import { useAuth } from '@/lib/auth';
 import { useWindows } from '@/lib/windows';
 import { PageTitle, DataTable, SegmentedControl, SearchInput, type Column } from '@/components/common';
-import { useInvoices, useSetInvoiceArchived } from '../hooks';
+import { useInvoiceEditRequests, useInvoices, useSetInvoiceArchived } from '../hooks';
+import { InvoiceEditRequests } from './InvoiceEditRequests';
 import type { Invoice, InvoiceKind } from '../dtos';
 import { InvoiceEditor } from './InvoiceEditor';
 import { InvoiceDetail } from './InvoiceDetail';
@@ -19,8 +20,14 @@ const invoiceTotal = (inv: Invoice) =>
   inv.items.reduce((s, it) => s + it.qty * it.price, 0) + (inv.charges ?? []).reduce((s, c) => s + c.qty * c.price, 0);
 
 export function InvoicesView() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const { open } = useWindows();
+  // تعديلات غير المالك بتستنى موافقته — المالك بس يشوفها
+  const { data: editRequests } = useInvoiceEditRequests(!!user?.isPrimary);
+  const openEditRequests = () => open({
+    title: 'تعديلات بانتظار الموافقة',
+    render: () => <InvoiceEditRequests />,
+  });
   const [section, setSection] = useState<'invoices' | 'returns' | 'discounts' | 'deals'>('invoices');
   const [kind, setKind] = useState<InvoiceKind>('SALE');
   const [selected, setSelected] = useState<Invoice | null>(null);
@@ -98,6 +105,12 @@ export function InvoicesView() {
     <>
       <PageTitle title="الفواتير والمرتجعات" subtitle="البيع ينقّص المخزن ويسجّل على العميل · الشراء يزوّد المخزن ويسجّل للمورد" />
       {sectionSwitch}
+      {!!editRequests?.length && (
+        <div className="card" style={{ padding: '10px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: 'var(--gold-soft, #fff4d6)' }}>
+          <b>{editRequests.length} تعديل على الفواتير بانتظار موافقتك</b>
+          <button className="btn btn-primary btn-sm" onClick={openEditRequests}>عرض التعديلات</button>
+        </div>
+      )}
       <div className="toolbar">
         <SegmentedControl
           value={kind}
