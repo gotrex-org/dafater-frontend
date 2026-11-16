@@ -47,7 +47,12 @@ export function TradeReportSection({ r }: { r: R }) {
                 {data.salesReturns > 0 && <tr><td>مرتجعات بيع</td><td className="num deb">− {EGP(data.salesReturns)}</td></tr>}
                 <tr><td><b>صافي المبيعات</b></td><td className="num"><b>{EGP(data.netSales)}</b></td></tr>
                 <tr><td>تكلفة الأصناف المباعة <span className="muted">(متوسط سعر الشراء شامل الناولون الداخلي والشاي)</span></td><td className="num deb">− {EGP(data.cost)}</td></tr>
+                {!!data.goodsExpenses && <tr><td>مصاريف على البضاعة</td><td className="num deb">− {EGP(data.goodsExpenses)}</td></tr>}
                 <tr><td><b>مجمل ربح التجارة</b></td><td className="num"><b>{EGP(data.grossProfit)}</b></td></tr>
+                {!!data.saleFreight && <tr><td>ناولون وشاي فواتير البيع <span className="muted">(غير المربوطة بعربية)</span></td><td className="num deb">− {EGP(data.saleFreight)}</td></tr>}
+                {!!data.commissions && <tr><td>عمولات</td><td className="num deb">− {EGP(data.commissions)}</td></tr>}
+                {!!data.discountsEarned && <tr><td>خصومات من الموردين</td><td className="num cre">+ {EGP(data.discountsEarned)}</td></tr>}
+                {!!data.discountsGiven && <tr><td>خصومات للعملاء</td><td className="num deb">− {EGP(data.discountsGiven)}</td></tr>}
                 {data.expensesByCategory.map((e) => (
                   <tr key={e.name}><td>مصروف تجارة: {e.name}</td><td className="num deb">− {EGP(e.total)}</td></tr>
                 ))}
@@ -128,7 +133,7 @@ export function ShippingReportSection({ r }: { r: R }) {
                 <tr><td>الجمرك والتخليص</td><td /><td className="num deb">{EGP(data.vehicleCosts.customs)}</td></tr>
                 {data.vehicleCosts.loading.map((c) => <tr key={`l-${c.name}`}><td>{c.name}</td><td /><td className="num deb">{EGP(c.total)}</td></tr>)}
                 {!data.vehicleCosts.loading.length && <tr><td>التحميل والشفتنة</td><td /><td className="num deb">{EGP(0)}</td></tr>}
-                {data.vehicleCosts.driverExtras > 0 && <tr><td>عطلة وفرق وزن وشاي السائقين</td><td /><td className="num deb">{EGP(data.vehicleCosts.driverExtras)}</td></tr>}
+                {data.vehicleCosts.driverExtras > 0 && <tr><td>عطلة وسلف وفرق وزن وشاي السائقين</td><td /><td className="num deb">{EGP(data.vehicleCosts.driverExtras)}</td></tr>}
                 {data.vehicleCosts.invoiceFreight !== 0 && <tr><td>الناولون <span className="muted">(فواتير بيع مربوطة بعربية)</span></td><td /><td className="num deb">{EGP(data.vehicleCosts.invoiceFreight)}</td></tr>}
                 {data.vehicleCosts.purchaseCharges.map((c) => <tr key={`p-${c.name}`}><td>{c.name} <span className="muted">(على فواتير الشراء)</span></td><td /><td className="num deb">{EGP(c.total)}</td></tr>)}
 

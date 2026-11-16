@@ -20,7 +20,7 @@ function toEgp(p: Party): { raw: number; isUSD: boolean; rate: number; egp: numb
   return { raw, isUSD, rate, egp: isUSD ? (rate > 0 ? raw * rate : null) : raw };
 }
 
-// ميزان الحسابات — a trial-balance report listing every party (clients, suppliers,
+// أرصدة الحسابات — a party-balances report (not a full trial balance) listing every party (clients, suppliers,
 // commission agents) with its net balance split into عليه (debit) / له (credit),
 // plus column totals. Balance sign convention matches the ledger: > 0 = عليه (they
 // owe us), < 0 = له (we owe them).
@@ -92,14 +92,14 @@ export function TrialBalance({ onOpenParty }: { onOpenParty: (uid: string) => vo
           إظهار الأرصدة الصفرية
         </label>
         <div style={{ flex: 1 }} />
-        <button className="btn btn-ghost btn-sm sp" onClick={() => sheetRef.current && downloadElementAsPdf(sheetRef.current, 'ميزان-الحسابات')}>⬇ تحميل PDF</button>
+        <button className="btn btn-ghost btn-sm sp" onClick={() => sheetRef.current && downloadElementAsPdf(sheetRef.current, 'أرصدة-الحسابات')}>⬇ تحميل PDF</button>
         <button className="btn btn-primary btn-sm" onClick={() => window.print()}>🖨 طباعة</button>
       </div>
 
       <div ref={sheetRef} className="card print-sheet ledger-sheet">
         <div className="mf-logo">أبو شامة</div>
         <div className="mf-head">
-          <h2>ميزان الحسابات</h2>
+          <h2>أرصدة الحسابات</h2>
           <div className="mf-meta">
             <span>التاريخ: <b>{fmtDate(todayISO())}</b></span>
             <span>عدد الحسابات: <b>{rows.length}</b></span>
@@ -158,7 +158,11 @@ export function TrialBalance({ onOpenParty }: { onOpenParty: (uid: string) => vo
         </div>
 
         <div className="num" style={{ marginTop: 8, textAlign: 'left', fontSize: 15, fontWeight: 700 }}>
-          الإجمالي بالمصري: {EGP(Math.abs(net))} ج.م {net >= 0 ? 'عليهم' : 'لهم'}
+          الصافي بالمصري: {EGP(Math.abs(net))} ج.م {net >= 0 ? 'لنا عند الأطراف' : 'علينا للأطراف'}
+        </div>
+        {/* مش ميزان مراجعة: الخزن والمخزون ورأس المال مش فيه، فالعمودين مابيتساووش. */}
+        <div className="muted no-print" style={{ marginTop: 4, fontSize: 12.5 }}>
+          أرصدة العملاء والموردين وباقي الأطراف فقط. الخزن والمخزون غير داخلين، لذلك لا يتساوى العمودان.
         </div>
       </div>
     </>

@@ -133,9 +133,12 @@ export function ReportsView({ embedded = false }: { embedded?: boolean }) {
               return (
                 <div key={grp.key}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 800, marginBottom: 6 }}>
-                    <span>{grp.key === 'WAREHOUSE' ? '🏬' : '🚚'} {grp.label}</span>
+                    <span>{grp.key === 'WAREHOUSE' ? '🏬' : grp.key === 'GOODS' ? '📦' : '🚚'} {grp.label}</span>
                     <span className="num deb">{money(grp.total)}</span>
                   </div>
+                  {grp.key === 'GOODS' && (
+                    <div className="muted" style={{ fontSize: 12.5, marginBottom: 6 }}>داخل تكلفة الأصناف، ولا يدخل في إجمالي المصاريف.</div>
+                  )}
                   {!grp.items.length ? <div className="muted" style={{ fontSize: 12.5, paddingInlineStart: 6 }}>لا يوجد</div> : (
                     <div className="tbl-wrap">
                       <table>
@@ -159,17 +162,36 @@ export function ReportsView({ embedded = false }: { embedded?: boolean }) {
       {/* 4) إجمالي ربح وخسارة */}
       <Collapsible title="📈 إجمالي ربح وخسارة" defaultOpen headline={pl.data && <span className={pl.data.netProfit >= 0 ? 'cre' : 'deb'}>{money(pl.data.netProfit)}</span>}>
         {pl.isLoading || !pl.data ? <Spinner /> : (
-          <StatsGrid columns={4}>
-            <StatCard variant="gold" label="الإيرادات (صافي المبيعات)" value={money(pl.data.revenue)} />
-            <StatCard label="التكلفة (مشتريات + مصاريف بضاعة + التصفية)" value={money(pl.data.cost)} />
-            <StatCard label="مجمل الربح" value={money(pl.data.grossProfit)} />
-            <StatCard variant="debit" label="المصاريف التشغيلية" value={money(pl.data.expenses)} />
-            <StatCard variant="debit" label="منها: مصاريف المخزن" value={money(pl.data.warehouseExpenses)} />
-            <StatCard variant="debit" label="تسويات نقدية" value={money(pl.data.settlement)} />
-            <StatCard label="منها: مستحقات التصفية (على التكلفة)" value={money(pl.data.partnerDues ?? 0)} />
-            <StatCard variant="debit" label="نصيب أسماء التصفية برأس المال" value={money(pl.data.partnerShares ?? 0)} />
-            <StatCard variant={pl.data.netProfit >= 0 ? 'accent' : 'debit'} label="صافي الربح" value={money(pl.data.netProfit)} />
-          </StatsGrid>
+          <>
+            <StatsGrid columns={4}>
+              <StatCard variant={pl.data.trade.profit >= 0 ? 'accent' : 'debit'} label="ربح التجارة" value={money(pl.data.trade.profit)} />
+              <StatCard variant={pl.data.shipping.profit >= 0 ? 'accent' : 'debit'} label="ربح الشحن" value={money(pl.data.shipping.profit)} />
+              <StatCard variant="debit" label="تسويات ونصيب أسماء التصفية" value={money(pl.data.settlement + pl.data.partnerShares)} />
+              <StatCard variant={pl.data.netProfit >= 0 ? 'accent' : 'debit'} label="صافي الربح" value={money(pl.data.netProfit)} />
+            </StatsGrid>
+            <div className="tbl-wrap" style={{ marginTop: 10 }}>
+              <table>
+                <tbody>
+                  <tr><td>صافي المبيعات</td><td className="num">{EGP(pl.data.trade.netSales)}</td></tr>
+                  <tr><td>تكلفة البضاعة المباعة</td><td className="num deb">− {EGP(pl.data.trade.cost)}</td></tr>
+                  {!!pl.data.trade.sellingCosts && <tr><td>ناولون وشاي البيع والعمولات</td><td className="num deb">− {EGP(pl.data.trade.sellingCosts)}</td></tr>}
+                  {!!pl.data.trade.discounts && <tr><td>خصومات منفصلة (صافي)</td><td className={`num ${pl.data.trade.discounts >= 0 ? 'cre' : 'deb'}`}>{EGP(pl.data.trade.discounts)}</td></tr>}
+                  <tr><td>مصاريف التجارة</td><td className="num deb">− {EGP(pl.data.trade.expenses)}</td></tr>
+                  <tr><td><b>ربح التجارة</b></td><td className="num"><b>{EGP(pl.data.trade.profit)}</b></td></tr>
+                  <tr><td>إيرادات الشحن</td><td className="num">{EGP(pl.data.shipping.income)}</td></tr>
+                  <tr><td>تكاليف العربيات</td><td className="num deb">− {EGP(pl.data.shipping.vehicleCosts)}</td></tr>
+                  <tr><td>مصاريف الشحن</td><td className="num deb">− {EGP(pl.data.shipping.expenses)}</td></tr>
+                  <tr><td><b>ربح الشحن</b></td><td className="num"><b>{EGP(pl.data.shipping.profit)}</b></td></tr>
+                  {!!pl.data.settlement && <tr><td>تسويات نقدية</td><td className="num deb">− {EGP(pl.data.settlement)}</td></tr>}
+                  {!!pl.data.partnerShares && <tr><td>نصيب أسماء التصفية برأس المال</td><td className="num deb">− {EGP(pl.data.partnerShares)}</td></tr>}
+                  <tr className="mf-total"><td><b>صافي الربح</b></td><td className="num"><b>{EGP(pl.data.netProfit)}</b></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="muted" style={{ fontSize: 12.5, marginTop: 8 }}>
+              صافي الربح = ربح التجارة + ربح الشحن − التسويات النقدية − نصيب أسماء التصفية. نفس أرقام تقرير التجارة وتقرير الشحن.
+            </div>
+          </>
         )}
       </Collapsible>
 

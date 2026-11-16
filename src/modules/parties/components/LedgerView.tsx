@@ -614,10 +614,10 @@ export function LedgerView() {
         <nav className="tabs" style={{ marginBottom: 16 }}>
           <button className={tab === 'ledger' ? 'active' : ''} onClick={() => setTab('ledger')}
             style={{ background: 'none', border: 'none', cursor: 'pointer' }}>كشف الحساب</button>
-          {/* ميزان الحسابات — visible only to the primary (owner) account */}
+          {/* أرصدة الحسابات — visible only to the primary (owner) account */}
           {user?.isPrimary && (
             <button className={tab === 'mizan' ? 'active' : ''} onClick={() => setTab('mizan')}
-              style={{ background: 'none', border: 'none', cursor: 'pointer' }}>ميزان الحسابات</button>
+              style={{ background: 'none', border: 'none', cursor: 'pointer' }}>أرصدة الحسابات</button>
           )}
           <button className={tab === 'registry' ? 'active' : ''} onClick={() => setTab('registry')}
             style={{ background: 'none', border: 'none', cursor: 'pointer' }}>سجل العملاء والموردين</button>

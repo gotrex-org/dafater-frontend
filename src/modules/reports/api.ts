@@ -40,7 +40,9 @@ export interface ShippingSummary {
 // تقرير التجارة: مبيعات الأصناف، تكلفتها، ربح التجارة، والمخزون.
 export interface TradeReport {
   sales: number; salesDiscount: number; salesReturns: number; netSales: number; salesCount: number;
-  cost: number; grossProfit: number;
+  cost: number; goodsExpenses?: number; grossProfit: number;
+  /** ناولون وشاي فواتير البيع غير المربوطة بعربية، والعمولات، والخصم المنفصل */
+  saleFreight?: number; commissions?: number; discountsEarned?: number; discountsGiven?: number;
   expenses: number; expensesByCategory: NameTotal[];
   netProfit: number; purchases: number;
   /** عمليات بيع خارجي من مورد بالدولار بدون سعر صرف — خارج التقرير */
@@ -63,12 +65,18 @@ export interface VehicleProfits {
   totals: { revenue: number; rent: number; customs: number; loading: number; freight: number; costs: number; profit: number };
 }
 export interface InactiveClient { id: string; name: string; lastActivity: string | null; daysSince: number | null; }
-export interface ProfitLoss { revenue: number; cost: number; goodsExpenses: number; grossProfit: number; expenses: number; warehouseExpenses: number; settlement: number; partnerDues?: number; partnerShares?: number; netProfit: number; }
+// الأرباح والخسائر = ربح التجارة + ربح الشحن − التسويات النقدية − نصيب أسماء التصفية.
+export interface ProfitLoss {
+  trade: { netSales: number; cost: number; grossProfit: number; sellingCosts: number; discounts: number; expenses: number; profit: number };
+  shipping: { income: number; vehicleCosts: number; expenses: number; profit: number };
+  settlement: number; partnerShares: number; netProfit: number;
+  salesAwaitingPurchase?: number; dealsWithoutRate?: number;
+}
 export interface WarehouseExpenseRow { id: string; name: string; total: number; categories: { name: string; total: number }[]; }
 export interface WarehouseExpenses { total: number; warehouses: WarehouseExpenseRow[]; }
 export interface CustodyHolder { id: string; name: string; balance: number; }
 export interface CustodyBalances { total: number; holders: CustodyHolder[]; }
-export interface ExpenseGroupRow { key: 'WAREHOUSE' | 'EXTERNAL'; label: string; total: number; items: { name: string; total: number }[]; }
+export interface ExpenseGroupRow { key: 'WAREHOUSE' | 'EXTERNAL' | 'GOODS'; label: string; total: number; items: { name: string; total: number }[]; }
 export interface ExpensesByCategory { total: number; groups: ExpenseGroupRow[]; }
 export interface BusiestFor { months: { month: string; total: number; count: number }[]; peak: { month: string; total: number; count: number } | null; }
 
