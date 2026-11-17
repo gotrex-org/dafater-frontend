@@ -21,12 +21,19 @@ export interface LastPrice {
 export interface ProductMovement {
   id: string;
   date: string;
-  kind: 'SALE' | 'PURCHASE';
+  kind: 'SALE' | 'PURCHASE' | 'SALE_RETURN' | 'PURCHASE_RETURN' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'LOAN' | 'LOAN_RETURN';
   party?: string | null;
   warehouse?: string | null;
   no: string;
   qty: number;
-  price: number;
+  /** السعر بعملة المستند (null للتسوية والإعارة) */
+  price: number | null;
+  currency?: string;
+  /** السعر بالمصري — null لو دولار لسه ما اتسعّرش */
+  priceEgp?: number | null;
+  /** رصيد الصنف بعد الحركة في كل المخازن — null للبيع الخارجي والفاتورة الوهمية */
+  balance?: number | null;
+  fake?: boolean;
 }
 
 export interface CreateProductDto {

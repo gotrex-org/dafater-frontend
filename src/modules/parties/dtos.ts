@@ -59,6 +59,8 @@ export interface LedgerRow {
   manifestNo?: string | null;
   manifestArrived?: boolean;
   invoiceItems?: { name: string; qty: number; price: number }[] | null;
+  /** بنود الشحن على الفاتورة — سطر «بنود شحن» في الكشف بيعرضها هي بس */
+  invoiceCharges?: { name: string; qty?: number; price?: number; amount: number }[] | null;
 }
 
 export interface LedgerStatement {

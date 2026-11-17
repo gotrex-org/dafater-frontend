@@ -1,10 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { EGP, QTY, fmtDate } from '@/lib/format';
+import { EGP, QTY, USD, fmtDate } from '@/lib/format';
 import { PageTitle, DataTable, Spinner, SegmentedControl, Combobox, StatsGrid, StatCard, type Column } from '@/components/common';
 import { useProductMovements, useProductStock, useAllProducts, useUpdateProduct } from '../../products/hooks';
 import type { ProductMovement } from '../../products/dtos';
+
+const KIND_LABEL: Record<ProductMovement['kind'], string> = {
+  PURCHASE: 'دخول (شراء)',
+  SALE: 'خروج (بيع)',
+  SALE_RETURN: 'دخول (مرتجع بيع)',
+  PURCHASE_RETURN: 'خروج (مرتجع شراء)',
+  ADJUSTMENT_IN: 'دخول (تسوية مخزن)',
+  ADJUSTMENT_OUT: 'خروج (تسوية مخزن)',
+  LOAN: 'خروج (إعارة)',
+  LOAN_RETURN: 'دخول (رجوع إعارة)',
+};
+const IN_KINDS = new Set<ProductMovement['kind']>(['PURCHASE', 'SALE_RETURN', 'ADJUSTMENT_IN', 'LOAN_RETURN']);
 
 export function ProductMovements({ productId, name, onBack, backLabel = 'رجوع للمخزن' }: {
   productId: string;
@@ -26,23 +38,47 @@ export function ProductMovements({ productId, name, onBack, backLabel = 'رجو�
 
   const persons = Array.from(new Set(data.map((r) => r.party).filter(Boolean))).map((n) => ({ id: n as string, name: n as string }));
   const filtered = data.filter((r) =>
-    (tab === 'all' || (tab === 'in' && r.kind === 'PURCHASE') || (tab === 'out' && r.kind === 'SALE')) &&
+    (tab === 'all' || (tab === 'in' && IN_KINDS.has(r.kind)) || (tab === 'out' && !IN_KINDS.has(r.kind))) &&
     (!q.trim() || (r.party ?? '').includes(q.trim())),
   );
 
   const cols: Column<ProductMovement>[] = [
     { header: 'التاريخ', cell: (r) => fmtDate(r.date), className: 'muted' },
-    { header: 'الحركة', cell: (r) => (r.kind === 'PURCHASE' ? <span className="cre">دخول (شراء)</span> : <span className="deb">خروج (بيع)</span>) },
-    { header: 'المورد / العميل', cell: (r) => <b>{r.party ?? '—'}</b> },
+    {
+      header: 'الحركة',
+      cell: (r) => (
+        <span className={IN_KINDS.has(r.kind) ? 'cre' : 'deb'}>
+          {KIND_LABEL[r.kind]}
+          {r.fake && <span className="muted" style={{ fontSize: 11 }}> (وهمية)</span>}
+        </span>
+      ),
+    },
+    { header: 'الطرف', cell: (r) => <b>{r.party ?? '—'}</b> },
     { header: 'المخزن', cell: (r) => r.warehouse ?? '—', className: 'muted' },
     { header: 'الكمية', cell: (r) => QTY(r.qty), className: 'num' },
-    { header: 'السعر', cell: (r) => EGP(r.price), className: 'num' },
+    {
+      header: 'السعر بالمصري',
+      cell: (r) => {
+        if (r.price == null) return <span className="muted">—</span>;
+        const usd = r.currency === 'USD' ? <span className="muted" style={{ fontSize: 11, display: 'block' }}>({USD(r.price)})</span> : null;
+        if (r.priceEgp == null) return <span className="deb" style={{ fontSize: 12 }}>غير مسعّر{usd}</span>;
+        return <>{EGP(r.priceEgp)}{usd}</>;
+      },
+      className: 'num',
+    },
+    {
+      header: 'الرصيد بعدها',
+      cell: (r) => r.balance == null
+        ? <span className="muted">—</span>
+        : <span className={r.balance < 0 ? 'deb' : ''}>{QTY(r.balance)}</span>,
+      className: 'num',
+    },
   ];
 
   return (
     <>
       <button className="btn btn-ghost btn-sm" onClick={onBack}>→ {backLabel}</button>
-      <PageTitle title={`تقرير الصنف: ${name}`} subtitle="كل الكميات المشتراة والمباعة، ومن أي طرف وإلى أي طرف" />
+      <PageTitle title={`تقرير الصنف: ${name}`} subtitle="كل حركة بسعرها بالمصري ورصيد الصنف بعدها في كل المخازن" />
 
       {product !== undefined && (
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg2)', borderRadius: 8, cursor: 'pointer', marginBottom: 8 }}>

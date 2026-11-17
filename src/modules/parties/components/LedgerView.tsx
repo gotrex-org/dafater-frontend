@@ -177,6 +177,15 @@ function LedgerTab() {
 }
 
 // نوع الطرف زي ما كان بيتكتب في ترويسة الكشف القديمة (app_4.html)
+// سطر «بنود شحن» في الكشف تفاصيله بنود الشحن بس، وسطر الفاتورة تفاصيله الأصناف — الاتنين
+// على نفس الفاتورة، فمن غير الفصل ده بنود الشحن كانت بتفتح على الأصناف.
+const CHARGES_TX_TYPE = 'بنود شحن';
+const isChargesRow = (r: LedgerRow) => r.type === CHARGES_TX_TYPE;
+const detailLines = (r: LedgerRow): { name: string; qty: number; price: number }[] =>
+  isChargesRow(r)
+    ? (r.invoiceCharges ?? []).map((c) => ({ name: c.name, qty: c.qty ?? 1, price: c.price ?? c.amount }))
+    : (r.invoiceItems ?? []);
+
 const ROLE_LABEL: Record<string, string> = {
   CLIENT: 'عميل', SUPPLIER: 'مورد', AGENT: 'صاحب commission', PERSON: 'عهدة',
 };
@@ -283,7 +292,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
       r.type, r.note, r.clientNote, r.partyName,
       r.manifestNo, r.docNo,
       r.debit, r.credit,
-      ...(r.invoiceItems ?? []).map((it) => it.name),
+      ...detailLines(r).map((it) => it.name),
     ].filter(Boolean).join(' ');
     if (normalizeAr(text).includes(qn)) return true;
     // رقم مكتوب من غير فواصل يلاقي الرقم المعروض بفواصله
@@ -329,7 +338,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
     `${hasUnpriced ? '≈ ' : ''}${EGP(egp ?? 0)} ج.م (${money(usd, 'USD')})`;
 
   // rows with an expandable item breakdown, and a single show-all / hide-all toggle
-  const detailRowIds = visibleRows.filter((r) => r.invoiceItems?.length).map((r) => r.id);
+  const detailRowIds = visibleRows.filter((r) => detailLines(r).length).map((r) => r.id);
   const allExpanded = detailRowIds.length > 0 && detailRowIds.every((id) => expanded.has(id));
   const toggleAllDetails = () => setExpanded(allExpanded ? new Set() : new Set(detailRowIds));
   // أعمدة الجدول ثابتة مهما فلترت — الفلتر بيقلّل الصفوف بس، عمر ما بيشيل عمود
@@ -409,7 +418,8 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
               </thead>
               <tbody>
                 {visibleRows.map((r) => {
-                  const open = expanded.has(r.id) && !!r.invoiceItems?.length;
+                  const lines = detailLines(r);
+                  const open = expanded.has(r.id) && !!lines.length;
                   return (
                     <Fragment key={r.id}>
                       <tr
@@ -428,6 +438,8 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                         onClick={() => {
                           setLastOpenedId(r.id);
                           if (r.invoiceUid || r.dealUid) scrollToRow.current = r.id;
+                          // سطر بنود الشحن بيفتح بنوده بس، مش الفاتورة كلها بأصنافها.
+                          if (isChargesRow(r) && lines.length) { toggle(r.id); return; }
                           if (r.invoiceUid) { setInvoiceUid(r.invoiceUid); return; }
                           if (r.dealUid) { setDealUid(r.dealUid); return; }
                           setSel(r);
@@ -456,7 +468,7 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                               {r.partyRole === 'SUPPLIER' ? 'مورد' : 'عميل'}
                             </span>
                           )}
-                          {r.invoiceItems?.length
+                          {lines.length
                             ? <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); toggle(r.id); }}>{open ? '▾' : '▸'} {r.note || 'تفاصيل الفاتورة'}</button>
                             : r.note}
                         </td>
@@ -468,9 +480,9 @@ function LedgerDetail({ party, onBack }: { party: Party; onBack: () => void }) {
                         <tr className="lg-items-row">
                           <td colSpan={6} style={{ background: '#f3ecda', borderInlineStart: '3px solid var(--gold, #b98a2e)', padding: '8px 16px' }}>
                             <table className="lg-items" style={{ width: '100%', color: 'var(--ink)' }}>
-                              <thead><tr><th>الكمية</th><th>الصنف</th><th>السعر</th><th>الإجمالي</th></tr></thead>
+                              <thead><tr><th>الكمية</th><th>{isChargesRow(r) ? 'البند' : 'الصنف'}</th><th>السعر</th><th>الإجمالي</th></tr></thead>
                               <tbody>
-                                {r.invoiceItems!.map((it, j) => (
+                                {lines.map((it, j) => (
                                   <tr key={j}><td className="num">{it.qty}</td><td>{it.name}</td><td className="num">{EGP(it.price)}</td><td className="num">{EGP(it.qty * it.price)}</td></tr>
                                 ))}
                               </tbody>
