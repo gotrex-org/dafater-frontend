@@ -63,7 +63,7 @@ function ProductRow({ product, canManage, selected, selectDisabled, onToggle }: 
           {product.name}
           {product.unit && <span className="muted" style={{ fontSize: 12, fontWeight: 400, marginInlineStart: 8 }}>({product.unit})</span>}
           {product.service && <span className="pill" style={{ marginInlineStart: 6 }}>خدمة</span>}
-          {!!product.price && <span className="muted num" style={{ fontSize: 12, fontWeight: 400, marginInlineStart: 8 }}>سعر التقييم: {EGP(product.price)}</span>}
+          {!!product.price && <span className="muted num" style={{ fontSize: 12, fontWeight: 400, marginInlineStart: 8 }}>تقييم يدوي: {EGP(product.price)}</span>}
           {!!product.purchasePrice && <span className="muted num" style={{ fontSize: 12, fontWeight: 400, marginInlineStart: 8 }}>شراء: {EGP(product.purchasePrice)}</span>}
           {!!product.salePrice && <span className="muted num" style={{ fontSize: 12, fontWeight: 400, marginInlineStart: 8 }}>بيع: {EGP(product.salePrice)}</span>}
         </span>
@@ -84,9 +84,9 @@ function ProductRow({ product, canManage, selected, selectDisabled, onToggle }: 
         <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input placeholder="الاسم" value={name} onChange={(e) => setName(e.target.value)} style={{ flex: 1, minWidth: 130 }} />
           <input placeholder="الوحدة (اختياري)" value={unit} onChange={(e) => setUnit(e.target.value)} style={{ maxWidth: 140 }} />
-          <MoneyInput value={price} onChange={setPrice} placeholder="سعر التقييم" style={{ maxWidth: 140 }} />
-          <MoneyInput value={purchasePrice} onChange={setPurchasePrice} placeholder="سعر شراء ثابت" style={{ maxWidth: 140 }} />
-          <MoneyInput value={salePrice} onChange={setSalePrice} placeholder="سعر بيع ثابت" style={{ maxWidth: 140 }} />
+          <MoneyInput value={price} onChange={setPrice} placeholder="تقييم يدوي (بدون شراء)" style={{ maxWidth: 140 }} />
+          <MoneyInput value={purchasePrice} onChange={setPurchasePrice} placeholder="آخر سعر شراء" style={{ maxWidth: 140 }} />
+          <MoneyInput value={salePrice} onChange={setSalePrice} placeholder="آخر سعر بيع" style={{ maxWidth: 140 }} />
           <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer' }}>
             <input type="checkbox" checked={service} onChange={(e) => setService(e.target.checked)} />
             بند خدمة (بدون مخزون)
@@ -215,9 +215,9 @@ export function ProductsManager() {
             onKeyDown={(e) => { if (e.key === 'Enter') addProduct(); if (e.key === 'Escape') setAdding(false); }}
             style={{ flex: 1, minWidth: 150 }} />
           <input placeholder="الوحدة (اختياري)" value={pUnit} onChange={(e) => setPUnit(e.target.value)} style={{ maxWidth: 150 }} />
-          <MoneyInput value={pPrice} onChange={setPPrice} placeholder="سعر التقييم (اختياري)" style={{ maxWidth: 150 }} />
-          <MoneyInput value={pPurchase} onChange={setPPurchase} placeholder="سعر شراء ثابت" style={{ maxWidth: 150 }} />
-          <MoneyInput value={pSale} onChange={setPSale} placeholder="سعر بيع ثابت" style={{ maxWidth: 150 }} />
+          <MoneyInput value={pPrice} onChange={setPPrice} placeholder="تقييم يدوي (اختياري)" style={{ maxWidth: 150 }} />
+          <MoneyInput value={pPurchase} onChange={setPPurchase} placeholder="سعر شراء (اختياري)" style={{ maxWidth: 150 }} />
+          <MoneyInput value={pSale} onChange={setPSale} placeholder="سعر بيع (اختياري)" style={{ maxWidth: 150 }} />
           <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer' }}>
             <input type="checkbox" checked={pService} onChange={(e) => setPService(e.target.checked)} />
             بند خدمة (بدون مخزون)

@@ -46,7 +46,7 @@ export function TradeReportSection({ r }: { r: R }) {
                 {data.salesDiscount > 0 && <tr><td>خصومات على الفواتير</td><td className="num deb">− {EGP(data.salesDiscount)}</td></tr>}
                 {data.salesReturns > 0 && <tr><td>مرتجعات بيع</td><td className="num deb">− {EGP(data.salesReturns)}</td></tr>}
                 <tr><td><b>صافي المبيعات</b></td><td className="num"><b>{EGP(data.netSales)}</b></td></tr>
-                <tr><td>تكلفة الأصناف المباعة <span className="muted">(متوسط سعر الشراء شامل الناولون الداخلي والشاي)</span></td><td className="num deb">− {EGP(data.cost)}</td></tr>
+                <tr><td>تكلفة الأصناف المباعة <span className="muted">(متوسط سعر الشراء وقت البيع شامل الناولون الداخلي والشاي)</span></td><td className="num deb">− {EGP(data.cost)}</td></tr>
                 {!!data.goodsExpenses && <tr><td>مصاريف على البضاعة</td><td className="num deb">− {EGP(data.goodsExpenses)}</td></tr>}
                 <tr><td><b>مجمل ربح التجارة</b></td><td className="num"><b>{EGP(data.grossProfit)}</b></td></tr>
                 {!!data.saleFreight && <tr><td>ناولون وشاي فواتير البيع <span className="muted">(غير المربوطة بعربية)</span></td><td className="num deb">− {EGP(data.saleFreight)}</td></tr>}
@@ -63,6 +63,11 @@ export function TradeReportSection({ r }: { r: R }) {
           <div className="muted" style={{ fontSize: 12.5, marginTop: 8 }}>
             {data.salesCount} فاتورة بيع (شامل البيع الخارجي) · مشتريات الفترة {money(data.purchases)} · المرتبات محسوب منها نصيب التجارة فقط
           </div>
+          {!!data.salesAwaitingPurchase && (
+            <div className="deb" style={{ fontSize: 12.5, marginTop: 4, fontWeight: 700 }}>
+              {data.salesAwaitingPurchase} فاتورة بيع فيها أصناف لسه ما اتشرتش، ومكسبها هيتحسب بعد الشراء.
+            </div>
+          )}
           {!!data.dealsWithoutRate && (
             <div className="deb" style={{ fontSize: 12.5, marginTop: 4, fontWeight: 700 }}>
               {data.dealsWithoutRate} عملية بيع خارجي من مورد بالدولار لم يكتمل تسعيرها من دفعات الوكيل، وهي خارج التقرير حتى يتم التوريد.

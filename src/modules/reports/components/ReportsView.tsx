@@ -193,6 +193,11 @@ export function ReportsView({ embedded = false }: { embedded?: boolean }) {
             </div>
           </>
         )}
+        {!!pl.data?.salesAwaitingPurchase && (
+          <div className="deb" style={{ fontSize: 12.5, marginTop: 8, fontWeight: 700 }}>
+            {pl.data.salesAwaitingPurchase} فاتورة بيع فيها أصناف لسه ما اتشرتش، ومكسبها هيتحسب بعد الشراء.
+          </div>
+        )}
       </Collapsible>
 
       {/* العُهَد */}

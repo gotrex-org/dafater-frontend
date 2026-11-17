@@ -47,6 +47,8 @@ export interface TradeReport {
   netProfit: number; purchases: number;
   /** عمليات بيع خارجي من مورد بالدولار بدون سعر صرف — خارج التقرير */
   dealsWithoutRate?: number;
+  /** فواتير بيع فيها أصناف لسه ما اتشرتش — مكسبها يتحسب بعد الشراء */
+  salesAwaitingPurchase?: number;
   products: { id: string; name: string; unit: string | null; qty: number; sales: number; cost: number; profit: number }[];
   inventory: { total: number; warehouses: { id: string; name: string; value: number }[] };
 }
